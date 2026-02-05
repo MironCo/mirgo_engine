@@ -228,8 +228,15 @@ func (w *World) DrawShadowMap() {
 	lightView := rl.GetMatrixModelview()
 	lightProj := rl.GetMatrixProjection()
 
+	// Cull front faces during shadow pass — writes back-face depth into the shadowmap,
+	// which naturally prevents self-shadowing (shadow acne) on lit surfaces
+	rl.SetCullFace(0) // 0 = RL_CULL_FACE_FRONT
+
 	// Draw the scene (same objects as main pass)
 	w.drawScene()
+
+	// Restore default back-face culling for the main render pass
+	rl.SetCullFace(1) // 1 = RL_CULL_FACE_BACK
 
 	rl.EndMode3D()
 	rl.EndTextureMode()

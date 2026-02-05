@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"test3d/internal/camera"
+	"test3d/internal/physics"
 	"test3d/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -18,7 +19,7 @@ func New() *Game {
 	return &Game{
 		Camera:    camera.New(rl.Vector3{X: 10, Y: 10, Z: 10}),
 		World:     world.New(),
-		DebugMode: true, // Start with debug on
+		DebugMode: false,
 	}
 }
 
@@ -42,6 +43,19 @@ func (g *Game) Run() {
 func (g *Game) Update() {
 	deltaTime := rl.GetFrameTime()
 	g.Camera.Update()
+
+	// Resolve player collision against world objects
+	playerSize := rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6}
+	playerAABB := physics.NewAABBFromCenter(g.Camera.Position, playerSize)
+	for _, obj := range g.World.Objects {
+		objAABB := physics.NewAABBFromCenter(obj.Position, obj.Size)
+		pushOut := playerAABB.Resolve(objAABB)
+		if pushOut.X != 0 || pushOut.Y != 0 || pushOut.Z != 0 {
+			g.Camera.Position = rl.Vector3Add(g.Camera.Position, pushOut)
+			playerAABB = physics.NewAABBFromCenter(g.Camera.Position, playerSize)
+		}
+	}
+
 	g.World.Update(deltaTime)
 
 	// Toggle debug mode with F1
