@@ -4,8 +4,11 @@ in vec3 fragPosition;
 in vec2 fragTexCoord;
 in vec4 fragColor;
 in vec3 fragNormal;
+in vec2 fragShadowTexCoord;
+in float fragShadowDepth;
 
 uniform sampler2D texture0;
+uniform sampler2D shadowMap;
 uniform vec4 colDiffuse;
 uniform vec3 viewPos;
 uniform vec4 ambient;
@@ -14,11 +17,38 @@ uniform vec4 lightColor;
 
 out vec4 finalColor;
 
+float calculateShadow()
+{
+    // Check if fragment is outside shadowmap bounds
+    if (fragShadowTexCoord.x < 0.0 || fragShadowTexCoord.x > 1.0 ||
+        fragShadowTexCoord.y < 0.0 || fragShadowTexCoord.y > 1.0) {
+        return 1.0; // No shadow outside the shadowmap
+    }
+
+    // Sample depth from shadowmap
+    float shadowDepth = texture(shadowMap, fragShadowTexCoord).r;
+
+    // Bias to prevent shadow acne (adjust as needed)
+    float bias = 0.005;
+
+    // Compare depths: if fragment is further than shadowmap sample, it's in shadow
+    // Subtract bias from fragShadowDepth to prevent self-shadowing
+    if (fragShadowDepth - bias > shadowDepth) {
+        return 0.3; // In shadow - return shadow intensity
+    }
+
+    return 1.0; // Fully lit
+}
+
 void main()
 {
     vec3 normal = normalize(fragNormal);
     vec3 viewDir = normalize(viewPos - fragPosition);
-    vec3 lightDirection = normalize(lightDir);
+    // lightDir is direction light points (e.g. down), we need direction TOWARD light
+    vec3 lightDirection = normalize(-lightDir);
+
+    // Calculate shadow factor
+    float shadow = calculateShadow();
 
     // Diffuse lighting (wrap lighting for softer look)
     float NdotL = dot(normal, lightDirection);
@@ -38,13 +68,13 @@ void main()
     // Rim lighting
     float rim = fresnel * max(dot(normal, lightDirection), 0.0);
 
-    // Combine lighting components
-    vec3 diffuseLight = diff * lightColor.rgb;
-    vec3 specularLight = spec * lightColor.rgb * 1.2;
-    vec3 rimLight = rim * lightColor.rgb * 0.5;
+    // Combine lighting components - apply shadow to diffuse and specular
+    vec3 diffuseLight = diff * lightColor.rgb * shadow;
+    vec3 specularLight = spec * lightColor.rgb * 1.2 * shadow;
+    vec3 rimLight = rim * lightColor.rgb * 0.5 * shadow;
     vec3 fresnelLight = fresnel * ambient.rgb * 0.3;
 
-    // Final lighting
+    // Final lighting (ambient is not affected by shadow)
     vec3 lighting = ambient.rgb + diffuseLight + specularLight + rimLight + fresnelLight;
 
     // Apply material color
