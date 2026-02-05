@@ -1,9 +1,10 @@
 package game
 
 import (
-	rl "github.com/gen2brain/raylib-go/raylib"
 	"test3d/internal/camera"
 	"test3d/internal/world"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type Game struct {
@@ -19,11 +20,15 @@ func New() *Game {
 }
 
 func (g *Game) Run() {
-	rl.InitWindow(800, 600, "3D Game")
+	rl.InitWindow(1280, 720, "3D Animated Cubes with Lighting")
 	defer rl.CloseWindow()
 
 	rl.SetTargetFPS(60)
 	rl.DisableCursor()
+
+	// Initialize world after OpenGL context is created
+	g.World.Initialize()
+	defer g.World.Unload()
 
 	for !rl.WindowShouldClose() {
 		g.Update()
@@ -32,15 +37,23 @@ func (g *Game) Run() {
 }
 
 func (g *Game) Update() {
+	deltaTime := rl.GetFrameTime()
 	g.Camera.Update()
+	g.World.Update(deltaTime)
 }
 
 func (g *Game) Draw() {
-	rl.BeginDrawing()
-	rl.ClearBackground(rl.RayWhite)
+	camera := g.Camera.GetRaylibCamera()
 
-	rl.BeginMode3D(g.Camera.GetRaylibCamera())
-	g.World.Draw()
+	// First: render shadow map (before BeginDrawing to avoid state conflicts)
+	g.World.DrawShadowMap()
+
+	// Second: main scene rendering
+	rl.BeginDrawing()
+	rl.ClearBackground(rl.NewColor(20, 20, 30, 255))
+
+	rl.BeginMode3D(camera)
+	g.World.DrawWithShadows(camera.Position)
 	rl.EndMode3D()
 
 	g.DrawUI()
