@@ -7,18 +7,16 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-const ShadowMapResolution = 2048
+const ShadowMapResolution = 1024
 
 type World struct {
-	Objects     []AnimatedCube
-	LightDir    rl.Vector3
-	Shader      rl.Shader
-	DepthShader rl.Shader
-	FloorModel  rl.Model
-	ShadowMap   rl.RenderTexture2D
-	LightCamera rl.Camera3D
-	MatLightVP  rl.Matrix
-	time        float32
+	Objects       []AnimatedCube
+	LightDir      rl.Vector3
+	Shader        rl.Shader
+	FloorModel    rl.Model
+	ShadowTexture rl.RenderTexture2D
+	ShadowCamera  rl.Camera3D
+	time          float32
 }
 
 type AnimatedCube struct {
@@ -74,24 +72,26 @@ func New() *World {
 	return w
 }
 
+const FloorSize = 60.0
+
 func (w *World) Initialize() {
-	// Load shaders from files
+	// Load lighting shader
 	w.Shader = rl.LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs")
-	w.DepthShader = rl.LoadShader("assets/shaders/depth.vs", "assets/shaders/depth.fs")
 
-	// Load shadow map
-	w.ShadowMap = rl.LoadRenderTexture(ShadowMapResolution, ShadowMapResolution)
+	// Create shadow render texture
+	w.ShadowTexture = rl.LoadRenderTexture(ShadowMapResolution, ShadowMapResolution)
 
-	// Set directional light direction
+	// Set directional light direction (pointing toward scene)
 	w.LightDir = rl.Vector3Normalize(rl.Vector3{X: 1.0, Y: 1.0, Z: 1.0})
 
-	// Setup light camera for shadowmap
-	lightPos := rl.Vector3Scale(w.LightDir, 40)
-	w.LightCamera = rl.Camera3D{
-		Position:   lightPos,
+	// Shadow camera - positioned along light direction, looking at scene center
+	// This makes shadows match the light direction
+	lightDistance := float32(50)
+	w.ShadowCamera = rl.Camera3D{
+		Position:   rl.Vector3Scale(w.LightDir, lightDistance),
 		Target:     rl.Vector3{X: 0, Y: 0, Z: 0},
 		Up:         rl.Vector3{X: 0, Y: 1, Z: 0},
-		Fovy:       60,
+		Fovy:       FloorSize,
 		Projection: rl.CameraOrthographic,
 	}
 
@@ -103,7 +103,7 @@ func (w *World) Initialize() {
 	rl.SetShaderValue(w.Shader, lightColorLoc, []float32{1.0, 0.95, 0.9, 1.0}, rl.ShaderUniformVec4)
 
 	ambientLoc := rl.GetShaderLocation(w.Shader, "ambient")
-	rl.SetShaderValue(w.Shader, ambientLoc, []float32{0.2, 0.2, 0.25, 1.0}, rl.ShaderUniformVec4)
+	rl.SetShaderValue(w.Shader, ambientLoc, []float32{0.3, 0.3, 0.35, 1.0}, rl.ShaderUniformVec4)
 
 	// Initialize cube models
 	for i := range w.Objects {
@@ -113,11 +113,12 @@ func (w *World) Initialize() {
 		w.Objects[i].Model.Materials.Maps.Color = w.Objects[i].Color
 	}
 
-	// Create floor
-	floorMesh := rl.GenMeshPlane(60, 60, 10, 10)
+	// Create floor - GenMeshPlane creates UVs from 0-1, matching our shadow texture
+	floorMesh := rl.GenMeshPlane(FloorSize, FloorSize, 1, 1)
 	w.FloorModel = rl.LoadModelFromMesh(floorMesh)
-	w.FloorModel.Materials.Shader = w.Shader
-	w.FloorModel.Materials.Maps.Color = rl.NewColor(80, 80, 90, 255)
+	// Don't use custom shader for floor - just show the texture
+	w.FloorModel.Materials.Maps.Color = rl.White
+	rl.SetMaterialTexture(w.FloorModel.Materials, rl.MapDiffuse, w.ShadowTexture.Texture)
 }
 
 func (w *World) Update(deltaTime float32) {
@@ -142,53 +143,34 @@ func (w *World) Update(deltaTime float32) {
 	}
 }
 
-// DrawShadowMap renders the scene from light's perspective
+// DrawShadowMap renders the scene from above to create shadow texture
 func (w *World) DrawShadowMap() {
-	rl.BeginTextureMode(w.ShadowMap)
-	rl.ClearBackground(rl.White)
+	rl.BeginTextureMode(w.ShadowTexture)
+	// Light gray background - this will be the "lit" areas
+	rl.ClearBackground(rl.NewColor(180, 180, 180, 255))
 
-	rl.BeginMode3D(w.LightCamera)
+	rl.BeginMode3D(w.ShadowCamera)
 
-	lightOrthoSize := float32(40)
-	rl.SetMatrixProjection(rl.MatrixOrtho(
-		-lightOrthoSize, lightOrthoSize,
-		-lightOrthoSize, lightOrthoSize,
-		0.1, 100.0,
-	))
-
-	w.MatLightVP = rl.MatrixMultiply(rl.GetMatrixModelview(), rl.GetMatrixProjection())
-
-	// Draw with depth shader
-	w.FloorModel.Materials.Shader = w.DepthShader
-	for i := range w.Objects {
-		w.Objects[i].Model.Materials.Shader = w.DepthShader
-	}
-
-	rl.DrawModel(w.FloorModel, rl.Vector3Zero(), 1.0, rl.White)
+	// Draw cubes as dark silhouettes (shadows)
+	shadowColor := rl.NewColor(80, 80, 90, 255)
 	for _, obj := range w.Objects {
-		rl.DrawModel(obj.Model, obj.Position, 1.0, rl.White)
-	}
-
-	// Restore main shader
-	w.FloorModel.Materials.Shader = w.Shader
-	for i := range w.Objects {
-		w.Objects[i].Model.Materials.Shader = w.Shader
+		rl.DrawCube(obj.Position, obj.Size.X, obj.Size.Y, obj.Size.Z, shadowColor)
 	}
 
 	rl.EndMode3D()
 	rl.EndTextureMode()
 }
 
-// DrawWithShadows renders the scene with lighting
+// DrawWithShadows renders the main scene
 func (w *World) DrawWithShadows(cameraPos rl.Vector3) {
 	// Update view position for specular
 	viewPosLoc := rl.GetShaderLocation(w.Shader, "viewPos")
 	rl.SetShaderValue(w.Shader, viewPosLoc, []float32{cameraPos.X, cameraPos.Y, cameraPos.Z}, rl.ShaderUniformVec3)
 
-	// Draw floor
+	// Draw floor with shadow texture
 	rl.DrawModel(w.FloorModel, rl.Vector3Zero(), 1.0, rl.White)
 
-	// Draw cubes
+	// Draw cubes with lighting
 	for _, obj := range w.Objects {
 		rl.DrawModel(obj.Model, obj.Position, 1.0, rl.White)
 	}
@@ -201,8 +183,7 @@ func (w *World) DrawWithShadows(cameraPos rl.Vector3) {
 
 func (w *World) Unload() {
 	rl.UnloadShader(w.Shader)
-	rl.UnloadShader(w.DepthShader)
-	rl.UnloadRenderTexture(w.ShadowMap)
+	rl.UnloadRenderTexture(w.ShadowTexture)
 	for i := range w.Objects {
 		rl.UnloadModel(w.Objects[i].Model)
 	}
