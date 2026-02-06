@@ -2,7 +2,8 @@ package game
 
 import (
 	"fmt"
-	"test3d/internal/camera"
+	"test3d/internal/components"
+	"test3d/internal/engine"
 	"test3d/internal/physics"
 	"test3d/internal/world"
 
@@ -10,14 +11,13 @@ import (
 )
 
 type Game struct {
-	Camera    *camera.FPSCamera
+	Player    *engine.GameObject
 	World     *world.World
 	DebugMode bool
 }
 
 func New() *Game {
 	return &Game{
-		Camera:    camera.New(rl.Vector3{X: 10, Y: 10, Z: 10}),
 		World:     world.New(),
 		DebugMode: false,
 	}
@@ -35,76 +35,112 @@ func (g *Game) Run() {
 	g.World.Initialize()
 	defer g.World.Unload()
 
+	// Create player GameObject
+	g.createPlayer()
+
 	for !rl.WindowShouldClose() {
 		g.Update()
 		g.Draw()
 	}
 }
 
+func (g *Game) createPlayer() {
+	g.Player = engine.NewGameObject("Player")
+	g.Player.Transform.Position = rl.Vector3{X: 10, Y: 10, Z: 10}
+
+	// Add FPS controller
+	fps := components.NewFPSController()
+	g.Player.AddComponent(fps)
+
+	// Add camera
+	cam := components.NewCamera()
+	g.Player.AddComponent(cam)
+
+	// Add collider for player body
+	collider := components.NewBoxCollider(rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6})
+	g.Player.AddComponent(collider)
+
+	g.Player.Start()
+}
+
 func (g *Game) Update() {
 	deltaTime := rl.GetFrameTime()
-	g.Camera.Update(deltaTime)
 
-	// Player collision box (feet position is camera position minus eye height)
-	playerSize := rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6}
-	feetPos := rl.Vector3{
-		X: g.Camera.Position.X,
-		Y: g.Camera.Position.Y - g.Camera.EyeHeight + playerSize.Y/2,
-		Z: g.Camera.Position.Z,
+	// Update player
+	g.Player.Update(deltaTime)
+
+	// Get player components
+	fps := engine.GetComponent[*components.FPSController](g.Player)
+	collider := engine.GetComponent[*components.BoxCollider](g.Player)
+
+	if fps == nil || collider == nil {
+		return
 	}
-	playerAABB := physics.NewAABBFromCenter(feetPos, playerSize)
 
 	// Ground check - floor is at Y=0
-	// Player feet are at: camera.Y - EyeHeight
-	// So camera should be at: floorY + EyeHeight when standing on floor
 	floorY := float32(0.0)
-	feetY := g.Camera.Position.Y - g.Camera.EyeHeight
+	feetY := g.Player.Transform.Position.Y - fps.EyeHeight
 	if feetY <= floorY {
-		// Land on floor - put camera at eye height above floor
-		g.Camera.Position.Y = floorY + g.Camera.EyeHeight
-		g.Camera.Velocity.Y = 0
-		g.Camera.Grounded = true
+		g.Player.Transform.Position.Y = floorY + fps.EyeHeight
+		fps.Velocity.Y = 0
+		fps.Grounded = true
 	} else {
-		g.Camera.Grounded = false
+		fps.Grounded = false
 	}
 
-	// Update playerAABB after floor collision
-	feetPos.Y = g.Camera.Position.Y - g.Camera.EyeHeight + playerSize.Y/2
-	playerAABB = physics.NewAABBFromCenter(feetPos, playerSize)
+	// Collision with world objects
+	playerAABB := collider.GetAABB()
+	// Adjust AABB center for eye height offset
+	playerAABB = physics.NewAABBFromCenter(
+		rl.Vector3{
+			X: g.Player.Transform.Position.X,
+			Y: g.Player.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
+			Z: g.Player.Transform.Position.Z,
+		},
+		collider.Size,
+	)
 
-	// Resolve player collision against world objects
-	for _, obj := range g.World.Objects {
-		objAABB := physics.NewAABBFromCenter(obj.Position, obj.Size)
+	for _, obj := range g.World.GetCollidableObjects() {
+		objCollider := engine.GetComponent[*components.BoxCollider](obj)
+		if objCollider == nil {
+			continue
+		}
+
+		objAABB := objCollider.GetAABB()
 		pushOut := playerAABB.Resolve(objAABB)
+
 		if pushOut.X != 0 || pushOut.Y != 0 || pushOut.Z != 0 {
-			g.Camera.Position = rl.Vector3Add(g.Camera.Position, pushOut)
-			// If pushed up, we landed on something
+			g.Player.Transform.Position = rl.Vector3Add(g.Player.Transform.Position, pushOut)
+
 			if pushOut.Y > 0 {
-				g.Camera.Velocity.Y = 0
-				g.Camera.Grounded = true
+				fps.Velocity.Y = 0
+				fps.Grounded = true
 			}
-			// If pushed down, we hit our head
-			if pushOut.Y < 0 && g.Camera.Velocity.Y > 0 {
-				g.Camera.Velocity.Y = 0
+			if pushOut.Y < 0 && fps.Velocity.Y > 0 {
+				fps.Velocity.Y = 0
 			}
-			// Update AABB for subsequent collision checks
-			feetPos = rl.Vector3{
-				X: g.Camera.Position.X,
-				Y: g.Camera.Position.Y - g.Camera.EyeHeight + playerSize.Y/2,
-				Z: g.Camera.Position.Z,
-			}
-			playerAABB = physics.NewAABBFromCenter(feetPos, playerSize)
+
+			// Update AABB for subsequent checks
+			playerAABB = physics.NewAABBFromCenter(
+				rl.Vector3{
+					X: g.Player.Transform.Position.X,
+					Y: g.Player.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
+					Z: g.Player.Transform.Position.Z,
+				},
+				collider.Size,
+			)
 		}
 	}
 
+	// Update world
 	g.World.Update(deltaTime)
 
-	// Toggle debug mode with F1
+	// Toggle debug mode
 	if rl.IsKeyPressed(rl.KeyF1) {
 		g.DebugMode = !g.DebugMode
 	}
 
-	// Move light with arrow keys + Q/E for up/down
+	// Light controls
 	lightSpeed := float32(1.0) * deltaTime
 	if rl.IsKeyDown(rl.KeyLeft) {
 		g.World.MoveLightDir(-lightSpeed, 0, 0)
@@ -119,20 +155,25 @@ func (g *Game) Update() {
 		g.World.MoveLightDir(0, 0, -lightSpeed)
 	}
 	if rl.IsKeyDown(rl.KeyQ) {
-		g.World.MoveLightDir(0, -lightSpeed, 0) // Light points more down
+		g.World.MoveLightDir(0, -lightSpeed, 0)
 	}
 	if rl.IsKeyDown(rl.KeyE) {
-		g.World.MoveLightDir(0, lightSpeed, 0) // Light points more up
+		g.World.MoveLightDir(0, lightSpeed, 0)
 	}
 }
 
 func (g *Game) Draw() {
-	camera := g.Camera.GetRaylibCamera()
+	cam := engine.GetComponent[*components.Camera](g.Player)
+	if cam == nil {
+		return
+	}
 
-	// First: render shadow map (before BeginDrawing to avoid state conflicts)
+	camera := cam.GetRaylibCamera()
+
+	// Shadow pass
 	g.World.DrawShadowMap()
 
-	// Second: main scene rendering
+	// Main render
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.NewColor(20, 20, 30, 255))
 
@@ -149,14 +190,12 @@ func (g *Game) DrawUI() {
 	rl.DrawText("F1 to toggle debug view", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 
-	// Debug: draw shadowmap preview
 	if g.DebugMode {
 		previewSize := int32(256)
 		screenW := int32(rl.GetScreenWidth())
-		// Draw shadowmap depth texture as preview in corner
 		rl.DrawTexturePro(
 			g.World.ShadowMap.Depth,
-			rl.Rectangle{X: 0, Y: 0, Width: float32(g.World.ShadowMap.Depth.Width), Height: float32(-g.World.ShadowMap.Depth.Height)}, // Flip Y
+			rl.Rectangle{X: 0, Y: 0, Width: float32(g.World.ShadowMap.Depth.Width), Height: float32(-g.World.ShadowMap.Depth.Height)},
 			rl.Rectangle{X: float32(screenW - previewSize - 10), Y: 10, Width: float32(previewSize), Height: float32(previewSize)},
 			rl.Vector2{X: 0, Y: 0},
 			0,
@@ -165,7 +204,6 @@ func (g *Game) DrawUI() {
 		rl.DrawRectangleLines(screenW-previewSize-10, 10, previewSize, previewSize, rl.Green)
 		rl.DrawText("Shadow Map", screenW-previewSize-10, previewSize+15, 16, rl.Green)
 
-		// Show light direction
 		lightDir := g.World.LightDir
 		rl.DrawText(fmt.Sprintf("Light Dir: (%.2f, %.2f, %.2f)", lightDir.X, lightDir.Y, lightDir.Z), 10, 85, 16, rl.Yellow)
 	}
