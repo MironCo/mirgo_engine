@@ -24,6 +24,7 @@ func New() *Game {
 }
 
 func (g *Game) Run() {
+	rl.SetConfigFlags(rl.FlagWindowHighdpi)
 	rl.InitWindow(1280, 720, "3D Animated Cubes with Lighting")
 	defer rl.CloseWindow()
 
@@ -42,17 +43,57 @@ func (g *Game) Run() {
 
 func (g *Game) Update() {
 	deltaTime := rl.GetFrameTime()
-	g.Camera.Update()
+	g.Camera.Update(deltaTime)
+
+	// Player collision box (feet position is camera position minus eye height)
+	playerSize := rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6}
+	feetPos := rl.Vector3{
+		X: g.Camera.Position.X,
+		Y: g.Camera.Position.Y - g.Camera.EyeHeight + playerSize.Y/2,
+		Z: g.Camera.Position.Z,
+	}
+	playerAABB := physics.NewAABBFromCenter(feetPos, playerSize)
+
+	// Ground check - floor is at Y=0
+	// Player feet are at: camera.Y - EyeHeight
+	// So camera should be at: floorY + EyeHeight when standing on floor
+	floorY := float32(0.0)
+	feetY := g.Camera.Position.Y - g.Camera.EyeHeight
+	if feetY <= floorY {
+		// Land on floor - put camera at eye height above floor
+		g.Camera.Position.Y = floorY + g.Camera.EyeHeight
+		g.Camera.Velocity.Y = 0
+		g.Camera.Grounded = true
+	} else {
+		g.Camera.Grounded = false
+	}
+
+	// Update playerAABB after floor collision
+	feetPos.Y = g.Camera.Position.Y - g.Camera.EyeHeight + playerSize.Y/2
+	playerAABB = physics.NewAABBFromCenter(feetPos, playerSize)
 
 	// Resolve player collision against world objects
-	playerSize := rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6}
-	playerAABB := physics.NewAABBFromCenter(g.Camera.Position, playerSize)
 	for _, obj := range g.World.Objects {
 		objAABB := physics.NewAABBFromCenter(obj.Position, obj.Size)
 		pushOut := playerAABB.Resolve(objAABB)
 		if pushOut.X != 0 || pushOut.Y != 0 || pushOut.Z != 0 {
 			g.Camera.Position = rl.Vector3Add(g.Camera.Position, pushOut)
-			playerAABB = physics.NewAABBFromCenter(g.Camera.Position, playerSize)
+			// If pushed up, we landed on something
+			if pushOut.Y > 0 {
+				g.Camera.Velocity.Y = 0
+				g.Camera.Grounded = true
+			}
+			// If pushed down, we hit our head
+			if pushOut.Y < 0 && g.Camera.Velocity.Y > 0 {
+				g.Camera.Velocity.Y = 0
+			}
+			// Update AABB for subsequent collision checks
+			feetPos = rl.Vector3{
+				X: g.Camera.Position.X,
+				Y: g.Camera.Position.Y - g.Camera.EyeHeight + playerSize.Y/2,
+				Z: g.Camera.Position.Z,
+			}
+			playerAABB = physics.NewAABBFromCenter(feetPos, playerSize)
 		}
 	}
 
@@ -104,7 +145,7 @@ func (g *Game) Draw() {
 }
 
 func (g *Game) DrawUI() {
-	rl.DrawText("WASD to move, Mouse to look, Arrows+Q/E to move light", 10, 10, 20, rl.DarkGray)
+	rl.DrawText("WASD to move, Space to jump, Mouse to look", 10, 10, 20, rl.DarkGray)
 	rl.DrawText("F1 to toggle debug view", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 

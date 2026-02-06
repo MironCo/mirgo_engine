@@ -241,6 +241,9 @@ func (w *World) DrawShadowMap() {
 	rl.EndMode3D()
 	rl.EndTextureMode()
 
+	// Reset viewport to full framebuffer size for main rendering (use RenderWidth/Height for Retina)
+	rl.Viewport(0, 0, int32(rl.GetRenderWidth()), int32(rl.GetRenderHeight()))
+
 	// Calculate lightViewProj AFTER EndTextureMode (like raylib example)
 	w.MatLightVP = rl.MatrixMultiply(lightView, lightProj)
 }

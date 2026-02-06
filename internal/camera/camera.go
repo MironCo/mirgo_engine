@@ -8,23 +8,35 @@ import (
 
 type FPSCamera struct {
 	Position  rl.Vector3
+	Velocity  rl.Vector3
 	Yaw       float32
 	Pitch     float32
 	MoveSpeed float32
 	LookSpeed float32
+
+	// Physics
+	Gravity      float32
+	JumpStrength float32
+	Grounded     bool
+	EyeHeight    float32 // Height of camera above feet
 }
 
 func New(pos rl.Vector3) *FPSCamera {
 	return &FPSCamera{
-		Position:  pos,
-		Yaw:       -135.0,
-		Pitch:     -30.0,
-		MoveSpeed: 0.2,
-		LookSpeed: 0.1,
+		Position:     pos,
+		Velocity:     rl.Vector3{},
+		Yaw:          -135.0,
+		Pitch:        -30.0,
+		MoveSpeed:    8.0,  // Units per second
+		LookSpeed:    0.1,
+		Gravity:      20.0, // Units per second squared
+		JumpStrength: 8.0,  // Initial upward velocity
+		Grounded:     false,
+		EyeHeight:    5.0,
 	}
 }
 
-func (c *FPSCamera) Update() {
+func (c *FPSCamera) Update(deltaTime float32) {
 	// Mouse look
 	mouseDelta := rl.GetMouseDelta()
 	c.Yaw += mouseDelta.X * c.LookSpeed
@@ -38,32 +50,54 @@ func (c *FPSCamera) Update() {
 		c.Pitch = -89
 	}
 
-	// Calculate movement vectors
+	// Calculate movement vectors (horizontal plane only)
 	forward, right := c.getDirections()
 
-	// WASD movement
+	// Build horizontal movement from input
+	var moveDir rl.Vector3
 	if rl.IsKeyDown(rl.KeyW) {
-		c.Position.X += forward.X * c.MoveSpeed
-		c.Position.Z += forward.Z * c.MoveSpeed
+		moveDir.X += forward.X
+		moveDir.Z += forward.Z
 	}
 	if rl.IsKeyDown(rl.KeyS) {
-		c.Position.X -= forward.X * c.MoveSpeed
-		c.Position.Z -= forward.Z * c.MoveSpeed
+		moveDir.X -= forward.X
+		moveDir.Z -= forward.Z
 	}
 	if rl.IsKeyDown(rl.KeyA) {
-		c.Position.X += right.X * c.MoveSpeed
-		c.Position.Z += right.Z * c.MoveSpeed
+		moveDir.X += right.X
+		moveDir.Z += right.Z
 	}
 	if rl.IsKeyDown(rl.KeyD) {
-		c.Position.X -= right.X * c.MoveSpeed
-		c.Position.Z -= right.Z * c.MoveSpeed
+		moveDir.X -= right.X
+		moveDir.Z -= right.Z
 	}
-	if rl.IsKeyDown(rl.KeySpace) {
-		c.Position.Y += c.MoveSpeed
+
+	// Normalize diagonal movement so you don't go faster diagonally
+	moveLen := float32(math.Sqrt(float64(moveDir.X*moveDir.X + moveDir.Z*moveDir.Z)))
+	if moveLen > 0 {
+		moveDir.X /= moveLen
+		moveDir.Z /= moveLen
 	}
-	if rl.IsKeyDown(rl.KeyLeftShift) {
-		c.Position.Y -= c.MoveSpeed
+
+	// Apply horizontal velocity
+	c.Velocity.X = moveDir.X * c.MoveSpeed
+	c.Velocity.Z = moveDir.Z * c.MoveSpeed
+
+	// Jump
+	if rl.IsKeyPressed(rl.KeySpace) && c.Grounded {
+		c.Velocity.Y = c.JumpStrength
+		c.Grounded = false
 	}
+
+	// Apply gravity
+	if !c.Grounded {
+		c.Velocity.Y -= c.Gravity * deltaTime
+	}
+
+	// Update position
+	c.Position.X += c.Velocity.X * deltaTime
+	c.Position.Y += c.Velocity.Y * deltaTime
+	c.Position.Z += c.Velocity.Z * deltaTime
 }
 
 func (c *FPSCamera) getDirections() (forward, right rl.Vector3) {
