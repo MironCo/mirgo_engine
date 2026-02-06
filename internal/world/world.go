@@ -11,7 +11,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-const ShadowMapResolution = 1024
+const ShadowMapResolution = 2048
 
 type World struct {
 	Scene        *engine.Scene

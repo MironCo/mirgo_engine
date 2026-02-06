@@ -17,7 +17,7 @@ uniform vec4 lightColor;
 
 out vec4 finalColor;
 
-float calculateShadow()
+float calculateShadow(vec3 normal, vec3 lightDirection)
 {
     // Check if fragment is outside shadowmap bounds
     if (fragShadowTexCoord.x < 0.0 || fragShadowTexCoord.x > 1.0 ||
@@ -28,11 +28,11 @@ float calculateShadow()
     // Sample depth from shadowmap
     float shadowDepth = texture(shadowMap, fragShadowTexCoord).r;
 
-    // Bias to prevent shadow acne (adjust as needed)
-    float bias = 0.005;
+    // Slope-scaled bias: surfaces at steep angles to light need more bias
+    float NdotL = dot(normal, lightDirection);
+    float bias = max(0.01 * (1.0 - NdotL), 0.002);
 
     // Compare depths: if fragment is further than shadowmap sample, it's in shadow
-    // Subtract bias from fragShadowDepth to prevent self-shadowing
     if (fragShadowDepth - bias > shadowDepth) {
         return 0.3; // In shadow - return shadow intensity
     }
@@ -47,8 +47,8 @@ void main()
     // lightDir is direction light points (e.g. down), we need direction TOWARD light
     vec3 lightDirection = normalize(-lightDir);
 
-    // Calculate shadow factor
-    float shadow = calculateShadow();
+    // Calculate shadow factor (pass normal and light dir for slope-scaled bias)
+    float shadow = calculateShadow(normal, lightDirection);
 
     // Diffuse lighting (wrap lighting for softer look)
     float NdotL = dot(normal, lightDirection);

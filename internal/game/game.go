@@ -29,7 +29,7 @@ func (g *Game) Run() {
 	rl.InitWindow(1280, 720, "3D Animated Cubes with Lighting")
 	defer rl.CloseWindow()
 
-	rl.SetTargetFPS(60)
+	rl.SetTargetFPS(120)
 	rl.DisableCursor()
 
 	// Initialize world after OpenGL context is created
@@ -155,8 +155,8 @@ func (g *Game) Update() {
 		g.DebugMode = !g.DebugMode
 	}
 
-	// Shoot sphere with left mouse button
-	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+	// Shoot sphere with left mouse button (full auto)
+	if rl.IsMouseButtonDown(rl.MouseLeftButton) {
 		g.ShootSphere(fps)
 	}
 

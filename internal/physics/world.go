@@ -3,6 +3,7 @@ package physics
 import (
 	"test3d/internal/components"
 	"test3d/internal/engine"
+	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -38,11 +39,28 @@ func estimateContactPoint(center rl.Vector3, halfSize rl.Vector3, pushDir rl.Vec
 	return contact
 }
 
+// Spatial grid cell size - objects within same or neighboring cells are checked
+const CellSize = 5.0
+
+// Cell key for spatial hashing
+type CellKey struct {
+	X, Y, Z int
+}
+
+func posToCell(pos rl.Vector3) CellKey {
+	return CellKey{
+		X: int(pos.X / CellSize),
+		Y: int(pos.Y / CellSize),
+		Z: int(pos.Z / CellSize),
+	}
+}
+
 type PhysicsWorld struct {
 	Gravity    rl.Vector3
 	Objects    []*engine.GameObject // dynamic rigidbodies
 	Kinematics []*engine.GameObject // kinematic rigidbodies (player, moving platforms)
 	Statics    []*engine.GameObject // no rigidbody (walls, floor)
+	grid       map[CellKey][]*engine.GameObject
 }
 
 func NewPhysicsWorld() *PhysicsWorld {
@@ -51,7 +69,39 @@ func NewPhysicsWorld() *PhysicsWorld {
 		Objects:    make([]*engine.GameObject, 0),
 		Kinematics: make([]*engine.GameObject, 0),
 		Statics:    make([]*engine.GameObject, 0),
+		grid:       make(map[CellKey][]*engine.GameObject),
 	}
+}
+
+// rebuildGrid clears and repopulates the spatial hash grid
+func (p *PhysicsWorld) rebuildGrid() {
+	// Clear grid
+	for k := range p.grid {
+		delete(p.grid, k)
+	}
+
+	// Insert all dynamic objects
+	for _, obj := range p.Objects {
+		cell := posToCell(obj.Transform.Position)
+		p.grid[cell] = append(p.grid[cell], obj)
+	}
+}
+
+// getNeighborObjects returns all objects in same cell and 26 neighboring cells
+func (p *PhysicsWorld) getNeighborObjects(obj *engine.GameObject) []*engine.GameObject {
+	cell := posToCell(obj.Transform.Position)
+	var neighbors []*engine.GameObject
+
+	// Check 3x3x3 cube of cells centered on object's cell
+	for dx := -1; dx <= 1; dx++ {
+		for dy := -1; dy <= 1; dy++ {
+			for dz := -1; dz <= 1; dz++ {
+				key := CellKey{cell.X + dx, cell.Y + dy, cell.Z + dz}
+				neighbors = append(neighbors, p.grid[key]...)
+			}
+		}
+	}
+	return neighbors
 }
 
 func (p *PhysicsWorld) AddObject(g *engine.GameObject) {
@@ -98,10 +148,29 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 		rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, damping)
 	}
 
-	// 2. Rigidbody vs Rigidbody collision (O(n²) baby)
-	for i := 0; i < len(p.Objects); i++ {
-		for j := i + 1; j < len(p.Objects); j++ {
-			p.resolveCollision(p.Objects[i], p.Objects[j])
+	// 2. Rebuild spatial grid and do broad-phase collision
+	p.rebuildGrid()
+
+	// Track checked pairs to avoid duplicate checks
+	checked := make(map[[2]uintptr]bool)
+
+	for _, obj := range p.Objects {
+		neighbors := p.getNeighborObjects(obj)
+		for _, other := range neighbors {
+			if obj == other {
+				continue
+			}
+			// Create consistent pair key using pointer addresses (smaller first)
+			ptrA, ptrB := uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(other))
+			if ptrA > ptrB {
+				ptrA, ptrB = ptrB, ptrA
+			}
+			key := [2]uintptr{ptrA, ptrB}
+			if checked[key] {
+				continue
+			}
+			checked[key] = true
+			p.resolveCollision(obj, other)
 		}
 	}
 
