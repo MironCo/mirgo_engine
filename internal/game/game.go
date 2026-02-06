@@ -6,6 +6,7 @@ import (
 	"test3d/internal/engine"
 	"test3d/internal/physics"
 	"test3d/internal/world"
+	"time"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -15,6 +16,11 @@ type Game struct {
 	World       *world.World
 	DebugMode   bool
 	cubeCounter int
+
+	// Debug timing (ms)
+	updateMs  float64
+	shadowMs  float64
+	drawMs    float64
 }
 
 func New() *Game {
@@ -74,6 +80,7 @@ func (g *Game) createPlayer() {
 }
 
 func (g *Game) Update() {
+	updateStart := time.Now()
 	deltaTime := rl.GetFrameTime()
 
 	// Update player
@@ -180,6 +187,8 @@ func (g *Game) Update() {
 	if rl.IsKeyDown(rl.KeyE) {
 		g.World.MoveLightDir(0, lightSpeed, 0)
 	}
+
+	g.updateMs = float64(time.Since(updateStart).Microseconds()) / 1000.0
 }
 
 func (g *Game) Draw() {
@@ -191,15 +200,19 @@ func (g *Game) Draw() {
 	camera := cam.GetRaylibCamera()
 
 	// Shadow pass
+	shadowStart := time.Now()
 	g.World.DrawShadowMap()
+	g.shadowMs = float64(time.Since(shadowStart).Microseconds()) / 1000.0
 
 	// Main render
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.NewColor(20, 20, 30, 255))
 
+	drawStart := time.Now()
 	rl.BeginMode3D(camera)
 	g.World.DrawWithShadows(camera.Position)
 	rl.EndMode3D()
+	g.drawMs = float64(time.Since(drawStart).Microseconds()) / 1000.0
 
 	g.DrawUI()
 	rl.EndDrawing()
@@ -226,6 +239,11 @@ func (g *Game) DrawUI() {
 
 		lightDir := g.World.LightDir
 		rl.DrawText(fmt.Sprintf("Light Dir: (%.2f, %.2f, %.2f)", lightDir.X, lightDir.Y, lightDir.Z), 10, 85, 16, rl.Yellow)
+
+		rl.DrawText(fmt.Sprintf("Update:  %.2f ms", g.updateMs), 10, 110, 16, rl.Green)
+		rl.DrawText(fmt.Sprintf("Shadows: %.2f ms", g.shadowMs), 10, 130, 16, rl.Green)
+		rl.DrawText(fmt.Sprintf("Draw:    %.2f ms", g.drawMs), 10, 150, 16, rl.Green)
+		rl.DrawText(fmt.Sprintf("Total:   %.2f ms", g.updateMs+g.shadowMs+g.drawMs), 10, 170, 16, rl.Lime)
 	}
 }
 
