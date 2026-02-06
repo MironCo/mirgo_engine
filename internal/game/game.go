@@ -174,22 +174,22 @@ func (g *Game) Update() {
 	// Light controls
 	lightSpeed := float32(1.0) * deltaTime
 	if rl.IsKeyDown(rl.KeyLeft) {
-		g.World.MoveLightDir(-lightSpeed, 0, 0)
+		g.World.Renderer.MoveLightDir(-lightSpeed, 0, 0)
 	}
 	if rl.IsKeyDown(rl.KeyRight) {
-		g.World.MoveLightDir(lightSpeed, 0, 0)
+		g.World.Renderer.MoveLightDir(lightSpeed, 0, 0)
 	}
 	if rl.IsKeyDown(rl.KeyUp) {
-		g.World.MoveLightDir(0, 0, lightSpeed)
+		g.World.Renderer.MoveLightDir(0, 0, lightSpeed)
 	}
 	if rl.IsKeyDown(rl.KeyDown) {
-		g.World.MoveLightDir(0, 0, -lightSpeed)
+		g.World.Renderer.MoveLightDir(0, 0, -lightSpeed)
 	}
 	if rl.IsKeyDown(rl.KeyQ) {
-		g.World.MoveLightDir(0, -lightSpeed, 0)
+		g.World.Renderer.MoveLightDir(0, -lightSpeed, 0)
 	}
 	if rl.IsKeyDown(rl.KeyE) {
-		g.World.MoveLightDir(0, lightSpeed, 0)
+		g.World.Renderer.MoveLightDir(0, lightSpeed, 0)
 	}
 
 	g.updateMs = float64(time.Since(updateStart).Microseconds()) / 1000.0
@@ -205,7 +205,7 @@ func (g *Game) Draw() {
 
 	// Shadow pass
 	shadowStart := time.Now()
-	g.World.DrawShadowMap()
+	g.World.Renderer.DrawShadowMap(g.World.Scene.GameObjects)
 	g.shadowMs = float64(time.Since(shadowStart).Microseconds()) / 1000.0
 
 	// Main render
@@ -214,7 +214,7 @@ func (g *Game) Draw() {
 
 	drawStart := time.Now()
 	rl.BeginMode3D(camera)
-	g.World.DrawWithShadows(camera.Position)
+	g.World.Renderer.DrawWithShadows(camera.Position, g.World.Scene.GameObjects)
 	rl.EndMode3D()
 	g.drawMs = float64(time.Since(drawStart).Microseconds()) / 1000.0
 
@@ -231,8 +231,8 @@ func (g *Game) DrawUI() {
 		previewSize := int32(256)
 		screenW := int32(rl.GetScreenWidth())
 		rl.DrawTexturePro(
-			g.World.ShadowMap.Depth,
-			rl.Rectangle{X: 0, Y: 0, Width: float32(g.World.ShadowMap.Depth.Width), Height: float32(-g.World.ShadowMap.Depth.Height)},
+			g.World.Renderer.ShadowMap.Depth,
+			rl.Rectangle{X: 0, Y: 0, Width: float32(g.World.Renderer.ShadowMap.Depth.Width), Height: float32(-g.World.Renderer.ShadowMap.Depth.Height)},
 			rl.Rectangle{X: float32(screenW - previewSize - 10), Y: 10, Width: float32(previewSize), Height: float32(previewSize)},
 			rl.Vector2{X: 0, Y: 0},
 			0,
@@ -241,7 +241,7 @@ func (g *Game) DrawUI() {
 		rl.DrawRectangleLines(screenW-previewSize-10, 10, previewSize, previewSize, rl.Green)
 		rl.DrawText("Shadow Map", screenW-previewSize-10, previewSize+15, 16, rl.Green)
 
-		lightDir := g.World.LightDir
+		lightDir := g.World.Renderer.LightDir
 		rl.DrawText(fmt.Sprintf("Light Dir: (%.2f, %.2f, %.2f)", lightDir.X, lightDir.Y, lightDir.Z), 10, 85, 16, rl.Yellow)
 
 		rl.DrawText(fmt.Sprintf("Update:  %.2f ms", g.updateMs), 10, 110, 16, rl.Green)
@@ -268,7 +268,7 @@ func (g *Game) ShootSphere(fps *components.FPSController) {
 	mesh := rl.GenMeshSphere(radius, 16, 16)
 	model := rl.LoadModelFromMesh(mesh)
 	renderer := components.NewModelRenderer(model, rl.Orange)
-	renderer.SetShader(g.World.Shader)
+	renderer.SetShader(g.World.Renderer.Shader)
 	sphere.AddComponent(renderer)
 
 	// Add sphere collider
