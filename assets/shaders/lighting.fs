@@ -25,19 +25,24 @@ float calculateShadow(vec3 normal, vec3 lightDirection)
         return 1.0; // No shadow outside the shadowmap
     }
 
-    // Sample depth from shadowmap
-    float shadowDepth = texture(shadowMap, fragShadowTexCoord).r;
-
     // Slope-scaled bias: surfaces at steep angles to light need more bias
     float NdotL = dot(normal, lightDirection);
     float bias = max(0.004 * (1.0 - NdotL), 0.0005);
 
-    // Compare depths: if fragment is further than shadowmap sample, it's in shadow
-    if (fragShadowDepth - bias > shadowDepth) {
-        return 0.3; // In shadow - return shadow intensity
+    // PCF: sample a 5x5 kernel around the shadow coordinate
+    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+    float shadow = 0.0;
+    for (int x = -2; x <= 2; x++) {
+        for (int y = -2; y <= 2; y++) {
+            float sampleDepth = texture(shadowMap, fragShadowTexCoord + vec2(x, y) * texelSize).r;
+            shadow += (fragShadowDepth - bias > sampleDepth) ? 0.0 : 1.0;
+        }
     }
+    shadow /= 25.0;
 
-    return 1.0; // Fully lit
+    // Remap from [0,1] to [shadowIntensity,1]
+    float shadowIntensity = 0.3;
+    return shadowIntensity + shadow * (1.0 - shadowIntensity);
 }
 
 void main()
