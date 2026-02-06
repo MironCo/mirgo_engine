@@ -6,21 +6,21 @@ CMD_PATH=./cmd/test3d
 all: build
 
 build:
-	go build -o bin/$(BINARY_NAME) $(CMD_PATH)
+	go build -o $(BINARY_NAME) $(CMD_PATH)
 
 run:
 	go run $(CMD_PATH)
 
 clean:
-	rm -rf bin/
+	rm -f $(BINARY_NAME) $(BINARY_NAME).exe $(BINARY_NAME)-linux
 
 # Cross-compilation is tricky with raylib due to CGO
 # These targets require the appropriate cross-compilers and libs installed
 
 build-windows:
 	CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 \
-	go build -o bin/$(BINARY_NAME).exe $(CMD_PATH)
+	go build -o $(BINARY_NAME).exe $(CMD_PATH)
 
 build-linux:
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-	go build -o bin/$(BINARY_NAME)-linux $(CMD_PATH)
+	go build -o $(BINARY_NAME)-linux $(CMD_PATH)
