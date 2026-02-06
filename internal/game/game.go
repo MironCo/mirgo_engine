@@ -21,6 +21,8 @@ type Game struct {
 	updateMs  float64
 	shadowMs  float64
 	drawMs    float64
+
+	lastShotTime float64
 }
 
 func New() *Game {
@@ -162,9 +164,11 @@ func (g *Game) Update() {
 		g.DebugMode = !g.DebugMode
 	}
 
-	// Shoot sphere with left mouse button (full auto)
-	if rl.IsMouseButtonDown(rl.MouseLeftButton) {
+	// Shoot sphere with left mouse button (with cooldown)
+	const shootCooldown = 0.15
+	if rl.IsMouseButtonDown(rl.MouseLeftButton) && rl.GetTime()-g.lastShotTime >= shootCooldown {
 		g.ShootSphere(fps)
+		g.lastShotTime = rl.GetTime()
 	}
 
 	// Light controls

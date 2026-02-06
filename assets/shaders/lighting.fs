@@ -30,7 +30,7 @@ float calculateShadow(vec3 normal, vec3 lightDirection)
 
     // Slope-scaled bias: surfaces at steep angles to light need more bias
     float NdotL = dot(normal, lightDirection);
-    float bias = max(0.01 * (1.0 - NdotL), 0.002);
+    float bias = max(0.004 * (1.0 - NdotL), 0.0005);
 
     // Compare depths: if fragment is further than shadowmap sample, it's in shadow
     if (fragShadowDepth - bias > shadowDepth) {
