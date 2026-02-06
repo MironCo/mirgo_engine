@@ -2,7 +2,6 @@ package components
 
 import (
 	"test3d/internal/engine"
-	"test3d/internal/physics"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -20,8 +19,8 @@ func NewBoxCollider(size rl.Vector3) *BoxCollider {
 	}
 }
 
-func (b *BoxCollider) GetAABB() physics.AABB {
+// GetCenter returns the world-space center of this collider
+func (b *BoxCollider) GetCenter() rl.Vector3 {
 	g := b.GetGameObject()
-	center := rl.Vector3Add(g.Transform.Position, b.Offset)
-	return physics.NewAABBFromCenter(center, b.Size)
+	return rl.Vector3Add(g.Transform.Position, b.Offset)
 }

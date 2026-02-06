@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"test3d/internal/components"
 	"test3d/internal/engine"
+	"test3d/internal/physics"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -13,18 +14,20 @@ import (
 const ShadowMapResolution = 1024
 
 type World struct {
-	Scene       *engine.Scene
-	LightDir    rl.Vector3
-	Shader      rl.Shader
-	FloorModel  rl.Model
-	ShadowMap   rl.RenderTexture2D
-	LightCamera rl.Camera3D
-	MatLightVP  rl.Matrix
+	Scene        *engine.Scene
+	PhysicsWorld *physics.PhysicsWorld
+	LightDir     rl.Vector3
+	Shader       rl.Shader
+	FloorModel   rl.Model
+	ShadowMap    rl.RenderTexture2D
+	LightCamera  rl.Camera3D
+	MatLightVP   rl.Matrix
 }
 
 func New() *World {
 	w := &World{
-		Scene: engine.NewScene("Main"),
+		Scene:        engine.NewScene("Main"),
+		PhysicsWorld: physics.NewPhysicsWorld(),
 	}
 	return w
 }
@@ -66,6 +69,14 @@ func (w *World) Initialize() {
 	w.FloorModel.Materials.Shader = w.Shader
 	w.FloorModel.Materials.Maps.Color = rl.LightGray
 
+	// Create floor collider for physics (thin box at Y=0)
+	floor := engine.NewGameObject("Floor")
+	floor.Transform.Position = rl.Vector3{X: 0, Y: -0.5, Z: 0} // Center of box is below surface
+	floorCollider := components.NewBoxCollider(rl.Vector3{X: FloorSize, Y: 1.0, Z: FloorSize})
+	floor.AddComponent(floorCollider)
+	w.Scene.AddGameObject(floor)
+	w.PhysicsWorld.AddObject(floor) // No rigidbody = static
+
 	// Create cube GameObjects
 	w.createCubes()
 
@@ -86,7 +97,7 @@ func (w *World) createCubes() {
 
 		pos := rl.Vector3{
 			X: float32(math.Cos(float64(angle))) * radius,
-			Y: float32(2 + rand.Float64()*3),
+			Y: float32(5 + rand.Float64()*10), // Start higher so they fall
 			Z: float32(math.Sin(float64(angle))) * radius,
 		}
 
@@ -108,18 +119,14 @@ func (w *World) createCubes() {
 		collider := components.NewBoxCollider(size)
 		cube.AddComponent(collider)
 
-		// Add animator
-		animator := components.NewCubeAnimator(
-			pos,
-			rl.Vector3Normalize(rl.Vector3{X: rand.Float32(), Y: rand.Float32(), Z: rand.Float32()}),
-			float32(30+rand.Float64()*60),
-			float32(2+rand.Float64()*3),
-			float32(0.5+rand.Float64()*1.5),
-			float32(rand.Float64()*2*math.Pi),
-		)
-		cube.AddComponent(animator)
+		// Add rigidbody for physics
+		rb := components.NewRigidbody()
+		rb.Bounciness = 0.4 + rand.Float32()*0.4 // Random bounce 0.4-0.8
+		rb.Friction = 0.05 + rand.Float32()*0.1
+		cube.AddComponent(rb)
 
 		w.Scene.AddGameObject(cube)
+		w.PhysicsWorld.AddObject(cube)
 	}
 }
 
@@ -169,6 +176,7 @@ func getLightCameraUp(lightDir rl.Vector3) rl.Vector3 {
 }
 
 func (w *World) Update(deltaTime float32) {
+	w.PhysicsWorld.Update(deltaTime)
 	w.Scene.Update(deltaTime)
 }
 

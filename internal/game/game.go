@@ -89,9 +89,8 @@ func (g *Game) Update() {
 	}
 
 	// Collision with world objects
-	playerAABB := collider.GetAABB()
-	// Adjust AABB center for eye height offset
-	playerAABB = physics.NewAABBFromCenter(
+	// Build AABB with eye height offset
+	playerAABB := physics.NewAABBFromCenter(
 		rl.Vector3{
 			X: g.Player.Transform.Position.X,
 			Y: g.Player.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
@@ -106,7 +105,7 @@ func (g *Game) Update() {
 			continue
 		}
 
-		objAABB := objCollider.GetAABB()
+		objAABB := physics.NewAABBFromCenter(obj.Transform.Position, objCollider.Size)
 		pushOut := playerAABB.Resolve(objAABB)
 
 		if pushOut.X != 0 || pushOut.Y != 0 || pushOut.Z != 0 {
