@@ -115,14 +115,20 @@ func (w *World) createCubes() {
 		renderer.SetShader(w.Shader)
 		cube.AddComponent(renderer)
 
-		// Add collider
-		collider := components.NewBoxCollider(size)
-		cube.AddComponent(collider)
+		// Add box collider
+		boxCol := components.NewBoxCollider(size)
+		cube.AddComponent(boxCol)
 
 		// Add rigidbody for physics
 		rb := components.NewRigidbody()
 		rb.Bounciness = 0.4 + rand.Float32()*0.4 // Random bounce 0.4-0.8
 		rb.Friction = 0.05 + rand.Float32()*0.1
+		// Give some initial spin
+		rb.AngularVelocity = rl.Vector3{
+			X: (rand.Float32() - 0.5) * 200,
+			Y: (rand.Float32() - 0.5) * 200,
+			Z: (rand.Float32() - 0.5) * 200,
+		}
 		cube.AddComponent(rb)
 
 		w.Scene.AddGameObject(cube)

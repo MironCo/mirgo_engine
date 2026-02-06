@@ -7,26 +7,61 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// Cross product of two vectors
+func cross(a, b rl.Vector3) rl.Vector3 {
+	return rl.Vector3{
+		X: a.Y*b.Z - a.Z*b.Y,
+		Y: a.Z*b.X - a.X*b.Z,
+		Z: a.X*b.Y - a.Y*b.X,
+	}
+}
+
+// Estimate contact point on object's surface given push direction
+func estimateContactPoint(center rl.Vector3, halfSize rl.Vector3, pushDir rl.Vector3) rl.Vector3 {
+	// Contact is on the face opposite to push direction
+	contact := center
+	if pushDir.X > 0.5 {
+		contact.X -= halfSize.X
+	} else if pushDir.X < -0.5 {
+		contact.X += halfSize.X
+	}
+	if pushDir.Y > 0.5 {
+		contact.Y -= halfSize.Y
+	} else if pushDir.Y < -0.5 {
+		contact.Y += halfSize.Y
+	}
+	if pushDir.Z > 0.5 {
+		contact.Z -= halfSize.Z
+	} else if pushDir.Z < -0.5 {
+		contact.Z += halfSize.Z
+	}
+	return contact
+}
+
 type PhysicsWorld struct {
-	Gravity rl.Vector3
-	Objects []*engine.GameObject // objects with rigidbodies
-	Statics []*engine.GameObject // objects without rigidbodies (walls, floor, etc)
+	Gravity    rl.Vector3
+	Objects    []*engine.GameObject // dynamic rigidbodies
+	Kinematics []*engine.GameObject // kinematic rigidbodies (player, moving platforms)
+	Statics    []*engine.GameObject // no rigidbody (walls, floor)
 }
 
 func NewPhysicsWorld() *PhysicsWorld {
 	return &PhysicsWorld{
-		Gravity: rl.Vector3{X: 0, Y: -20.0, Z: 0},
-		Objects: make([]*engine.GameObject, 0),
-		Statics: make([]*engine.GameObject, 0),
+		Gravity:    rl.Vector3{X: 0, Y: -20.0, Z: 0},
+		Objects:    make([]*engine.GameObject, 0),
+		Kinematics: make([]*engine.GameObject, 0),
+		Statics:    make([]*engine.GameObject, 0),
 	}
 }
 
 func (p *PhysicsWorld) AddObject(g *engine.GameObject) {
 	rb := engine.GetComponent[*components.Rigidbody](g)
-	if rb != nil && !rb.IsKinematic {
-		p.Objects = append(p.Objects, g)
-	} else {
+	if rb == nil {
 		p.Statics = append(p.Statics, g)
+	} else if rb.IsKinematic {
+		p.Kinematics = append(p.Kinematics, g)
+	} else {
+		p.Objects = append(p.Objects, g)
 	}
 }
 
@@ -48,12 +83,32 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 			obj.Transform.Position,
 			rl.Vector3Scale(rb.Velocity, deltaTime),
 		)
+
+		// Integrate rotation (angular velocity in degrees/sec)
+		obj.Transform.Rotation = rl.Vector3Add(
+			obj.Transform.Rotation,
+			rl.Vector3Scale(rb.AngularVelocity, deltaTime),
+		)
+
+		// Apply angular damping (time-based so it's framerate independent)
+		damping := float32(1.0) - (1.0-rb.AngularDamping)*deltaTime*60
+		if damping < 0 {
+			damping = 0
+		}
+		rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, damping)
 	}
 
 	// 2. Rigidbody vs Rigidbody collision (O(n²) baby)
 	for i := 0; i < len(p.Objects); i++ {
 		for j := i + 1; j < len(p.Objects); j++ {
 			p.resolveCollision(p.Objects[i], p.Objects[j])
+		}
+	}
+
+	// 3. Kinematic vs Dynamic collision (kinematic pushes dynamic)
+	for _, kinematic := range p.Kinematics {
+		for _, obj := range p.Objects {
+			p.resolveKinematicCollision(kinematic, obj)
 		}
 	}
 
@@ -68,15 +123,40 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
 	rbA := engine.GetComponent[*components.Rigidbody](a)
 	rbB := engine.GetComponent[*components.Rigidbody](b)
-	colA := engine.GetComponent[*components.BoxCollider](a)
-	colB := engine.GetComponent[*components.BoxCollider](b)
-
-	if rbA == nil || rbB == nil || colA == nil || colB == nil {
+	if rbA == nil || rbB == nil {
 		return
 	}
 
-	aabbA := NewAABBFromCenter(a.Transform.Position, colA.Size)
-	aabbB := NewAABBFromCenter(b.Transform.Position, colB.Size)
+	// Check for sphere colliders first
+	sphereA := engine.GetComponent[*components.SphereCollider](a)
+	sphereB := engine.GetComponent[*components.SphereCollider](b)
+
+	// Sphere vs Sphere
+	if sphereA != nil && sphereB != nil {
+		p.resolveSphereVsSphere(a, b, rbA, rbB, sphereA, sphereB)
+		return
+	}
+
+	// Sphere vs Box
+	boxA := engine.GetComponent[*components.BoxCollider](a)
+	boxB := engine.GetComponent[*components.BoxCollider](b)
+
+	if sphereA != nil && boxB != nil {
+		p.resolveSphereVsBox(a, b, rbA, rbB, sphereA, boxB)
+		return
+	}
+	if boxA != nil && sphereB != nil {
+		p.resolveSphereVsBox(b, a, rbB, rbA, sphereB, boxA)
+		return
+	}
+
+	// Box vs Box (original)
+	if boxA == nil || boxB == nil {
+		return
+	}
+
+	aabbA := NewAABBFromCenter(a.Transform.Position, boxA.Size)
+	aabbB := NewAABBFromCenter(b.Transform.Position, boxB.Size)
 
 	pushOut := aabbA.Resolve(aabbB)
 	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {
@@ -119,14 +199,172 @@ func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
 	impulse := rl.Vector3Scale(normal, j)
 	rbA.Velocity = rl.Vector3Add(rbA.Velocity, rl.Vector3Scale(impulse, 1/rbA.Mass))
 	rbB.Velocity = rl.Vector3Subtract(rbB.Velocity, rl.Vector3Scale(impulse, 1/rbB.Mass))
+
+	// Apply torque from off-center collision
+	halfSizeA := rl.Vector3{X: boxA.Size.X / 2, Y: boxA.Size.Y / 2, Z: boxA.Size.Z / 2}
+	halfSizeB := rl.Vector3{X: boxB.Size.X / 2, Y: boxB.Size.Y / 2, Z: boxB.Size.Z / 2}
+
+	contactA := estimateContactPoint(a.Transform.Position, halfSizeA, normal)
+	contactB := estimateContactPoint(b.Transform.Position, halfSizeB, rl.Vector3Scale(normal, -1))
+
+	// r = contact point - center of mass
+	rA := rl.Vector3Subtract(contactA, a.Transform.Position)
+	rB := rl.Vector3Subtract(contactB, b.Transform.Position)
+
+	// torque = r × impulse (scaled down for stability)
+	torqueScale := float32(50.0) // convert to degrees/sec-ish
+	torqueA := cross(rA, impulse)
+	torqueB := cross(rB, rl.Vector3Scale(impulse, -1))
+
+	rbA.AngularVelocity = rl.Vector3Add(rbA.AngularVelocity, rl.Vector3Scale(torqueA, torqueScale/rbA.Mass))
+	rbB.AngularVelocity = rl.Vector3Add(rbB.AngularVelocity, rl.Vector3Scale(torqueB, torqueScale/rbB.Mass))
+}
+
+// Sphere vs Sphere collision
+func (p *PhysicsWorld) resolveSphereVsSphere(a, b *engine.GameObject, rbA, rbB *components.Rigidbody, sA, sB *components.SphereCollider) {
+	diff := rl.Vector3Subtract(a.Transform.Position, b.Transform.Position)
+	dist := rl.Vector3Length(diff)
+	minDist := sA.Radius + sB.Radius
+
+	if dist >= minDist || dist < 0.0001 {
+		return
+	}
+
+	// Collision normal
+	normal := rl.Vector3Scale(diff, 1/dist)
+	penetration := minDist - dist
+
+	// Split push based on mass
+	totalMass := rbA.Mass + rbB.Mass
+	ratioA := rbB.Mass / totalMass
+	ratioB := rbA.Mass / totalMass
+
+	a.Transform.Position = rl.Vector3Add(a.Transform.Position, rl.Vector3Scale(normal, penetration*ratioA))
+	b.Transform.Position = rl.Vector3Subtract(b.Transform.Position, rl.Vector3Scale(normal, penetration*ratioB))
+
+	// Relative velocity
+	relVel := rl.Vector3Subtract(rbA.Velocity, rbB.Velocity)
+	velAlongNormal := rl.Vector3DotProduct(relVel, normal)
+
+	if velAlongNormal > 0 {
+		return
+	}
+
+	// Restitution
+	e := (rbA.Bounciness + rbB.Bounciness) / 2
+
+	// Impulse
+	j := -(1 + e) * velAlongNormal
+	j /= (1/rbA.Mass + 1/rbB.Mass)
+
+	impulse := rl.Vector3Scale(normal, j)
+	rbA.Velocity = rl.Vector3Add(rbA.Velocity, rl.Vector3Scale(impulse, 1/rbA.Mass))
+	rbB.Velocity = rl.Vector3Subtract(rbB.Velocity, rl.Vector3Scale(impulse, 1/rbB.Mass))
+
+	// Torque for spheres - contact point is on surface along normal
+	rA := rl.Vector3Scale(normal, -sA.Radius)
+	rB := rl.Vector3Scale(normal, sB.Radius)
+
+	torqueScale := float32(50.0)
+	torqueA := cross(rA, impulse)
+	torqueB := cross(rB, rl.Vector3Scale(impulse, -1))
+
+	rbA.AngularVelocity = rl.Vector3Add(rbA.AngularVelocity, rl.Vector3Scale(torqueA, torqueScale/rbA.Mass))
+	rbB.AngularVelocity = rl.Vector3Add(rbB.AngularVelocity, rl.Vector3Scale(torqueB, torqueScale/rbB.Mass))
+}
+
+// Sphere vs Box collision
+func (p *PhysicsWorld) resolveSphereVsBox(sphereObj, boxObj *engine.GameObject, rbSphere, rbBox *components.Rigidbody, sphere *components.SphereCollider, box *components.BoxCollider) {
+	// Find closest point on box to sphere center
+	sphereCenter := sphereObj.Transform.Position
+	boxCenter := boxObj.Transform.Position
+	halfSize := rl.Vector3{X: box.Size.X / 2, Y: box.Size.Y / 2, Z: box.Size.Z / 2}
+
+	// Clamp sphere center to box bounds
+	closest := rl.Vector3{
+		X: clamp(sphereCenter.X, boxCenter.X-halfSize.X, boxCenter.X+halfSize.X),
+		Y: clamp(sphereCenter.Y, boxCenter.Y-halfSize.Y, boxCenter.Y+halfSize.Y),
+		Z: clamp(sphereCenter.Z, boxCenter.Z-halfSize.Z, boxCenter.Z+halfSize.Z),
+	}
+
+	diff := rl.Vector3Subtract(sphereCenter, closest)
+	dist := rl.Vector3Length(diff)
+
+	if dist >= sphere.Radius || dist < 0.0001 {
+		return
+	}
+
+	// Normal points from box to sphere
+	normal := rl.Vector3Scale(diff, 1/dist)
+	penetration := sphere.Radius - dist
+
+	// Split push based on mass
+	totalMass := rbSphere.Mass + rbBox.Mass
+	ratioSphere := rbBox.Mass / totalMass
+	ratioBox := rbSphere.Mass / totalMass
+
+	sphereObj.Transform.Position = rl.Vector3Add(sphereObj.Transform.Position, rl.Vector3Scale(normal, penetration*ratioSphere))
+	boxObj.Transform.Position = rl.Vector3Subtract(boxObj.Transform.Position, rl.Vector3Scale(normal, penetration*ratioBox))
+
+	// Relative velocity
+	relVel := rl.Vector3Subtract(rbSphere.Velocity, rbBox.Velocity)
+	velAlongNormal := rl.Vector3DotProduct(relVel, normal)
+
+	if velAlongNormal > 0 {
+		return
+	}
+
+	// Restitution
+	e := (rbSphere.Bounciness + rbBox.Bounciness) / 2
+
+	// Impulse
+	j := -(1 + e) * velAlongNormal
+	j /= (1/rbSphere.Mass + 1/rbBox.Mass)
+
+	impulse := rl.Vector3Scale(normal, j)
+	rbSphere.Velocity = rl.Vector3Add(rbSphere.Velocity, rl.Vector3Scale(impulse, 1/rbSphere.Mass))
+	rbBox.Velocity = rl.Vector3Subtract(rbBox.Velocity, rl.Vector3Scale(impulse, 1/rbBox.Mass))
+
+	// Torque
+	rSphere := rl.Vector3Scale(normal, -sphere.Radius)
+	rBox := rl.Vector3Subtract(closest, boxCenter)
+
+	torqueScale := float32(50.0)
+	torqueSphere := cross(rSphere, impulse)
+	torqueBox := cross(rBox, rl.Vector3Scale(impulse, -1))
+
+	rbSphere.AngularVelocity = rl.Vector3Add(rbSphere.AngularVelocity, rl.Vector3Scale(torqueSphere, torqueScale/rbSphere.Mass))
+	rbBox.AngularVelocity = rl.Vector3Add(rbBox.AngularVelocity, rl.Vector3Scale(torqueBox, torqueScale/rbBox.Mass))
+}
+
+func clamp(v, min, max float32) float32 {
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
 }
 
 func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 	rb := engine.GetComponent[*components.Rigidbody](obj)
-	colObj := engine.GetComponent[*components.BoxCollider](obj)
+	if rb == nil {
+		return
+	}
+
+	// Check for sphere collider
+	sphere := engine.GetComponent[*components.SphereCollider](obj)
 	colStatic := engine.GetComponent[*components.BoxCollider](static)
 
-	if rb == nil || colObj == nil || colStatic == nil {
+	if sphere != nil && colStatic != nil {
+		p.resolveSphereVsStaticBox(obj, static, rb, sphere, colStatic)
+		return
+	}
+
+	// Box vs static box
+	colObj := engine.GetComponent[*components.BoxCollider](obj)
+	if colObj == nil || colStatic == nil {
 		return
 	}
 
@@ -157,5 +395,111 @@ func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 		// Apply friction perpendicular to normal
 		rb.Velocity.X *= (1 - rb.Friction)
 		rb.Velocity.Z *= (1 - rb.Friction)
+
+		// Apply torque from collision
+		halfSize := rl.Vector3{X: colObj.Size.X / 2, Y: colObj.Size.Y / 2, Z: colObj.Size.Z / 2}
+		contact := estimateContactPoint(obj.Transform.Position, halfSize, normal)
+		r := rl.Vector3Subtract(contact, obj.Transform.Position)
+
+		// The impulse is the reflect vector (change in momentum)
+		impulse := reflect
+		torque := cross(r, impulse)
+		torqueScale := float32(30.0)
+		rb.AngularVelocity = rl.Vector3Add(rb.AngularVelocity, rl.Vector3Scale(torque, torqueScale/rb.Mass))
+
+		// Also apply friction to angular velocity when touching ground
+		if normal.Y > 0.5 {
+			rb.AngularVelocity.X *= (1 - rb.Friction*0.5)
+			rb.AngularVelocity.Z *= (1 - rb.Friction*0.5)
+		}
+	}
+}
+
+// resolveSphereVsStaticBox handles sphere colliding with static box (floor, walls)
+func (p *PhysicsWorld) resolveSphereVsStaticBox(obj, static *engine.GameObject, rb *components.Rigidbody, sphere *components.SphereCollider, box *components.BoxCollider) {
+	sphereCenter := obj.Transform.Position
+	boxCenter := static.Transform.Position
+	halfSize := rl.Vector3{X: box.Size.X / 2, Y: box.Size.Y / 2, Z: box.Size.Z / 2}
+
+	// Find closest point on box to sphere center
+	closest := rl.Vector3{
+		X: clamp(sphereCenter.X, boxCenter.X-halfSize.X, boxCenter.X+halfSize.X),
+		Y: clamp(sphereCenter.Y, boxCenter.Y-halfSize.Y, boxCenter.Y+halfSize.Y),
+		Z: clamp(sphereCenter.Z, boxCenter.Z-halfSize.Z, boxCenter.Z+halfSize.Z),
+	}
+
+	diff := rl.Vector3Subtract(sphereCenter, closest)
+	dist := rl.Vector3Length(diff)
+
+	if dist >= sphere.Radius || dist < 0.0001 {
+		return
+	}
+
+	// Normal points from box to sphere
+	normal := rl.Vector3Scale(diff, 1/dist)
+	penetration := sphere.Radius - dist
+
+	// Push sphere out
+	obj.Transform.Position = rl.Vector3Add(obj.Transform.Position, rl.Vector3Scale(normal, penetration))
+
+	// Reflect velocity
+	velAlongNormal := rl.Vector3DotProduct(rb.Velocity, normal)
+	if velAlongNormal < 0 {
+		reflect := rl.Vector3Scale(normal, -2*velAlongNormal*rb.Bounciness)
+		rb.Velocity = rl.Vector3Add(rb.Velocity, reflect)
+
+		// Apply friction
+		rb.Velocity.X *= (1 - rb.Friction)
+		rb.Velocity.Z *= (1 - rb.Friction)
+
+		// Apply torque - contact point is on sphere surface
+		r := rl.Vector3Scale(normal, -sphere.Radius)
+		torque := cross(r, reflect)
+		torqueScale := float32(30.0)
+		rb.AngularVelocity = rl.Vector3Add(rb.AngularVelocity, rl.Vector3Scale(torque, torqueScale/rb.Mass))
+
+		// Friction on angular velocity when on ground
+		if normal.Y > 0.5 {
+			rb.AngularVelocity.X *= (1 - rb.Friction*0.5)
+			rb.AngularVelocity.Z *= (1 - rb.Friction*0.5)
+		}
+	}
+}
+
+// resolveKinematicCollision handles kinematic (player) pushing dynamic objects
+func (p *PhysicsWorld) resolveKinematicCollision(kinematic, obj *engine.GameObject) {
+	rbKin := engine.GetComponent[*components.Rigidbody](kinematic)
+	rbObj := engine.GetComponent[*components.Rigidbody](obj)
+	colKin := engine.GetComponent[*components.BoxCollider](kinematic)
+	colObj := engine.GetComponent[*components.BoxCollider](obj)
+
+	if rbKin == nil || rbObj == nil || colKin == nil || colObj == nil {
+		return
+	}
+
+	aabbKin := NewAABBFromCenter(kinematic.Transform.Position, colKin.Size)
+	aabbObj := NewAABBFromCenter(obj.Transform.Position, colObj.Size)
+
+	pushOut := aabbKin.Resolve(aabbObj)
+	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {
+		return
+	}
+
+	// Push the dynamic object fully out (kinematic doesn't move)
+	obj.Transform.Position = rl.Vector3Subtract(obj.Transform.Position, pushOut)
+
+	// Transfer velocity from kinematic to dynamic
+	pushLen := rl.Vector3Length(pushOut)
+	if pushLen < 0.0001 {
+		return
+	}
+	normal := rl.Vector3Scale(pushOut, 1/pushLen)
+
+	// Add kinematic's velocity to the object in the push direction
+	kinVelAlongNormal := rl.Vector3DotProduct(rbKin.Velocity, normal)
+	if kinVelAlongNormal > 0 {
+		// Push the object with some of the kinematic's velocity
+		impulse := rl.Vector3Scale(normal, kinVelAlongNormal*1.5)
+		rbObj.Velocity = rl.Vector3Subtract(rbObj.Velocity, impulse)
 	}
 }

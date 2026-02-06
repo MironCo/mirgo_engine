@@ -11,9 +11,10 @@ import (
 )
 
 type Game struct {
-	Player    *engine.GameObject
-	World     *world.World
-	DebugMode bool
+	Player      *engine.GameObject
+	World       *world.World
+	DebugMode   bool
+	cubeCounter int
 }
 
 func New() *Game {
@@ -60,6 +61,15 @@ func (g *Game) createPlayer() {
 	collider := components.NewBoxCollider(rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6})
 	g.Player.AddComponent(collider)
 
+	// Add kinematic rigidbody so player can push things
+	rb := components.NewRigidbody()
+	rb.IsKinematic = true
+	rb.UseGravity = false // FPSController handles gravity
+	g.Player.AddComponent(rb)
+
+	// Add to physics world
+	g.World.PhysicsWorld.AddObject(g.Player)
+
 	g.Player.Start()
 }
 
@@ -72,9 +82,15 @@ func (g *Game) Update() {
 	// Get player components
 	fps := engine.GetComponent[*components.FPSController](g.Player)
 	collider := engine.GetComponent[*components.BoxCollider](g.Player)
+	playerRb := engine.GetComponent[*components.Rigidbody](g.Player)
 
 	if fps == nil || collider == nil {
 		return
+	}
+
+	// Sync FPSController velocity to rigidbody for physics pushing
+	if playerRb != nil {
+		playerRb.Velocity = fps.Velocity
 	}
 
 	// Ground check - floor is at Y=0
@@ -137,6 +153,11 @@ func (g *Game) Update() {
 	// Toggle debug mode
 	if rl.IsKeyPressed(rl.KeyF1) {
 		g.DebugMode = !g.DebugMode
+	}
+
+	// Shoot sphere with left mouse button
+	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		g.ShootSphere(fps)
 	}
 
 	// Light controls
@@ -206,4 +227,39 @@ func (g *Game) DrawUI() {
 		lightDir := g.World.LightDir
 		rl.DrawText(fmt.Sprintf("Light Dir: (%.2f, %.2f, %.2f)", lightDir.X, lightDir.Y, lightDir.Z), 10, 85, 16, rl.Yellow)
 	}
+}
+
+func (g *Game) ShootSphere(fps *components.FPSController) {
+	g.cubeCounter++
+
+	// Spawn position: in front of player
+	lookDir := fps.GetLookDirection()
+	spawnPos := rl.Vector3Add(g.Player.Transform.Position, rl.Vector3Scale(lookDir, 3))
+
+	radius := float32(0.5)
+
+	// Create sphere GameObject
+	sphere := engine.NewGameObject(fmt.Sprintf("Shot_%d", g.cubeCounter))
+	sphere.Transform.Position = spawnPos
+
+	// Create sphere model and renderer
+	mesh := rl.GenMeshSphere(radius, 16, 16)
+	model := rl.LoadModelFromMesh(mesh)
+	renderer := components.NewModelRenderer(model, rl.Orange)
+	renderer.SetShader(g.World.Shader)
+	sphere.AddComponent(renderer)
+
+	// Add sphere collider
+	sphere.AddComponent(components.NewSphereCollider(radius))
+
+	// Add rigidbody with initial velocity in look direction
+	rb := components.NewRigidbody()
+	rb.Bounciness = 0.6
+	rb.Friction = 0.1
+	rb.Velocity = rl.Vector3Scale(lookDir, 30) // yeet it
+	sphere.AddComponent(rb)
+
+	sphere.Start()
+	g.World.Scene.AddGameObject(sphere)
+	g.World.PhysicsWorld.AddObject(sphere)
 }

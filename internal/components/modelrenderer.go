@@ -31,7 +31,22 @@ func (m *ModelRenderer) Draw() {
 	if g == nil || !g.Active {
 		return
 	}
-	rl.DrawModel(m.Model, g.Transform.Position, 1.0, rl.White)
+
+	// Build rotation matrix from Euler angles
+	rot := g.Transform.Rotation
+	rotX := rl.MatrixRotateX(rot.X * rl.Deg2rad)
+	rotY := rl.MatrixRotateY(rot.Y * rl.Deg2rad)
+	rotZ := rl.MatrixRotateZ(rot.Z * rl.Deg2rad)
+	rotMatrix := rl.MatrixMultiply(rl.MatrixMultiply(rotX, rotY), rotZ)
+
+	// Build translation matrix
+	pos := g.Transform.Position
+	transMatrix := rl.MatrixTranslate(pos.X, pos.Y, pos.Z)
+
+	// Combine: first rotate, then translate
+	m.Model.Transform = rl.MatrixMultiply(rotMatrix, transMatrix)
+
+	rl.DrawModel(m.Model, rl.Vector3Zero(), 1.0, rl.White)
 }
 
 func (m *ModelRenderer) Unload() {
