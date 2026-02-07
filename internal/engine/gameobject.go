@@ -90,6 +90,28 @@ func (g *GameObject) Components() []Component {
 	return g.components
 }
 
+// RemoveComponent removes a component from the GameObject by pointer.
+// Returns true if the component was found and removed.
+func (g *GameObject) RemoveComponent(c Component) bool {
+	for i, comp := range g.components {
+		if comp == c {
+			g.components = append(g.components[:i], g.components[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// RemoveComponentByIndex removes a component at a specific index.
+// Returns true if the index was valid and the component was removed.
+func (g *GameObject) RemoveComponentByIndex(index int) bool {
+	if index < 0 || index >= len(g.components) {
+		return false
+	}
+	g.components = append(g.components[:index], g.components[index+1:]...)
+	return true
+}
+
 func (g *GameObject) HasTag(tag string) bool {
 	for _, t := range g.Tags {
 		if t == tag {

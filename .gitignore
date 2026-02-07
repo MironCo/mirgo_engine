@@ -3,3 +3,6 @@ test3d.exe
 test3d-linux
 mirgo-utils
 utilities/target/
+
+# Raylib examples (vendored for reference only)
+raylib-go/examples/
