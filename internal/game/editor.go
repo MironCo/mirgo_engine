@@ -503,13 +503,7 @@ func (e *Editor) Draw3D() {
 	if box := engine.GetComponent[*components.BoxCollider](e.Selected); box != nil {
 		center := box.GetCenter()
 		rot := e.Selected.WorldRotation()
-		scale := e.Selected.WorldScale()
-		scaledSize := rl.Vector3{
-			X: box.Size.X * scale.X,
-			Y: box.Size.Y * scale.Y,
-			Z: box.Size.Z * scale.Z,
-		}
-		drawRotatedBoxWires(center, scaledSize, rot, rl.Yellow)
+		drawRotatedBoxWires(center, box.GetWorldSize(), rot, rl.Yellow)
 	} else if sphere := engine.GetComponent[*components.SphereCollider](e.Selected); sphere != nil {
 		center := sphere.GetCenter()
 		rl.DrawSphereWires(center, sphere.Radius, 8, 8, rl.Yellow)

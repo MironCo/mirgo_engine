@@ -56,7 +56,9 @@ func (p *PhysicsWorld) Raycast(origin, direction rl.Vector3, maxDistance float32
 
 func raycastBox(origin, direction rl.Vector3, box *components.BoxCollider, maxDistance float32) (RaycastHit, bool) {
 	center := box.GetCenter()
-	halfSize := rl.Vector3{X: box.Size.X / 2, Y: box.Size.Y / 2, Z: box.Size.Z / 2}
+	// Use world-scaled size with absolute values to handle negative sizes
+	worldSize := box.GetWorldSize()
+	halfSize := rl.Vector3{X: abs(worldSize.X) / 2, Y: abs(worldSize.Y) / 2, Z: abs(worldSize.Z) / 2}
 
 	min := rl.Vector3{X: center.X - halfSize.X, Y: center.Y - halfSize.Y, Z: center.Z - halfSize.Z}
 	max := rl.Vector3{X: center.X + halfSize.X, Y: center.Y + halfSize.Y, Z: center.Z + halfSize.Z}

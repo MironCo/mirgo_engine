@@ -22,5 +22,23 @@ func NewBoxCollider(size rl.Vector3) *BoxCollider {
 // GetCenter returns the world-space center of this collider
 func (b *BoxCollider) GetCenter() rl.Vector3 {
 	g := b.GetGameObject()
-	return rl.Vector3Add(g.WorldPosition(), b.Offset)
+	scale := g.WorldScale()
+	// Scale the offset by the object's scale
+	scaledOffset := rl.Vector3{
+		X: b.Offset.X * scale.X,
+		Y: b.Offset.Y * scale.Y,
+		Z: b.Offset.Z * scale.Z,
+	}
+	return rl.Vector3Add(g.WorldPosition(), scaledOffset)
+}
+
+// GetWorldSize returns the collider size scaled by the object's transform
+func (b *BoxCollider) GetWorldSize() rl.Vector3 {
+	g := b.GetGameObject()
+	scale := g.WorldScale()
+	return rl.Vector3{
+		X: b.Size.X * scale.X,
+		Y: b.Size.Y * scale.Y,
+		Z: b.Size.Z * scale.Z,
+	}
 }
