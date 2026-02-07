@@ -135,8 +135,9 @@ func (g *Game) DrawUI() {
 		rl.DrawRectangleLines(screenW-previewSize-10, 10, previewSize, previewSize, rl.Green)
 		rl.DrawText("Shadow Map", screenW-previewSize-10, previewSize+15, 16, rl.Green)
 
-		lightDir := g.World.Renderer.LightDir
-		rl.DrawText(fmt.Sprintf("Light Dir: (%.2f, %.2f, %.2f)", lightDir.X, lightDir.Y, lightDir.Z), 10, 85, 16, rl.Yellow)
+		if light := g.World.Renderer.Light; light != nil {
+			rl.DrawText(fmt.Sprintf("Light Dir: (%.2f, %.2f, %.2f)", light.Direction.X, light.Direction.Y, light.Direction.Z), 10, 85, 16, rl.Yellow)
+		}
 
 		rl.DrawText(fmt.Sprintf("Update:  %.2f ms", g.updateMs), 10, 110, 16, rl.Green)
 		rl.DrawText(fmt.Sprintf("Shadows: %.2f ms", g.shadowMs), 10, 130, 16, rl.Green)

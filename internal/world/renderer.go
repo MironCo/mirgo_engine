@@ -1,7 +1,6 @@
 package world
 
 import (
-	"math"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 
@@ -18,9 +17,10 @@ const (
 type Renderer struct {
 	Shader      rl.Shader
 	ShadowMap   rl.RenderTexture2D
-	LightDir    rl.Vector3
+	Light       *components.DirectionalLight
 	LightCamera rl.Camera3D
 	MatLightVP  rl.Matrix
+	floorSize   float32
 }
 
 func NewRenderer() *Renderer {
@@ -28,34 +28,41 @@ func NewRenderer() *Renderer {
 }
 
 func (r *Renderer) Initialize(floorSize float32) {
+	r.floorSize = floorSize
+
 	// Load lighting shader
 	r.Shader = rl.LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs")
 
 	// Create shadowmap render texture
 	r.ShadowMap = loadShadowmapRenderTexture(ShadowMapResolution, ShadowMapResolution)
+}
 
-	// Set directional light direction
-	r.LightDir = rl.Vector3Normalize(rl.Vector3{X: 0.35, Y: -1.0, Z: -0.35})
+func (r *Renderer) SetLight(light *components.DirectionalLight) {
+	r.Light = light
+	r.updateLightCamera()
+	r.updateShaderUniforms()
+}
 
-	// Light camera
-	r.LightCamera = rl.Camera3D{
-		Position:   rl.Vector3Scale(r.LightDir, -50.0),
-		Target:     rl.Vector3Zero(),
-		Up:         lightCameraUp(r.LightDir),
-		Fovy:       floorSize + 20,
-		Projection: rl.CameraOrthographic,
+func (r *Renderer) updateLightCamera() {
+	if r.Light == nil {
+		return
+	}
+	r.LightCamera = r.Light.GetLightCamera(r.floorSize + 20)
+}
+
+func (r *Renderer) updateShaderUniforms() {
+	if r.Light == nil {
+		return
 	}
 
-	// Set shader uniforms
 	lightDirLoc := rl.GetShaderLocation(r.Shader, "lightDir")
-	rl.SetShaderValue(r.Shader, lightDirLoc, []float32{r.LightDir.X, r.LightDir.Y, r.LightDir.Z}, rl.ShaderUniformVec3)
+	rl.SetShaderValue(r.Shader, lightDirLoc, []float32{r.Light.Direction.X, r.Light.Direction.Y, r.Light.Direction.Z}, rl.ShaderUniformVec3)
 
 	lightColorLoc := rl.GetShaderLocation(r.Shader, "lightColor")
-	rl.SetShaderValue(r.Shader, lightColorLoc, []float32{1.0, 1.0, 1.0, 1.0}, rl.ShaderUniformVec4)
+	rl.SetShaderValue(r.Shader, lightColorLoc, r.Light.GetColorFloat(), rl.ShaderUniformVec4)
 
 	ambientLoc := rl.GetShaderLocation(r.Shader, "ambient")
-	rl.SetShaderValue(r.Shader, ambientLoc, []float32{0.1, 0.1, 0.1, 1.0}, rl.ShaderUniformVec4)
-
+	rl.SetShaderValue(r.Shader, ambientLoc, r.Light.GetAmbientFloat(), rl.ShaderUniformVec4)
 }
 
 func (r *Renderer) DrawShadowMap(gameObjects []*engine.GameObject) {
@@ -105,9 +112,11 @@ func (r *Renderer) DrawWithShadows(cameraPos rl.Vector3, gameObjects []*engine.G
 	r.drawScene(gameObjects)
 
 	// Draw light indicator
-	lightIndicatorPos := rl.Vector3Scale(r.LightDir, -50)
-	rl.DrawSphere(lightIndicatorPos, 0.5, rl.Yellow)
-	rl.DrawLine3D(lightIndicatorPos, rl.Vector3Zero(), rl.Yellow)
+	if r.Light != nil {
+		lightIndicatorPos := rl.Vector3Scale(r.Light.Direction, -r.Light.ShadowDistance)
+		rl.DrawSphere(lightIndicatorPos, 0.5, rl.Yellow)
+		rl.DrawLine3D(lightIndicatorPos, rl.Vector3Zero(), rl.Yellow)
+	}
 }
 
 func (r *Renderer) drawScene(gameObjects []*engine.GameObject) {
@@ -120,16 +129,14 @@ func (r *Renderer) drawScene(gameObjects []*engine.GameObject) {
 }
 
 func (r *Renderer) MoveLightDir(dx, dy, dz float32) {
-	r.LightDir.X += dx
-	r.LightDir.Y += dy
-	r.LightDir.Z += dz
-	r.LightDir = rl.Vector3Normalize(r.LightDir)
-
-	r.LightCamera.Position = rl.Vector3Scale(r.LightDir, -50.0)
-	r.LightCamera.Up = lightCameraUp(r.LightDir)
+	if r.Light == nil {
+		return
+	}
+	r.Light.MoveLightDir(dx, dy, dz)
+	r.updateLightCamera()
 
 	lightDirLoc := rl.GetShaderLocation(r.Shader, "lightDir")
-	rl.SetShaderValue(r.Shader, lightDirLoc, []float32{r.LightDir.X, r.LightDir.Y, r.LightDir.Z}, rl.ShaderUniformVec3)
+	rl.SetShaderValue(r.Shader, lightDirLoc, []float32{r.Light.Direction.X, r.Light.Direction.Y, r.Light.Direction.Z}, rl.ShaderUniformVec3)
 }
 
 func (r *Renderer) Unload(gameObjects []*engine.GameObject) {
@@ -141,13 +148,6 @@ func (r *Renderer) Unload(gameObjects []*engine.GameObject) {
 			renderer.Unload()
 		}
 	}
-}
-
-func lightCameraUp(lightDir rl.Vector3) rl.Vector3 {
-	if math.Abs(float64(lightDir.Y)) > 0.9 {
-		return rl.Vector3{X: 0, Y: 0, Z: 1}
-	}
-	return rl.Vector3{X: 0, Y: 1, Z: 0}
 }
 
 func loadShadowmapRenderTexture(width, height int32) rl.RenderTexture2D {

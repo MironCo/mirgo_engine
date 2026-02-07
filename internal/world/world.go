@@ -17,6 +17,7 @@ type World struct {
 	Scene        *engine.Scene
 	PhysicsWorld *physics.PhysicsWorld
 	Renderer     *Renderer
+	Light        *engine.GameObject
 }
 
 func New() *World {
@@ -54,6 +55,9 @@ func (w *World) Initialize() {
 
 	// Create player
 	w.createPlayer()
+
+	// Create light
+	w.createLight()
 
 	// Start all GameObjects
 	w.Scene.Start()
@@ -136,6 +140,19 @@ func (w *World) createCubes() {
 		w.Scene.AddGameObject(cube)
 		w.PhysicsWorld.AddObject(cube)
 	}
+}
+
+func (w *World) createLight() {
+	light := engine.NewGameObject("DirectionalLight")
+
+	lightComp := components.NewDirectionalLight()
+	light.AddComponent(lightComp)
+
+	w.Light = light
+	w.Scene.AddGameObject(light)
+
+	// Set the light on the renderer
+	w.Renderer.SetLight(lightComp)
 }
 
 func (w *World) Update(deltaTime float32) {
