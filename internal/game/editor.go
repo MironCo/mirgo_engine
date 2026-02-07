@@ -109,6 +109,9 @@ func (e *Editor) Exit() {
 }
 
 func (e *Editor) Update(deltaTime float32) {
+	// Handle file drops (GLTF models, etc.)
+	e.handleFileDrop()
+
 	// Ctrl+Z or Cmd+Z: undo
 	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyZ) {
 		e.undo()
