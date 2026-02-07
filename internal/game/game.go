@@ -31,7 +31,7 @@ func New() *Game {
 }
 
 func (g *Game) Run() {
-	rl.SetConfigFlags(rl.FlagWindowHighdpi)
+	rl.SetConfigFlags(rl.FlagWindowHighdpi | rl.FlagWindowResizable)
 	rl.InitWindow(1280, 720, "3D Animated Cubes with Lighting")
 	defer rl.CloseWindow()
 

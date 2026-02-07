@@ -5,6 +5,7 @@ package game
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -114,8 +115,21 @@ func (e *Editor) Enter(currentCam rl.Camera3D) {
 	initRayguiStyle()
 }
 
+// editorFont holds the custom font for the editor UI (zero value = use default)
+var editorFont rl.Font
+var editorFontLoaded bool
+
 // initRayguiStyle sets up a dark theme for raygui widgets
 func initRayguiStyle() {
+	// Load a nicer font if available (only once)
+	if !editorFontLoaded {
+		editorFontLoaded = true
+		if _, err := os.Stat("assets/fonts/editor.ttf"); err == nil {
+			editorFont = rl.LoadFontEx("assets/fonts/editor.ttf", 16, nil)
+			gui.SetFont(editorFont)
+		}
+	}
+
 	// Background colors
 	gui.SetStyle(gui.DEFAULT, gui.BACKGROUND_COLOR, gui.NewColorPropertyValue(rl.NewColor(30, 30, 35, 255)))
 	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(45, 45, 50, 255)))
