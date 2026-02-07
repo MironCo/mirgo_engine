@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 	"test3d/internal/world"
@@ -73,9 +74,14 @@ type Editor struct {
 	inspectorScroll      int32
 	showAddComponentMenu bool
 
-	// Text input state for raygui (which field is being edited)
-	activeInputID  string // e.g., "pos.x", "rot.y", "mass"
-	inputTextValue string // current text being edited
+	// Float field editing state
+	activeInputID     string  // e.g., "pos.x", "rot.y", "mass"
+	inputTextValue    string  // current text being edited
+	fieldDragging     bool    // true if drag-scrubbing a field
+	fieldDragID       string  // which field is being dragged
+	fieldDragStartX   float32 // mouse X when drag started
+	fieldDragStartVal float32 // value when drag started
+	fieldHoveredAny   bool    // true if any float field is hovered this frame
 
 	// Save feedback
 	saveMsg     string
@@ -83,6 +89,18 @@ type Editor struct {
 
 	// Undo stack
 	undoStack []UndoState
+
+	// Asset browser
+	showAssetBrowser bool
+	assetBrowserScroll int32
+	assetFiles       []AssetEntry
+}
+
+// AssetEntry represents a model file in the asset browser
+type AssetEntry struct {
+	Name     string // Display name
+	Path     string // Full path to the model file
+	IsFolder bool   // True if this is a folder
 }
 
 func NewEditor(w *world.World) *Editor {
@@ -177,6 +195,19 @@ func (e *Editor) Update(deltaTime float32) {
 			e.saveMsg = "Scene saved!"
 		}
 		e.saveMsgTime = rl.GetTime()
+	}
+
+	// Tab: toggle asset browser
+	if rl.IsKeyPressed(rl.KeyTab) {
+		e.showAssetBrowser = !e.showAssetBrowser
+		if e.showAssetBrowser {
+			e.scanAssetModels()
+		}
+	}
+
+	// Cmd+Delete (Mac) or Ctrl+Delete: delete selected object
+	if e.Selected != nil && (rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyLeftControl)) && rl.IsKeyPressed(rl.KeyBackspace) {
+		e.deleteSelectedObject()
 	}
 
 	// Camera: right-click + drag to look, right-click + WASD to fly
@@ -560,8 +591,48 @@ func (e *Editor) DrawUI() {
 		rl.DrawText(e.saveMsg, int32(rl.GetScreenWidth()/2)-50, 8, 20, color)
 	}
 
+	// Reset field hover tracking for this frame
+	e.fieldHoveredAny = false
+
 	e.drawHierarchy()
 	e.drawInspector()
+
+	// Asset browser toggle button in top bar
+	abBtnX := int32(rl.GetScreenWidth()) - 200
+	abBtnW := int32(90)
+	abBtnH := int32(22)
+	abBtnY := int32(5)
+
+	mousePos := rl.GetMousePosition()
+	abHovered := mousePos.X >= float32(abBtnX) && mousePos.X <= float32(abBtnX+abBtnW) &&
+		mousePos.Y >= float32(abBtnY) && mousePos.Y <= float32(abBtnY+abBtnH)
+
+	abBtnColor := rl.NewColor(50, 50, 60, 200)
+	if e.showAssetBrowser {
+		abBtnColor = rl.NewColor(60, 80, 60, 220)
+	} else if abHovered {
+		abBtnColor = rl.NewColor(70, 70, 80, 220)
+	}
+	rl.DrawRectangle(abBtnX, abBtnY, abBtnW, abBtnH, abBtnColor)
+	rl.DrawText("Assets [Tab]", abBtnX+6, abBtnY+4, 14, rl.LightGray)
+
+	if abHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		e.showAssetBrowser = !e.showAssetBrowser
+		if e.showAssetBrowser {
+			e.scanAssetModels()
+		}
+	}
+
+	if e.showAssetBrowser {
+		e.drawAssetBrowser()
+	}
+
+	// Set cursor based on field hover state
+	if e.fieldHoveredAny || e.fieldDragging {
+		rl.SetMouseCursor(rl.MouseCursorResizeEW)
+	} else {
+		rl.SetMouseCursor(rl.MouseCursorDefault)
+	}
 }
 
 // drawHierarchy draws the scene hierarchy panel on the left.
@@ -830,43 +901,108 @@ func (e *Editor) drawTransformSection(panelX, y, panelW int32) int32 {
 	return y
 }
 
-// drawFloatField draws an editable float input field and returns the new value.
+// drawFloatField draws an editable float input field with drag-to-scrub support.
 func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) float32 {
-	bounds := rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}
+	mousePos := rl.GetMousePosition()
+	hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
+		mousePos.Y >= float32(y) && mousePos.Y <= float32(y+h)
+
 	editMode := e.activeInputID == id
+	isDragging := e.fieldDragging && e.fieldDragID == id
 
-	// Initialize text value when entering edit mode
-	if editMode && e.inputTextValue == "" {
-		e.inputTextValue = strconv.FormatFloat(float64(value), 'f', 2, 32)
+	// Track if any field is hovered (for cursor management)
+	if hovered && !editMode {
+		e.fieldHoveredAny = true
 	}
 
-	// Use ValueBoxFloat for numeric input
-	textVal := e.inputTextValue
+	// Background color
+	bgColor := rl.NewColor(45, 45, 50, 255)
+	if editMode {
+		bgColor = rl.NewColor(60, 60, 70, 255)
+	} else if hovered || isDragging {
+		bgColor = rl.NewColor(55, 55, 60, 255)
+	}
+	rl.DrawRectangle(x, y, w, h, bgColor)
+	rl.DrawRectangleLines(x, y, w, h, rl.NewColor(80, 80, 90, 255))
+
+	// Handle drag-to-scrub (when not in edit mode)
 	if !editMode {
-		textVal = strconv.FormatFloat(float64(value), 'f', 2, 32)
-	}
+		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			// Start drag
+			e.fieldDragging = true
+			e.fieldDragID = id
+			e.fieldDragStartX = mousePos.X
+			e.fieldDragStartVal = value
+		}
 
-	// Draw the value box
-	clicked := gui.ValueBoxFloat(bounds, "", &textVal, &value, editMode)
-
-	if clicked {
-		if editMode {
-			// Exiting edit mode - parse the value
-			if parsed, err := strconv.ParseFloat(textVal, 32); err == nil {
-				value = float32(parsed)
+		if isDragging {
+			if rl.IsMouseButtonDown(rl.MouseLeftButton) {
+				// Update value based on drag distance
+				deltaX := mousePos.X - e.fieldDragStartX
+				// Sensitivity: 100 pixels = 1.0 change, hold shift for fine control
+				sensitivity := float32(0.01)
+				if rl.IsKeyDown(rl.KeyLeftShift) {
+					sensitivity = 0.001
+				}
+				value = e.fieldDragStartVal + deltaX*sensitivity
+			} else {
+				// End drag
+				dragDist := mousePos.X - e.fieldDragStartX
+				if dragDist > -2 && dragDist < 2 {
+					// Was a click, not a drag - enter edit mode
+					e.activeInputID = id
+					e.inputTextValue = strconv.FormatFloat(float64(value), 'f', 2, 32)
+				}
+				e.fieldDragging = false
+				e.fieldDragID = ""
 			}
-			e.activeInputID = ""
-			e.inputTextValue = ""
-		} else {
-			// Entering edit mode
-			e.activeInputID = id
-			e.inputTextValue = strconv.FormatFloat(float64(value), 'f', 2, 32)
 		}
 	}
 
-	// Update stored text while editing
+	// Text display/editing
 	if editMode {
-		e.inputTextValue = textVal
+		// Draw text input
+		rl.DrawText(e.inputTextValue+"_", x+4, y+3, 14, rl.White)
+
+		// Handle typing
+		for {
+			key := rl.GetCharPressed()
+			if key == 0 {
+				break
+			}
+			ch := rune(key)
+			// Allow digits, minus, dot
+			if (ch >= '0' && ch <= '9') || ch == '-' || ch == '.' {
+				e.inputTextValue += string(ch)
+			}
+		}
+
+		// Backspace
+		if rl.IsKeyPressed(rl.KeyBackspace) && len(e.inputTextValue) > 0 {
+			e.inputTextValue = e.inputTextValue[:len(e.inputTextValue)-1]
+		}
+
+		// Enter or click outside to confirm
+		clickedOutside := rl.IsMouseButtonPressed(rl.MouseLeftButton) && !hovered
+		if rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) || clickedOutside || rl.IsKeyPressed(rl.KeyTab) {
+			if e.inputTextValue != "" {
+				if parsed, err := strconv.ParseFloat(e.inputTextValue, 32); err == nil {
+					value = float32(parsed)
+				}
+			}
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+
+		// Escape to cancel
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+	} else {
+		// Display current value
+		text := strconv.FormatFloat(float64(value), 'f', 2, 32)
+		rl.DrawText(text, x+4, y+3, 14, rl.LightGray)
 	}
 
 	return value
@@ -1158,6 +1294,33 @@ func colorName(c rl.Color) string {
 	}
 }
 
+// deleteSelectedObject removes the currently selected object from the scene.
+func (e *Editor) deleteSelectedObject() {
+	if e.Selected == nil {
+		return
+	}
+
+	// Don't allow deleting the player
+	if e.Selected.Name == "Player" {
+		e.saveMsg = "Cannot delete Player"
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Push undo state before deleting (keeps the object reference alive)
+	e.pushDeleteUndo(e.Selected)
+
+	name := e.Selected.Name
+
+	// Remove from scene and physics, but keep model loaded (for undo)
+	e.world.EditorDestroy(e.Selected)
+
+	e.Selected = nil
+
+	e.saveMsg = fmt.Sprintf("Deleted %s", name)
+	e.saveMsgTime = rl.GetTime()
+}
+
 // createNewGameObject creates a new empty GameObject and adds it to the scene.
 func (e *Editor) createNewGameObject() {
 	// Generate unique name
@@ -1200,6 +1363,10 @@ func (e *Editor) mouseInPanel() bool {
 	if m.Y <= 32 {
 		return true
 	}
+	// Asset browser: bottom 120px (when visible)
+	if e.showAssetBrowser && m.Y >= screenH-120 && m.X > 200 && m.X < screenW-300 {
+		return true
+	}
 	return false
 }
 
@@ -1240,6 +1407,191 @@ func rayPlaneIntersect(rayOrigin, rayDir, planePoint, planeNormal rl.Vector3) (r
 		return rl.Vector3{}, false
 	}
 	return rl.Vector3Add(rayOrigin, rl.Vector3Scale(rayDir, t)), true
+}
+
+// drawAssetBrowser draws the asset browser panel at the bottom of the screen
+func (e *Editor) drawAssetBrowser() {
+	panelH := int32(120)
+	panelY := int32(rl.GetScreenHeight()) - panelH
+	panelX := int32(200) // Start after hierarchy
+	panelW := int32(rl.GetScreenWidth()) - 200 - 300 // Between hierarchy and inspector
+
+	// Background
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 240))
+	rl.DrawLine(panelX, panelY, panelX+panelW, panelY, rl.NewColor(60, 60, 60, 255))
+
+	// Header
+	rl.DrawText("Models", panelX+10, panelY+6, 14, rl.Gray)
+
+	// Refresh button
+	refreshBtnX := panelX + panelW - 70
+	refreshBtnY := panelY + 4
+	refreshBtnW := int32(60)
+	refreshBtnH := int32(18)
+
+	mousePos := rl.GetMousePosition()
+	refreshHovered := mousePos.X >= float32(refreshBtnX) && mousePos.X <= float32(refreshBtnX+refreshBtnW) &&
+		mousePos.Y >= float32(refreshBtnY) && mousePos.Y <= float32(refreshBtnY+refreshBtnH)
+
+	refreshColor := rl.NewColor(50, 50, 60, 200)
+	if refreshHovered {
+		refreshColor = rl.NewColor(70, 70, 80, 220)
+	}
+	rl.DrawRectangle(refreshBtnX, refreshBtnY, refreshBtnW, refreshBtnH, refreshColor)
+	rl.DrawText("Refresh", refreshBtnX+6, refreshBtnY+2, 12, rl.LightGray)
+
+	if refreshHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		e.scanAssetModels()
+	}
+
+	// Asset grid
+	itemW := int32(80)
+	itemH := int32(70)
+	startX := panelX + 10
+	startY := panelY + 28
+	cols := (panelW - 20) / (itemW + 8)
+
+	// Scroll handling
+	mouseInPanel := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
+		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+panelH)
+
+	if mouseInPanel && !rl.IsMouseButtonDown(rl.MouseRightButton) {
+		scroll := rl.GetMouseWheelMove()
+		e.assetBrowserScroll -= int32(scroll * 30)
+		if e.assetBrowserScroll < 0 {
+			e.assetBrowserScroll = 0
+		}
+	}
+
+	// Clip content
+	rl.BeginScissorMode(panelX, panelY+24, panelW, panelH-24)
+
+	for i, asset := range e.assetFiles {
+		col := int32(i) % cols
+		row := int32(i) / cols
+
+		x := startX + col*(itemW+8)
+		y := startY + row*(itemH+8) - e.assetBrowserScroll
+
+		// Skip if off screen
+		if y+itemH < panelY+24 || y > panelY+panelH {
+			continue
+		}
+
+		// Item background
+		itemHovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+itemW) &&
+			mousePos.Y >= float32(y) && mousePos.Y <= float32(y+itemH)
+
+		bgColor := rl.NewColor(40, 40, 45, 200)
+		if itemHovered {
+			bgColor = rl.NewColor(60, 70, 60, 220)
+		}
+		rl.DrawRectangle(x, y, itemW, itemH, bgColor)
+
+		// Icon placeholder (cube icon)
+		iconSize := int32(32)
+		iconX := x + (itemW-iconSize)/2
+		iconY := y + 6
+		rl.DrawRectangle(iconX, iconY, iconSize, iconSize, rl.NewColor(80, 80, 90, 200))
+		rl.DrawText("3D", iconX+8, iconY+8, 14, rl.LightGray)
+
+		// Name (truncated)
+		name := asset.Name
+		if len(name) > 10 {
+			name = name[:9] + "…"
+		}
+		textW := rl.MeasureText(name, 11)
+		rl.DrawText(name, x+(itemW-textW)/2, y+itemH-18, 11, rl.LightGray)
+
+		// Click to spawn
+		if itemHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			e.spawnModelFromAsset(asset)
+		}
+	}
+
+	rl.EndScissorMode()
+
+	// Clamp scroll
+	rows := (int32(len(e.assetFiles)) + cols - 1) / cols
+	maxScroll := rows*(itemH+8) - (panelH - 28)
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if e.assetBrowserScroll > maxScroll {
+		e.assetBrowserScroll = maxScroll
+	}
+
+	// Empty state
+	if len(e.assetFiles) == 0 {
+		rl.DrawText("No models found. Drop .gltf files to import.", panelX+20, panelY+50, 14, rl.Gray)
+	}
+}
+
+// spawnModelFromAsset creates a new GameObject with the given model
+func (e *Editor) spawnModelFromAsset(asset AssetEntry) {
+	obj := engine.NewGameObject(asset.Name)
+
+	// Position in front of camera
+	forward, _ := e.getDirections()
+	obj.Transform.Position = rl.Vector3Add(e.camera.Position, rl.Vector3Scale(forward, 5))
+	obj.Transform.Scale = rl.NewVector3(1, 1, 1)
+
+	// Add ModelRenderer
+	modelRenderer := components.NewModelRendererFromFile(asset.Path, rl.White)
+	obj.AddComponent(modelRenderer)
+
+	// Add to scene
+	e.world.Scene.AddGameObject(obj)
+	e.world.PhysicsWorld.AddObject(obj)
+	e.Selected = obj
+
+	e.saveMsg = fmt.Sprintf("Spawned %s", asset.Name)
+	e.saveMsgTime = rl.GetTime()
+}
+
+// scanAssetModels scans the assets/models folder and populates the asset list
+func (e *Editor) scanAssetModels() {
+	e.assetFiles = nil
+	modelsDir := "assets/models"
+
+	entries, err := os.ReadDir(modelsDir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// Look for .gltf or .glb inside the folder
+			subPath := filepath.Join(modelsDir, entry.Name())
+			subEntries, err := os.ReadDir(subPath)
+			if err != nil {
+				continue
+			}
+			for _, sub := range subEntries {
+				if sub.IsDir() {
+					continue
+				}
+				ext := strings.ToLower(filepath.Ext(sub.Name()))
+				if ext == ".gltf" || ext == ".glb" {
+					e.assetFiles = append(e.assetFiles, AssetEntry{
+						Name: entry.Name(),
+						Path: filepath.Join(subPath, sub.Name()),
+					})
+					break // Only add one model per folder
+				}
+			}
+		} else {
+			// Check for loose model files
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if ext == ".gltf" || ext == ".glb" {
+				name := strings.TrimSuffix(entry.Name(), ext)
+				e.assetFiles = append(e.assetFiles, AssetEntry{
+					Name: name,
+					Path: filepath.Join(modelsDir, entry.Name()),
+				})
+			}
+		}
+	}
 }
 
 // drawRotatedBoxWires draws a wireframe box with rotation applied

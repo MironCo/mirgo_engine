@@ -143,6 +143,7 @@ func (w *World) GetCollidableObjects() []*engine.GameObject {
 	return result
 }
 
+// Destroy removes a GameObject and unloads its resources (for runtime/game use).
 func (w *World) Destroy(g *engine.GameObject) {
 	w.Scene.RemoveGameObject(g)
 	w.PhysicsWorld.RemoveObject(g)
@@ -151,6 +152,12 @@ func (w *World) Destroy(g *engine.GameObject) {
 	if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
 		renderer.Unload()
 	}
+}
+
+// EditorDestroy removes a GameObject but keeps resources loaded (for undo support).
+func (w *World) EditorDestroy(g *engine.GameObject) {
+	w.Scene.RemoveGameObject(g)
+	w.PhysicsWorld.RemoveObject(g)
 }
 
 // Raycast performs a physics raycast and returns the result
