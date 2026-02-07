@@ -1062,6 +1062,20 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		rl.DrawText(fmt.Sprintf("Color: %s", colorName(comp.Color)), indent, y, 12, propColor)
 		y += 18
 
+		// Material properties
+		id := fmt.Sprintf("mr%d", compIdx)
+		rl.DrawText("Metallic", indent, y+2, 12, propColor)
+		comp.Metallic = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".met", comp.Metallic)
+		y += fieldH + 2
+
+		rl.DrawText("Roughness", indent, y+2, 12, propColor)
+		comp.Roughness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".rough", comp.Roughness)
+		y += fieldH + 2
+
+		rl.DrawText("Emissive", indent, y+2, 12, propColor)
+		comp.Emissive = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".emit", comp.Emissive)
+		y += fieldH + 4
+
 	case *components.BoxCollider:
 		// Size
 		rl.DrawText("Size", indent, y+2, 12, propColor)

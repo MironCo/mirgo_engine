@@ -4,6 +4,7 @@ in vec3 vertexPosition;
 in vec2 vertexTexCoord;
 in vec3 vertexNormal;
 in vec4 vertexColor;
+in vec4 vertexTangent;
 
 uniform mat4 mvp;
 uniform mat4 matModel;
@@ -14,6 +15,8 @@ out vec3 fragPosition;
 out vec2 fragTexCoord;
 out vec4 fragColor;
 out vec3 fragNormal;
+out vec3 fragTangent;
+out vec3 fragBitangent;
 out vec2 fragShadowTexCoord;
 out float fragShadowDepth;
 
@@ -26,6 +29,11 @@ void main()
     fragTexCoord = vertexTexCoord;
     fragColor = vertexColor;
     fragNormal = normalize(vec3(matNormal * vec4(vertexNormal, 1.0)));
+
+    // Transform tangent to world space for normal mapping
+    fragTangent = normalize(vec3(matNormal * vec4(vertexTangent.xyz, 0.0)));
+    // Bitangent is perpendicular to both normal and tangent, w component indicates handedness
+    fragBitangent = cross(fragNormal, fragTangent) * vertexTangent.w;
 
     // Calculate shadow coordinates
     vec4 shadowClipPos = matLightVP * worldPos;

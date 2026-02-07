@@ -3,6 +3,7 @@ package world
 import (
 	"test3d/internal/components"
 	"test3d/internal/engine"
+	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -32,6 +33,11 @@ func (r *Renderer) Initialize(floorSize float32) {
 
 	// Load lighting shader
 	r.Shader = rl.LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs")
+
+	// Set shader locations for material maps so raylib knows where to bind them
+	// Normal map goes to texture slot 1 (texture1 in our shader)
+	locs := unsafe.Slice(r.Shader.Locs, rl.ShaderLocMapCubemap+1) // Enough for all shader locs
+	locs[rl.ShaderLocMapNormal] = rl.GetShaderLocation(r.Shader, "texture1")
 
 	// Create shadowmap render texture
 	r.ShadowMap = loadShadowmapRenderTexture(ShadowMapResolution, ShadowMapResolution)

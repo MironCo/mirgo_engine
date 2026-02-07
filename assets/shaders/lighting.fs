@@ -4,16 +4,24 @@ in vec3 fragPosition;
 in vec2 fragTexCoord;
 in vec4 fragColor;
 in vec3 fragNormal;
+in vec3 fragTangent;
+in vec3 fragBitangent;
 in vec2 fragShadowTexCoord;
 in float fragShadowDepth;
 
-uniform sampler2D texture0;
+uniform sampler2D texture0;      // Albedo/diffuse texture
+uniform sampler2D texture1;      // Normal map (Raylib's MAP_NORMAL slot)
 uniform sampler2D shadowMap;
 uniform vec4 colDiffuse;
 uniform vec3 viewPos;
 uniform vec4 ambient;
 uniform vec3 lightDir;
 uniform vec4 lightColor;
+
+// Material properties
+uniform float metallic;   // 0 = diffuse, 1 = metallic
+uniform float roughness;  // 0 = shiny, 1 = rough
+uniform float emissive;   // emission intensity
 
 out vec4 finalColor;
 
@@ -48,12 +56,42 @@ float calculateShadow(vec3 normal, vec3 lightDirection)
 void main()
 {
     vec3 normal = normalize(fragNormal);
+
+    // Check if we have valid tangent data (non-zero) and sample normal map
+    if (length(fragTangent) > 0.1)
+    {
+        // Build TBN matrix to transform from tangent space to world space
+        vec3 T = normalize(fragTangent);
+        vec3 B = normalize(fragBitangent);
+        vec3 N = normalize(fragNormal);
+        mat3 TBN = mat3(T, B, N);
+
+        // Sample normal map and convert from [0,1] to [-1,1] range
+        vec3 normalMap = texture(texture1, fragTexCoord).rgb;
+        normalMap = normalMap * 2.0 - 1.0;
+
+        // Normal map strength (1.0 = normal, higher = exaggerated)
+        float normalStrength = 1.0;
+        normalMap.xy *= normalStrength;
+        normalMap = normalize(normalMap);
+
+        // Only apply if normal map has actual data (not just flat blue)
+        if (abs(normalMap.x) > 0.01 || abs(normalMap.y) > 0.01)
+        {
+            normal = normalize(TBN * normalMap);
+        }
+    }
+
     vec3 viewDir = normalize(viewPos - fragPosition);
     // lightDir is direction light points (e.g. down), we need direction TOWARD light
     vec3 lightDirection = normalize(-lightDir);
 
     // Calculate shadow factor (pass normal and light dir for slope-scaled bias)
     float shadow = calculateShadow(normal, lightDirection);
+
+    // Base color - sample albedo texture and multiply by vertex color and diffuse
+    vec4 texColor = texture(texture0, fragTexCoord);
+    vec3 baseColor = texColor.rgb * colDiffuse.rgb;
 
     // Diffuse lighting (wrap lighting for softer look)
     float NdotL = dot(normal, lightDirection);
@@ -62,20 +100,32 @@ void main()
     float wrapDiff = max(NdotL * 0.5 + 0.5, 0.0);
     diff = mix(diff, wrapDiff, 0.3);
 
-    // Specular (Blinn-Phong) - tighter, brighter highlights
+    // Specular (Blinn-Phong) - shininess based on roughness
     vec3 halfwayDir = normalize(lightDirection + viewDir);
     float NdotH = max(dot(normal, halfwayDir), 0.0);
-    float spec = pow(NdotH, 64.0);
+    // Roughness affects specular power: rough = wide soft highlight, smooth = tight sharp highlight
+    float shininess = mix(256.0, 8.0, roughness);
+    float spec = pow(NdotH, shininess);
+    // Roughness also affects specular intensity
+    float specIntensity = mix(2.0, 0.2, roughness);
 
-    // Fresnel effect - brighter edges
+    // Fresnel effect - brighter edges (stronger for metals)
     float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
+    fresnel = mix(fresnel * 0.5, fresnel, metallic);
 
     // Rim lighting
     float rim = fresnel * max(dot(normal, lightDirection), 0.0);
 
+    // Metallic affects how specular color is derived
+    // Non-metals: white specular, Metals: specular tinted by base color
+    vec3 specColor = mix(vec3(1.0), baseColor, metallic);
+
     // Combine lighting components - apply shadow to diffuse and specular
     vec3 diffuseLight = diff * lightColor.rgb * shadow;
-    vec3 specularLight = spec * lightColor.rgb * 1.2 * shadow;
+    // Metals have reduced diffuse (energy conservation)
+    diffuseLight *= (1.0 - metallic * 0.8);
+
+    vec3 specularLight = spec * specColor * lightColor.rgb * specIntensity * shadow;
     vec3 rimLight = rim * lightColor.rgb * 0.5 * shadow;
     vec3 fresnelLight = fresnel * ambient.rgb * 0.3;
 
@@ -83,8 +133,10 @@ void main()
     vec3 lighting = ambient.rgb + diffuseLight + specularLight + rimLight + fresnelLight;
 
     // Apply material color
-    vec3 baseColor = colDiffuse.rgb * fragColor.rgb;
     vec3 result = lighting * baseColor;
+
+    // Add emission
+    result += baseColor * emissive;
 
     // Slight tone mapping to prevent over-bright
     result = result / (result + vec3(1.0));
@@ -92,5 +144,10 @@ void main()
     // Gamma correction
     result = pow(result, vec3(1.0/2.2));
 
-    finalColor = vec4(result, colDiffuse.a);
+    // DEBUG: Uncomment ONE of these to visualize:
+    // result = normal * 0.5 + 0.5;  // Normals as color
+    // result = texture(texture1, fragTexCoord).rgb;  // Normal map texture
+    // result = fragTangent * 0.5 + 0.5;  // Tangent data
+
+    finalColor = vec4(result, texColor.a * colDiffuse.a);
 }

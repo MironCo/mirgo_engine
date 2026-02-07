@@ -31,11 +31,14 @@ type componentHeader struct {
 }
 
 type modelRendererDef struct {
-	Type     string    `json:"type"`
-	Mesh     string    `json:"mesh,omitempty"`
-	MeshSize []float32 `json:"meshSize,omitempty"`
-	Model    string    `json:"model,omitempty"`
-	Color    string    `json:"color"`
+	Type      string    `json:"type"`
+	Mesh      string    `json:"mesh,omitempty"`
+	MeshSize  []float32 `json:"meshSize,omitempty"`
+	Model     string    `json:"model,omitempty"`
+	Color     string    `json:"color"`
+	Metallic  float32   `json:"metallic,omitempty"`
+	Roughness float32   `json:"roughness,omitempty"`
+	Emissive  float32   `json:"emissive,omitempty"`
 }
 
 type boxColliderDef struct {
@@ -224,6 +227,13 @@ func (w *World) loadModelRenderer(g *engine.GameObject, raw json.RawMessage) {
 		renderer.MeshSize = def.MeshSize
 	}
 
+	// Apply material properties
+	renderer.Metallic = def.Metallic
+	if def.Roughness > 0 {
+		renderer.Roughness = def.Roughness
+	}
+	renderer.Emissive = def.Emissive
+
 	renderer.SetShader(w.Renderer.Shader)
 	g.AddComponent(renderer)
 }
@@ -359,8 +369,11 @@ func serializeComponent(c engine.Component) json.RawMessage {
 	switch comp := c.(type) {
 	case *components.ModelRenderer:
 		d := modelRendererDef{
-			Type:  "ModelRenderer",
-			Color: lookupColorName(comp.Color),
+			Type:      "ModelRenderer",
+			Color:     lookupColorName(comp.Color),
+			Metallic:  comp.Metallic,
+			Roughness: comp.Roughness,
+			Emissive:  comp.Emissive,
 		}
 		if comp.FilePath != "" {
 			d.Model = comp.FilePath
