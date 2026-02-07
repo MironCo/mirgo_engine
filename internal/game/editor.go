@@ -404,7 +404,14 @@ func (e *Editor) Draw3D() {
 	// Selection wireframe
 	if box := engine.GetComponent[*components.BoxCollider](e.Selected); box != nil {
 		center := box.GetCenter()
-		rl.DrawCubeWiresV(center, box.Size, rl.Yellow)
+		rot := e.Selected.WorldRotation()
+		scale := e.Selected.WorldScale()
+		scaledSize := rl.Vector3{
+			X: box.Size.X * scale.X,
+			Y: box.Size.Y * scale.Y,
+			Z: box.Size.Z * scale.Z,
+		}
+		drawRotatedBoxWires(center, scaledSize, rot, rl.Yellow)
 	} else if sphere := engine.GetComponent[*components.SphereCollider](e.Selected); sphere != nil {
 		center := sphere.GetCenter()
 		rl.DrawSphereWires(center, sphere.Radius, 8, 8, rl.Yellow)
@@ -702,4 +709,54 @@ func rayPlaneIntersect(rayOrigin, rayDir, planePoint, planeNormal rl.Vector3) (r
 		return rl.Vector3{}, false
 	}
 	return rl.Vector3Add(rayOrigin, rl.Vector3Scale(rayDir, t)), true
+}
+
+// drawRotatedBoxWires draws a wireframe box with rotation applied
+func drawRotatedBoxWires(center, size, rotation rl.Vector3, color rl.Color) {
+	// Build rotation matrix
+	rx := float64(rotation.X) * math.Pi / 180
+	ry := float64(rotation.Y) * math.Pi / 180
+	rz := float64(rotation.Z) * math.Pi / 180
+	rotX := rl.MatrixRotateX(float32(rx))
+	rotY := rl.MatrixRotateY(float32(ry))
+	rotZ := rl.MatrixRotateZ(float32(rz))
+	rotMatrix := rl.MatrixMultiply(rl.MatrixMultiply(rotX, rotY), rotZ)
+
+	// Half extents
+	hx, hy, hz := size.X/2, size.Y/2, size.Z/2
+
+	// 8 corners in local space
+	corners := [8]rl.Vector3{
+		{X: -hx, Y: -hy, Z: -hz},
+		{X: hx, Y: -hy, Z: -hz},
+		{X: hx, Y: hy, Z: -hz},
+		{X: -hx, Y: hy, Z: -hz},
+		{X: -hx, Y: -hy, Z: hz},
+		{X: hx, Y: -hy, Z: hz},
+		{X: hx, Y: hy, Z: hz},
+		{X: -hx, Y: hy, Z: hz},
+	}
+
+	// Transform corners to world space
+	for i := range corners {
+		corners[i] = rl.Vector3Transform(corners[i], rotMatrix)
+		corners[i] = rl.Vector3Add(corners[i], center)
+	}
+
+	// Draw 12 edges
+	// Bottom face
+	rl.DrawLine3D(corners[0], corners[1], color)
+	rl.DrawLine3D(corners[1], corners[2], color)
+	rl.DrawLine3D(corners[2], corners[3], color)
+	rl.DrawLine3D(corners[3], corners[0], color)
+	// Top face
+	rl.DrawLine3D(corners[4], corners[5], color)
+	rl.DrawLine3D(corners[5], corners[6], color)
+	rl.DrawLine3D(corners[6], corners[7], color)
+	rl.DrawLine3D(corners[7], corners[4], color)
+	// Vertical edges
+	rl.DrawLine3D(corners[0], corners[4], color)
+	rl.DrawLine3D(corners[1], corners[5], color)
+	rl.DrawLine3D(corners[2], corners[6], color)
+	rl.DrawLine3D(corners[3], corners[7], color)
 }

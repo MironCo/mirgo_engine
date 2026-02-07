@@ -42,15 +42,13 @@ func (p *PlayerCollision) Update(deltaTime float32) {
 		fps.Grounded = false
 	}
 
-	// Collision with world objects
-	playerAABB := physics.NewAABBFromCenter(
-		rl.Vector3{
-			X: g.Transform.Position.X,
-			Y: g.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
-			Z: g.Transform.Position.Z,
-		},
-		collider.Size,
-	)
+	// Collision with world objects - use OBB for rotated box support
+	playerCenter := rl.Vector3{
+		X: g.Transform.Position.X,
+		Y: g.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
+		Z: g.Transform.Position.Z,
+	}
+	playerOBB := physics.NewAABBasOBB(playerCenter, collider.Size)
 
 	for _, obj := range p.GetGameObject().Scene.World.GetCollidableObjects() {
 		if obj == g {
@@ -62,8 +60,9 @@ func (p *PlayerCollision) Update(deltaTime float32) {
 			continue
 		}
 
-		objAABB := physics.NewAABBFromCenter(objCollider.GetCenter(), objCollider.Size)
-		pushOut := playerAABB.Resolve(objAABB)
+		// Use OBB for rotated box collision
+		objOBB := physics.NewOBBFromBox(objCollider.GetCenter(), objCollider.Size, obj.WorldRotation(), obj.WorldScale())
+		pushOut := playerOBB.ResolveOBB(objOBB)
 
 		if pushOut.X != 0 || pushOut.Y != 0 || pushOut.Z != 0 {
 			g.Transform.Position = rl.Vector3Add(g.Transform.Position, pushOut)
@@ -76,8 +75,8 @@ func (p *PlayerCollision) Update(deltaTime float32) {
 				fps.Velocity.Y = 0
 			}
 
-			// Update AABB for subsequent checks
-			playerAABB = physics.NewAABBFromCenter(
+			// Update OBB for subsequent checks
+			playerOBB = physics.NewAABBasOBB(
 				rl.Vector3{
 					X: g.Transform.Position.X,
 					Y: g.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
