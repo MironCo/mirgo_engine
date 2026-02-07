@@ -22,9 +22,10 @@ const (
 )
 
 const (
-	gizmoLength  float32 = 2.0
-	gizmoTipSize float32 = 0.12
-	gizmoHitDist float32 = 0.3
+	gizmoLength    float32 = 2.0
+	gizmoTipSize   float32 = 0.2
+	gizmoHitDist   float32 = 0.3
+	gizmoThickness float32 = 0.06
 )
 
 var gizmoAxes = [3]rl.Vector3{
@@ -221,12 +222,44 @@ func (e *Editor) pickGizmoAxis(ray rl.Ray) int {
 	bestDist := float32(999.0)
 	bestAxis := -1
 
-	for i, axis := range gizmoAxes {
-		_, t2, dist := closestPointBetweenRays(ray.Position, ray.Direction, center, axis)
-		if t2 > 0 && t2 < gizmoLength && dist < gizmoHitDist {
-			if dist < bestDist {
-				bestDist = dist
-				bestAxis = i
+	if e.gizmoMode == GizmoRotate {
+		// For rotation gizmo, check distance to each ring
+		radius := gizmoLength * 0.8
+		ringHitDist := float32(0.4) // More forgiving hit distance for rings
+
+		for i := range gizmoAxes {
+			// Get the plane normal for this ring
+			var planeNormal rl.Vector3
+			switch i {
+			case 0: // X axis - ring in YZ plane
+				planeNormal = rl.Vector3{X: 1, Y: 0, Z: 0}
+			case 1: // Y axis - ring in XZ plane
+				planeNormal = rl.Vector3{X: 0, Y: 1, Z: 0}
+			case 2: // Z axis - ring in XY plane
+				planeNormal = rl.Vector3{X: 0, Y: 0, Z: 1}
+			}
+
+			// Intersect ray with the ring's plane
+			if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, center, planeNormal); ok {
+				// Check if intersection point is near the ring
+				distFromCenter := rl.Vector3Length(rl.Vector3Subtract(pt, center))
+				distFromRing := float32(math.Abs(float64(distFromCenter - radius)))
+
+				if distFromRing < ringHitDist && distFromRing < bestDist {
+					bestDist = distFromRing
+					bestAxis = i
+				}
+			}
+		}
+	} else {
+		// For move/scale gizmos, use line-ray intersection
+		for i, axis := range gizmoAxes {
+			_, t2, dist := closestPointBetweenRays(ray.Position, ray.Direction, center, axis)
+			if t2 > 0 && t2 < gizmoLength && dist < gizmoHitDist {
+				if dist < bestDist {
+					bestDist = dist
+					bestAxis = i
+				}
 			}
 		}
 	}
@@ -362,11 +395,11 @@ func (e *Editor) Draw3D() {
 
 		switch e.gizmoMode {
 		case GizmoMove:
-			rl.DrawLine3D(center, end, color)
+			rl.DrawCylinderEx(center, end, gizmoThickness, gizmoThickness, 8, color)
 			tip := rl.Vector3{X: gizmoTipSize, Y: gizmoTipSize, Z: gizmoTipSize}
 			rl.DrawCubeV(end, tip, color)
 		case GizmoRotate:
-			// Draw arc segments to suggest rotation
+			// Draw arc segments as thick cylinders to suggest rotation
 			segments := 16
 			radius := gizmoLength * 0.8
 			for s := range segments {
@@ -384,12 +417,12 @@ func (e *Editor) Draw3D() {
 					p0 = rl.Vector3{X: center.X + radius*float32(math.Cos(t0)), Y: center.Y + radius*float32(math.Sin(t0)), Z: center.Z}
 					p1 = rl.Vector3{X: center.X + radius*float32(math.Cos(t1)), Y: center.Y + radius*float32(math.Sin(t1)), Z: center.Z}
 				}
-				rl.DrawLine3D(p0, p1, color)
+				rl.DrawCylinderEx(p0, p1, gizmoThickness*0.7, gizmoThickness*0.7, 6, color)
 			}
 		case GizmoScale:
-			rl.DrawLine3D(center, end, color)
+			rl.DrawCylinderEx(center, end, gizmoThickness, gizmoThickness, 8, color)
 			// Cube at the end instead of small tip
-			cubeSize := rl.Vector3{X: 0.18, Y: 0.18, Z: 0.18}
+			cubeSize := rl.Vector3{X: 0.25, Y: 0.25, Z: 0.25}
 			rl.DrawCubeV(end, cubeSize, color)
 			rl.DrawCubeWiresV(end, cubeSize, color)
 		}
