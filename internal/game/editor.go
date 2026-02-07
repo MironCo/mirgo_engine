@@ -82,6 +82,10 @@ func (e *Editor) Enter(currentCam rl.Camera3D) {
 	e.Active = true
 	rl.EnableCursor()
 
+	// Reload scene from disk to undo all play mode changes
+	e.world.ResetScene()
+	e.Selected = nil
+
 	e.camera.Position = currentCam.Position
 
 	dir := rl.Vector3Subtract(currentCam.Target, currentCam.Position)

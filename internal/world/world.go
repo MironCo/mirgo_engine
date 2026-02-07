@@ -81,6 +81,46 @@ func (w *World) createPlayer() {
 }
 
 
+// ResetScene reloads the scene from disk, removing all dynamically spawned
+// objects and restoring scene objects to their saved state.
+// The Player is preserved but reset to its spawn position.
+func (w *World) ResetScene() {
+	player := w.Scene.FindByName("Player")
+
+	// Unload models for all non-player objects
+	for _, g := range w.Scene.GameObjects {
+		if g == player {
+			continue
+		}
+		if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+			renderer.Unload()
+		}
+	}
+
+	// Clear scene and physics, keeping only player
+	w.Scene.GameObjects = w.Scene.GameObjects[:0]
+	w.PhysicsWorld.Objects = w.PhysicsWorld.Objects[:0]
+	w.PhysicsWorld.Statics = w.PhysicsWorld.Statics[:0]
+	w.PhysicsWorld.Kinematics = w.PhysicsWorld.Kinematics[:0]
+
+	if player != nil {
+		w.Scene.AddGameObject(player)
+		w.PhysicsWorld.AddObject(player)
+		player.Transform.Position = rl.Vector3{X: 10, Y: 10, Z: 10}
+		player.Transform.Rotation = rl.Vector3{}
+		if rb := engine.GetComponent[*components.Rigidbody](player); rb != nil {
+			rb.Velocity = rl.Vector3{}
+		}
+	}
+
+	// Reload scene from disk
+	if err := w.LoadScene(ScenePath); err != nil {
+		log.Printf("failed to reload scene: %v", err)
+		return
+	}
+	w.Scene.Start()
+}
+
 func (w *World) Update(deltaTime float32) {
 	w.PhysicsWorld.Update(deltaTime)
 	w.Scene.Update(deltaTime)
