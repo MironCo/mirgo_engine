@@ -63,6 +63,12 @@ type directionalLightDef struct {
 	Intensity float32    `json:"intensity,omitempty"`
 }
 
+type scriptDef struct {
+	Type  string         `json:"type"`
+	Name  string         `json:"name"`
+	Props map[string]any `json:"props,omitempty"`
+}
+
 // --- Color mapping ---
 
 var colorByName = map[string]rl.Color{
@@ -153,6 +159,8 @@ func (w *World) LoadScene(path string) error {
 				w.loadRigidbody(g, raw)
 			case "DirectionalLight":
 				w.loadDirectionalLight(g, raw)
+			case "Script":
+				loadScript(g, raw)
 			}
 		}
 
@@ -260,6 +268,16 @@ func (w *World) loadDirectionalLight(g *engine.GameObject, raw json.RawMessage) 
 	w.Renderer.SetLight(light)
 }
 
+func loadScript(g *engine.GameObject, raw json.RawMessage) {
+	var def scriptDef
+	if err := json.Unmarshal(raw, &def); err != nil {
+		return
+	}
+	if comp := engine.CreateScript(def.Name, def.Props); comp != nil {
+		g.AddComponent(comp)
+	}
+}
+
 // --- Saving ---
 
 func (w *World) SaveScene(path string) error {
@@ -353,7 +371,12 @@ func serializeComponent(c engine.Component) json.RawMessage {
 		}
 
 	default:
-		return nil
+		// Try script registry
+		if name, props, ok := engine.SerializeScript(c); ok {
+			def = scriptDef{Type: "Script", Name: name, Props: props}
+		} else {
+			return nil
+		}
 	}
 
 	data, err := json.Marshal(def)

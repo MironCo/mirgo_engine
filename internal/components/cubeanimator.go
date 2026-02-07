@@ -30,6 +30,14 @@ func NewCubeAnimator(startPos rl.Vector3, rotAxis rl.Vector3, rotSpeed, moveRadi
 	}
 }
 
+func (c *CubeAnimator) Start() {
+	if c.StartPosition == (rl.Vector3{}) {
+		if g := c.GetGameObject(); g != nil {
+			c.StartPosition = g.Transform.Position
+		}
+	}
+}
+
 func (c *CubeAnimator) Update(deltaTime float32) {
 	g := c.GetGameObject()
 	if g == nil {

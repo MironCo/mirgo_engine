@@ -9,8 +9,8 @@ import (
 
 type Shooter struct {
 	engine.BaseComponent
-	Shader      rl.Shader
-	Cooldown    float64
+	Shader       rl.Shader
+	Cooldown     float64
 	lastShotTime float64
 	shotCounter  int
 }

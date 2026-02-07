@@ -566,6 +566,13 @@
           "color": "White"
         },
         {
+          "type": "Script",
+          "name": "Rotator",
+          "props": {
+            "speed": 45
+          }
+        },
+        {
           "type": "BoxCollider",
           "size": [
             0.8,
