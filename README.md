@@ -66,7 +66,8 @@ go run ./cmd/test3d
 ```
 cmd/
   test3d/main.go               Entry point
-  newscript/main.go             Script scaffolding tool
+utilities/                      Rust CLI tools (see below)
+  src/main.rs                   mirgo-utils (subcommand tool)
 internal/
   engine/                       Core framework
     component.go                Component interface + BaseComponent
@@ -171,8 +172,14 @@ Scripts are custom behaviors that live in `internal/components/scripts/`, one fi
 Use the scaffolding tool:
 
 ```bash
-go run ./cmd/newscript MyScript
+# Build the utils (once)
+cd utilities && make
+
+# Generate a new script
+./mirgo-utils newscript MyScript
 ```
+
+The utils are written in Rust. Why? For the meme. 🤷
 
 This generates `internal/components/scripts/my_script.go` with the struct, factory, serializer, and registration all wired up. Edit the struct fields and factory to match your needs, then reference it in a scene file:
 
