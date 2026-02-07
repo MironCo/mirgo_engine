@@ -22,5 +22,5 @@ func NewBoxCollider(size rl.Vector3) *BoxCollider {
 // GetCenter returns the world-space center of this collider
 func (b *BoxCollider) GetCenter() rl.Vector3 {
 	g := b.GetGameObject()
-	return rl.Vector3Add(g.Transform.Position, b.Offset)
+	return rl.Vector3Add(g.WorldPosition(), b.Offset)
 }

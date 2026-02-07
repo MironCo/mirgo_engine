@@ -217,7 +217,7 @@ func (e *Editor) pickGizmoAxis(ray rl.Ray) int {
 		return -1
 	}
 
-	center := e.Selected.Transform.Position
+	center := e.Selected.WorldPosition()
 	bestDist := float32(999.0)
 	bestAxis := -1
 
@@ -241,13 +241,14 @@ func (e *Editor) startDrag(axisIdx int, ray rl.Ray) {
 	e.dragInitRot = e.Selected.Transform.Rotation
 	e.dragInitScale = e.Selected.Transform.Scale
 
-	// Build a drag plane that contains the axis and faces the camera
-	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(e.dragInitPos, e.camera.Position))
+	// Build a drag plane using world position for correct 3D picking
+	worldPos := e.Selected.WorldPosition()
+	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(worldPos, e.camera.Position))
 	cross1 := rl.Vector3CrossProduct(viewDir, e.dragAxis)
 	e.dragPlaneNormal = rl.Vector3Normalize(rl.Vector3CrossProduct(e.dragAxis, cross1))
 
-	if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitPos, e.dragPlaneNormal); ok {
-		e.dragStart = rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitPos), e.dragAxis)
+	if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, worldPos, e.dragPlaneNormal); ok {
+		e.dragStart = rl.Vector3DotProduct(rl.Vector3Subtract(pt, worldPos), e.dragAxis)
 	}
 }
 
@@ -347,7 +348,7 @@ func (e *Editor) Draw3D() {
 	}
 
 	// Transform gizmo
-	center := e.Selected.Transform.Position
+	center := e.Selected.WorldPosition()
 
 	for i, axis := range gizmoAxes {
 		color := gizmoColors[i]
@@ -488,11 +489,20 @@ func (e *Editor) drawHierarchy() {
 			e.Selected = g
 		}
 
+		// Compute depth for indentation
+		depth := int32(0)
+		p := g.Parent
+		for p != nil {
+			depth++
+			p = p.Parent
+		}
+		indent := int32(12) + depth*16
+
 		textColor := rl.LightGray
 		if selected {
 			textColor = rl.Yellow
 		}
-		rl.DrawText(g.Name, panelX+12, itemY+4, 14, textColor)
+		rl.DrawText(g.Name, panelX+indent, itemY+4, 14, textColor)
 	}
 
 	rl.EndScissorMode()
@@ -542,6 +552,12 @@ func (e *Editor) drawInspector() {
 	pos := e.Selected.Transform.Position
 	rl.DrawText(fmt.Sprintf("Pos   %.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z), panelX+14, y, 14, rl.White)
 	y += 18
+
+	if e.Selected.Parent != nil {
+		wPos := e.Selected.WorldPosition()
+		rl.DrawText(fmt.Sprintf("World %.2f, %.2f, %.2f", wPos.X, wPos.Y, wPos.Z), panelX+14, y, 12, rl.Gray)
+		y += 16
+	}
 
 	rot := e.Selected.Transform.Rotation
 	rl.DrawText(fmt.Sprintf("Rot   %.2f, %.2f, %.2f", rot.X, rot.Y, rot.Z), panelX+14, y, 14, rl.White)

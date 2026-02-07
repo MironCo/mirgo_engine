@@ -19,10 +19,26 @@ func (s *Scene) AddGameObject(g *GameObject) {
 }
 
 func (s *Scene) RemoveGameObject(g *GameObject) {
+	// Detach from parent
+	if g.Parent != nil {
+		g.Parent.RemoveChild(g)
+	}
+
+	// Remove from flat list
 	for i, obj := range s.GameObjects {
 		if obj == g {
 			s.GameObjects = append(s.GameObjects[:i], s.GameObjects[i+1:]...)
-			return
+			break
+		}
+	}
+
+	// Recursively remove children from flat list
+	for _, child := range g.Children {
+		for i, obj := range s.GameObjects {
+			if obj == child {
+				s.GameObjects = append(s.GameObjects[:i], s.GameObjects[i+1:]...)
+				break
+			}
 		}
 	}
 }

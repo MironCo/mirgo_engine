@@ -22,5 +22,5 @@ func NewSphereCollider(radius float32) *SphereCollider {
 // GetCenter returns the world-space center of this collider
 func (s *SphereCollider) GetCenter() rl.Vector3 {
 	g := s.GetGameObject()
-	return rl.Vector3Add(g.Transform.Position, s.Offset)
+	return rl.Vector3Add(g.WorldPosition(), s.Offset)
 }

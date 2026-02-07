@@ -44,19 +44,19 @@ func (m *ModelRenderer) Draw() {
 		return
 	}
 
-	// Build scale matrix
-	scale := g.Transform.Scale
+	// Build scale matrix (world space)
+	scale := g.WorldScale()
 	scaleMatrix := rl.MatrixScale(scale.X, scale.Y, scale.Z)
 
-	// Build rotation matrix from Euler angles
-	rot := g.Transform.Rotation
+	// Build rotation matrix from world Euler angles
+	rot := g.WorldRotation()
 	rotX := rl.MatrixRotateX(rot.X * rl.Deg2rad)
 	rotY := rl.MatrixRotateY(rot.Y * rl.Deg2rad)
 	rotZ := rl.MatrixRotateZ(rot.Z * rl.Deg2rad)
 	rotMatrix := rl.MatrixMultiply(rl.MatrixMultiply(rotX, rotY), rotZ)
 
-	// Build translation matrix
-	pos := g.Transform.Position
+	// Build translation matrix (world space)
+	pos := g.WorldPosition()
 	transMatrix := rl.MatrixTranslate(pos.X, pos.Y, pos.Z)
 
 	// Combine: scale -> rotate -> translate

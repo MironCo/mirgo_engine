@@ -35,7 +35,7 @@ func (m *MeshRenderer) Draw() {
 		return
 	}
 
-	pos := g.Transform.Position
+	pos := g.WorldPosition()
 
 	switch m.MeshType {
 	case MeshCube:

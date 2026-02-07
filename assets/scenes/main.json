@@ -90,6 +90,22 @@
           "friction": 0.08,
           "useGravity": true
         }
+      ],
+      "children": [
+        {
+          "name": "Antenna",
+          "position": [0, 1.5, 0],
+          "rotation": [0, 0, 0],
+          "scale": [0.3, 0.3, 0.3],
+          "components": [
+            {
+              "type": "ModelRenderer",
+              "mesh": "cube",
+              "meshSize": [1, 1, 1],
+              "color": "Gold"
+            }
+          ]
+        }
       ]
     },
     {

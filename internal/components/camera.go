@@ -30,7 +30,7 @@ func (c *Camera) GetRaylibCamera() rl.Camera3D {
 	}
 
 	// Get eye position (feet + eye height)
-	eyePos := g.Transform.Position
+	eyePos := g.WorldPosition()
 	fps := engine.GetComponent[*FPSController](g)
 	if fps != nil {
 		eyePos.Y += fps.EyeHeight
