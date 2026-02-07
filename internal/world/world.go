@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"test3d/internal/assets"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 	"test3d/internal/physics"
@@ -29,6 +30,7 @@ func New() *World {
 }
 
 func (w *World) Initialize() {
+	assets.Init()
 	w.Renderer.Initialize(FloorSize)
 
 	// Create floor as a regular game object
@@ -52,6 +54,9 @@ func (w *World) Initialize() {
 
 	// Create cube GameObjects
 	w.createCubes()
+
+	// Create duck
+	w.createDuck()
 
 	// Create player
 	w.createPlayer()
@@ -142,6 +147,28 @@ func (w *World) createCubes() {
 	}
 }
 
+func (w *World) createDuck() {
+	duck := engine.NewGameObject("Duck")
+	duck.Transform.Position = rl.Vector3{X: 0, Y: 5, Z: 0}
+	duck.Transform.Scale = rl.Vector3{X: 10, Y: 10, Z: 10}
+
+	renderer := components.NewModelRendererFromFile("assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf", rl.White)
+	renderer.SetShader(w.Renderer.Shader)
+	duck.AddComponent(renderer)
+
+	// Add collider (approximate duck size when scaled)
+	collider := components.NewBoxCollider(rl.Vector3{X: 0.8, Y: 0.6, Z: 0.8})
+	duck.AddComponent(collider)
+
+	// Add rigidbody for physics
+	rb := components.NewRigidbody()
+	rb.Bounciness = 0.6
+	duck.AddComponent(rb)
+
+	w.Scene.AddGameObject(duck)
+	w.PhysicsWorld.AddObject(duck)
+}
+
 func (w *World) createLight() {
 	light := engine.NewGameObject("DirectionalLight")
 
@@ -179,4 +206,5 @@ func (w *World) GetCollidableObjects() []*engine.GameObject {
 
 func (w *World) Unload() {
 	w.Renderer.Unload(w.Scene.GameObjects)
+	assets.Unload()
 }

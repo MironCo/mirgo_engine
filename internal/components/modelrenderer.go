@@ -1,6 +1,7 @@
 package components
 
 import (
+	"test3d/internal/assets"
 	"test3d/internal/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -8,15 +9,25 @@ import (
 
 type ModelRenderer struct {
 	engine.BaseComponent
-	Model  rl.Model
-	Color  rl.Color
-	shader rl.Shader
+	Model    rl.Model
+	Color    rl.Color
+	shader   rl.Shader
+	fromFile bool // true if loaded via asset manager
 }
 
 func NewModelRenderer(model rl.Model, color rl.Color) *ModelRenderer {
 	return &ModelRenderer{
-		Model: model,
-		Color: color,
+		Model:    model,
+		Color:    color,
+		fromFile: false,
+	}
+}
+
+func NewModelRendererFromFile(path string, color rl.Color) *ModelRenderer {
+	return &ModelRenderer{
+		Model:    assets.LoadModel(path),
+		Color:    color,
+		fromFile: true,
 	}
 }
 
@@ -32,6 +43,10 @@ func (m *ModelRenderer) Draw() {
 		return
 	}
 
+	// Build scale matrix
+	scale := g.Transform.Scale
+	scaleMatrix := rl.MatrixScale(scale.X, scale.Y, scale.Z)
+
 	// Build rotation matrix from Euler angles
 	rot := g.Transform.Rotation
 	rotX := rl.MatrixRotateX(rot.X * rl.Deg2rad)
@@ -43,12 +58,15 @@ func (m *ModelRenderer) Draw() {
 	pos := g.Transform.Position
 	transMatrix := rl.MatrixTranslate(pos.X, pos.Y, pos.Z)
 
-	// Combine: first rotate, then translate
-	m.Model.Transform = rl.MatrixMultiply(rotMatrix, transMatrix)
+	// Combine: scale -> rotate -> translate
+	m.Model.Transform = rl.MatrixMultiply(rl.MatrixMultiply(scaleMatrix, rotMatrix), transMatrix)
 
 	rl.DrawModel(m.Model, rl.Vector3Zero(), 1.0, rl.White)
 }
 
 func (m *ModelRenderer) Unload() {
-	rl.UnloadModel(m.Model)
+	// Only unload if not from asset manager (asset manager handles its own cleanup)
+	if !m.fromFile {
+		rl.UnloadModel(m.Model)
+	}
 }
