@@ -23,6 +23,7 @@ type ObjectDef struct {
 	Rotation   [3]float32        `json:"rotation"`
 	Scale      [3]float32        `json:"scale"`
 	Components []json.RawMessage `json:"components"`
+	Children   []ObjectDef       `json:"children,omitempty"`
 }
 
 type componentHeader struct {
@@ -130,45 +131,63 @@ func (w *World) LoadScene(path string) error {
 	}
 
 	for _, objDef := range sf.Objects {
-		g := engine.NewGameObject(objDef.Name)
-		g.Tags = objDef.Tags
-		g.Transform.Position = rl.Vector3{X: objDef.Position[0], Y: objDef.Position[1], Z: objDef.Position[2]}
-		g.Transform.Rotation = rl.Vector3{X: objDef.Rotation[0], Y: objDef.Rotation[1], Z: objDef.Rotation[2]}
-
-		// Default scale to 1 if zero
-		if objDef.Scale == [3]float32{} {
-			g.Transform.Scale = rl.Vector3{X: 1, Y: 1, Z: 1}
-		} else {
-			g.Transform.Scale = rl.Vector3{X: objDef.Scale[0], Y: objDef.Scale[1], Z: objDef.Scale[2]}
-		}
-
-		for _, raw := range objDef.Components {
-			var header componentHeader
-			if err := json.Unmarshal(raw, &header); err != nil {
-				continue
-			}
-
-			switch header.Type {
-			case "ModelRenderer":
-				w.loadModelRenderer(g, raw)
-			case "BoxCollider":
-				w.loadBoxCollider(g, raw)
-			case "SphereCollider":
-				w.loadSphereCollider(g, raw)
-			case "Rigidbody":
-				w.loadRigidbody(g, raw)
-			case "DirectionalLight":
-				w.loadDirectionalLight(g, raw)
-			case "Script":
-				loadScript(g, raw)
-			}
-		}
-
-		w.Scene.AddGameObject(g)
-		w.PhysicsWorld.AddObject(g)
+		w.loadObject(objDef, nil)
 	}
 
 	return nil
+}
+
+func (w *World) loadObject(objDef ObjectDef, parent *engine.GameObject) {
+	g := engine.NewGameObject(objDef.Name)
+	g.Tags = objDef.Tags
+	g.Transform.Position = rl.Vector3{X: objDef.Position[0], Y: objDef.Position[1], Z: objDef.Position[2]}
+	g.Transform.Rotation = rl.Vector3{X: objDef.Rotation[0], Y: objDef.Rotation[1], Z: objDef.Rotation[2]}
+
+	// Default scale to 1 if zero
+	if objDef.Scale == [3]float32{} {
+		g.Transform.Scale = rl.Vector3{X: 1, Y: 1, Z: 1}
+	} else {
+		g.Transform.Scale = rl.Vector3{X: objDef.Scale[0], Y: objDef.Scale[1], Z: objDef.Scale[2]}
+	}
+
+	for _, raw := range objDef.Components {
+		var header componentHeader
+		if err := json.Unmarshal(raw, &header); err != nil {
+			continue
+		}
+
+		switch header.Type {
+		case "ModelRenderer":
+			w.loadModelRenderer(g, raw)
+		case "BoxCollider":
+			w.loadBoxCollider(g, raw)
+		case "SphereCollider":
+			w.loadSphereCollider(g, raw)
+		case "Rigidbody":
+			w.loadRigidbody(g, raw)
+		case "DirectionalLight":
+			w.loadDirectionalLight(g, raw)
+		case "Script":
+			loadScript(g, raw)
+		}
+	}
+
+	if parent != nil {
+		parent.AddChild(g)
+	}
+
+	// All objects go in the flat list for Start/Update/Draw
+	w.Scene.AddGameObject(g)
+
+	// Only root objects participate in physics
+	if parent == nil {
+		w.PhysicsWorld.AddObject(g)
+	}
+
+	// Recursively load children
+	for _, childDef := range objDef.Children {
+		w.loadObject(childDef, g)
+	}
 }
 
 func (w *World) loadModelRenderer(g *engine.GameObject, raw json.RawMessage) {
@@ -284,6 +303,10 @@ func (w *World) SaveScene(path string) error {
 	var sf SceneFile
 
 	for _, g := range w.Scene.GameObjects {
+		// Skip children (saved recursively under their parent)
+		if g.Parent != nil {
+			continue
+		}
 		// Skip player (code-managed)
 		if engine.GetComponent[*components.FPSController](g) != nil {
 			continue
@@ -293,21 +316,7 @@ func (w *World) SaveScene(path string) error {
 			continue
 		}
 
-		objDef := ObjectDef{
-			Name:     g.Name,
-			Tags:     g.Tags,
-			Position: [3]float32{g.Transform.Position.X, g.Transform.Position.Y, g.Transform.Position.Z},
-			Rotation: [3]float32{g.Transform.Rotation.X, g.Transform.Rotation.Y, g.Transform.Rotation.Z},
-			Scale:    [3]float32{g.Transform.Scale.X, g.Transform.Scale.Y, g.Transform.Scale.Z},
-		}
-
-		for _, c := range g.Components() {
-			if raw := serializeComponent(c); raw != nil {
-				objDef.Components = append(objDef.Components, raw)
-			}
-		}
-
-		sf.Objects = append(sf.Objects, objDef)
+		sf.Objects = append(sf.Objects, serializeObject(g))
 	}
 
 	data, err := json.MarshalIndent(sf, "", "  ")
@@ -320,6 +329,28 @@ func (w *World) SaveScene(path string) error {
 	}
 
 	return nil
+}
+
+func serializeObject(g *engine.GameObject) ObjectDef {
+	objDef := ObjectDef{
+		Name:     g.Name,
+		Tags:     g.Tags,
+		Position: [3]float32{g.Transform.Position.X, g.Transform.Position.Y, g.Transform.Position.Z},
+		Rotation: [3]float32{g.Transform.Rotation.X, g.Transform.Rotation.Y, g.Transform.Rotation.Z},
+		Scale:    [3]float32{g.Transform.Scale.X, g.Transform.Scale.Y, g.Transform.Scale.Z},
+	}
+
+	for _, c := range g.Components() {
+		if raw := serializeComponent(c); raw != nil {
+			objDef.Components = append(objDef.Components, raw)
+		}
+	}
+
+	for _, child := range g.Children {
+		objDef.Children = append(objDef.Children, serializeObject(child))
+	}
+
+	return objDef
 }
 
 func serializeComponent(c engine.Component) json.RawMessage {

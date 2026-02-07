@@ -22,9 +22,10 @@ const (
 )
 
 const (
-	gizmoLength  float32 = 2.0
-	gizmoTipSize float32 = 0.12
-	gizmoHitDist float32 = 0.3
+	gizmoLength    float32 = 2.0
+	gizmoTipSize   float32 = 0.2
+	gizmoHitDist   float32 = 0.3
+	gizmoThickness float32 = 0.06
 )
 
 var gizmoAxes = [3]rl.Vector3{
@@ -49,16 +50,17 @@ type Editor struct {
 	world    *world.World
 
 	// Gizmo state
-	gizmoMode       GizmoMode
-	dragging        bool
-	dragAxisIdx     int
-	dragAxis        rl.Vector3
-	dragPlaneNormal rl.Vector3
-	dragStart       float32
-	dragInitPos     rl.Vector3
-	dragInitRot     rl.Vector3
-	dragInitScale   rl.Vector3
-	hoveredAxis     int // -1 = none, 0=X, 1=Y, 2=Z
+	gizmoMode        GizmoMode
+	dragging         bool
+	dragAxisIdx      int
+	dragAxis         rl.Vector3
+	dragPlaneNormal  rl.Vector3
+	dragStart        float32
+	dragInitPos      rl.Vector3 // Local position
+	dragInitWorldPos rl.Vector3 // World position (for drag plane math)
+	dragInitRot      rl.Vector3
+	dragInitScale    rl.Vector3
+	hoveredAxis      int // -1 = none, 0=X, 1=Y, 2=Z
 
 	// Hierarchy panel
 	hierarchyScroll int32
@@ -217,16 +219,48 @@ func (e *Editor) pickGizmoAxis(ray rl.Ray) int {
 		return -1
 	}
 
-	center := e.Selected.Transform.Position
+	center := e.Selected.WorldPosition()
 	bestDist := float32(999.0)
 	bestAxis := -1
 
-	for i, axis := range gizmoAxes {
-		_, t2, dist := closestPointBetweenRays(ray.Position, ray.Direction, center, axis)
-		if t2 > 0 && t2 < gizmoLength && dist < gizmoHitDist {
-			if dist < bestDist {
-				bestDist = dist
-				bestAxis = i
+	if e.gizmoMode == GizmoRotate {
+		// For rotation gizmo, check distance to each ring
+		radius := gizmoLength * 0.8
+		ringHitDist := float32(0.4) // More forgiving hit distance for rings
+
+		for i := range gizmoAxes {
+			// Get the plane normal for this ring
+			var planeNormal rl.Vector3
+			switch i {
+			case 0: // X axis - ring in YZ plane
+				planeNormal = rl.Vector3{X: 1, Y: 0, Z: 0}
+			case 1: // Y axis - ring in XZ plane
+				planeNormal = rl.Vector3{X: 0, Y: 1, Z: 0}
+			case 2: // Z axis - ring in XY plane
+				planeNormal = rl.Vector3{X: 0, Y: 0, Z: 1}
+			}
+
+			// Intersect ray with the ring's plane
+			if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, center, planeNormal); ok {
+				// Check if intersection point is near the ring
+				distFromCenter := rl.Vector3Length(rl.Vector3Subtract(pt, center))
+				distFromRing := float32(math.Abs(float64(distFromCenter - radius)))
+
+				if distFromRing < ringHitDist && distFromRing < bestDist {
+					bestDist = distFromRing
+					bestAxis = i
+				}
+			}
+		}
+	} else {
+		// For move/scale gizmos, use line-ray intersection
+		for i, axis := range gizmoAxes {
+			_, t2, dist := closestPointBetweenRays(ray.Position, ray.Direction, center, axis)
+			if t2 > 0 && t2 < gizmoLength && dist < gizmoHitDist {
+				if dist < bestDist {
+					bestDist = dist
+					bestAxis = i
+				}
 			}
 		}
 	}
@@ -238,16 +272,17 @@ func (e *Editor) startDrag(axisIdx int, ray rl.Ray) {
 	e.dragAxisIdx = axisIdx
 	e.dragAxis = gizmoAxes[axisIdx]
 	e.dragInitPos = e.Selected.Transform.Position
+	e.dragInitWorldPos = e.Selected.WorldPosition()
 	e.dragInitRot = e.Selected.Transform.Rotation
 	e.dragInitScale = e.Selected.Transform.Scale
 
-	// Build a drag plane that contains the axis and faces the camera
-	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(e.dragInitPos, e.camera.Position))
+	// Build a drag plane using world position for correct 3D picking
+	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(e.dragInitWorldPos, e.camera.Position))
 	cross1 := rl.Vector3CrossProduct(viewDir, e.dragAxis)
 	e.dragPlaneNormal = rl.Vector3Normalize(rl.Vector3CrossProduct(e.dragAxis, cross1))
 
-	if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitPos, e.dragPlaneNormal); ok {
-		e.dragStart = rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitPos), e.dragAxis)
+	if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitWorldPos, e.dragPlaneNormal); ok {
+		e.dragStart = rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitWorldPos), e.dragAxis)
 	}
 }
 
@@ -257,17 +292,46 @@ func (e *Editor) updateDrag(ray rl.Ray) {
 		return
 	}
 
-	pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitPos, e.dragPlaneNormal)
+	// Use the stored initial world position for drag plane intersection
+	pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitWorldPos, e.dragPlaneNormal)
 	if !ok {
 		return
 	}
 
-	currentT := rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitPos), e.dragAxis)
+	currentT := rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitWorldPos), e.dragAxis)
 	delta := currentT - e.dragStart
 
 	switch e.gizmoMode {
 	case GizmoMove:
-		e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, rl.Vector3Scale(e.dragAxis, delta))
+		// Calculate world-space delta
+		worldDelta := rl.Vector3Scale(e.dragAxis, delta)
+
+		// Convert to local space if object has a parent
+		if e.Selected.Parent != nil {
+			// Get inverse parent rotation
+			parentRot := e.Selected.Parent.WorldRotation()
+			rx := float64(-parentRot.X) * math.Pi / 180
+			ry := float64(-parentRot.Y) * math.Pi / 180
+			rz := float64(-parentRot.Z) * math.Pi / 180
+			// Inverse rotation order: Z, Y, X (reverse of forward)
+			rotZ := rl.MatrixRotateZ(float32(rz))
+			rotY := rl.MatrixRotateY(float32(ry))
+			rotX := rl.MatrixRotateX(float32(rx))
+			invRotMatrix := rl.MatrixMultiply(rl.MatrixMultiply(rotZ, rotY), rotX)
+
+			// Rotate delta into parent's local space
+			localDelta := rl.Vector3Transform(worldDelta, invRotMatrix)
+
+			// Account for parent scale
+			parentScale := e.Selected.Parent.WorldScale()
+			localDelta.X /= parentScale.X
+			localDelta.Y /= parentScale.Y
+			localDelta.Z /= parentScale.Z
+
+			e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, localDelta)
+		} else {
+			e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, worldDelta)
+		}
 
 	case GizmoRotate:
 		// Map drag distance to degrees (1 unit = 45 degrees)
@@ -347,7 +411,7 @@ func (e *Editor) Draw3D() {
 	}
 
 	// Transform gizmo
-	center := e.Selected.Transform.Position
+	center := e.Selected.WorldPosition()
 
 	for i, axis := range gizmoAxes {
 		color := gizmoColors[i]
@@ -361,11 +425,11 @@ func (e *Editor) Draw3D() {
 
 		switch e.gizmoMode {
 		case GizmoMove:
-			rl.DrawLine3D(center, end, color)
+			rl.DrawCylinderEx(center, end, gizmoThickness, gizmoThickness, 8, color)
 			tip := rl.Vector3{X: gizmoTipSize, Y: gizmoTipSize, Z: gizmoTipSize}
 			rl.DrawCubeV(end, tip, color)
 		case GizmoRotate:
-			// Draw arc segments to suggest rotation
+			// Draw arc segments as thick cylinders to suggest rotation
 			segments := 16
 			radius := gizmoLength * 0.8
 			for s := range segments {
@@ -383,12 +447,12 @@ func (e *Editor) Draw3D() {
 					p0 = rl.Vector3{X: center.X + radius*float32(math.Cos(t0)), Y: center.Y + radius*float32(math.Sin(t0)), Z: center.Z}
 					p1 = rl.Vector3{X: center.X + radius*float32(math.Cos(t1)), Y: center.Y + radius*float32(math.Sin(t1)), Z: center.Z}
 				}
-				rl.DrawLine3D(p0, p1, color)
+				rl.DrawCylinderEx(p0, p1, gizmoThickness*0.7, gizmoThickness*0.7, 6, color)
 			}
 		case GizmoScale:
-			rl.DrawLine3D(center, end, color)
+			rl.DrawCylinderEx(center, end, gizmoThickness, gizmoThickness, 8, color)
 			// Cube at the end instead of small tip
-			cubeSize := rl.Vector3{X: 0.18, Y: 0.18, Z: 0.18}
+			cubeSize := rl.Vector3{X: 0.25, Y: 0.25, Z: 0.25}
 			rl.DrawCubeV(end, cubeSize, color)
 			rl.DrawCubeWiresV(end, cubeSize, color)
 		}
@@ -488,11 +552,20 @@ func (e *Editor) drawHierarchy() {
 			e.Selected = g
 		}
 
+		// Compute depth for indentation
+		depth := int32(0)
+		p := g.Parent
+		for p != nil {
+			depth++
+			p = p.Parent
+		}
+		indent := int32(12) + depth*16
+
 		textColor := rl.LightGray
 		if selected {
 			textColor = rl.Yellow
 		}
-		rl.DrawText(g.Name, panelX+12, itemY+4, 14, textColor)
+		rl.DrawText(g.Name, panelX+indent, itemY+4, 14, textColor)
 	}
 
 	rl.EndScissorMode()
@@ -542,6 +615,12 @@ func (e *Editor) drawInspector() {
 	pos := e.Selected.Transform.Position
 	rl.DrawText(fmt.Sprintf("Pos   %.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z), panelX+14, y, 14, rl.White)
 	y += 18
+
+	if e.Selected.Parent != nil {
+		wPos := e.Selected.WorldPosition()
+		rl.DrawText(fmt.Sprintf("World %.2f, %.2f, %.2f", wPos.X, wPos.Y, wPos.Z), panelX+14, y, 12, rl.Gray)
+		y += 16
+	}
 
 	rot := e.Selected.Transform.Rotation
 	rl.DrawText(fmt.Sprintf("Rot   %.2f, %.2f, %.2f", rot.X, rot.Y, rot.Z), panelX+14, y, 14, rl.White)
