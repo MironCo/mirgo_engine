@@ -11,6 +11,20 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+const (
+	gizmoLength  float32 = 2.0
+	gizmoTipSize float32 = 0.12
+	gizmoHitDist float32 = 0.3
+)
+
+var gizmoAxes = [3]rl.Vector3{
+	{X: 1, Y: 0, Z: 0}, // X - red
+	{X: 0, Y: 1, Z: 0}, // Y - green
+	{X: 0, Y: 0, Z: 1}, // Z - blue
+}
+
+var gizmoColors = [3]rl.Color{rl.Red, rl.Green, rl.Blue}
+
 type EditorCamera struct {
 	Position  rl.Vector3
 	Yaw       float32
@@ -23,6 +37,15 @@ type Editor struct {
 	camera   EditorCamera
 	Selected *engine.GameObject
 	world    *world.World
+
+	// Gizmo state
+	dragging        bool
+	dragAxisIdx     int
+	dragAxis        rl.Vector3
+	dragPlaneNormal rl.Vector3
+	dragStart       float32
+	dragInitPos     rl.Vector3
+	hoveredAxis     int // -1 = none, 0=X, 1=Y, 2=Z
 }
 
 func NewEditor(w *world.World) *Editor {
@@ -31,6 +54,7 @@ func NewEditor(w *world.World) *Editor {
 		camera: EditorCamera{
 			MoveSpeed: 10.0,
 		},
+		hoveredAxis: -1,
 	}
 }
 
@@ -38,10 +62,8 @@ func (e *Editor) Enter(currentCam rl.Camera3D) {
 	e.Active = true
 	rl.EnableCursor()
 
-	// Initialize editor camera from current game camera
 	e.camera.Position = currentCam.Position
 
-	// Derive yaw/pitch from camera look direction
 	dir := rl.Vector3Subtract(currentCam.Target, currentCam.Position)
 	dir = rl.Vector3Normalize(dir)
 	e.camera.Pitch = float32(math.Asin(float64(dir.Y))) * rl.Rad2deg
@@ -51,11 +73,13 @@ func (e *Editor) Enter(currentCam rl.Camera3D) {
 func (e *Editor) Exit() {
 	e.Active = false
 	e.Selected = nil
+	e.dragging = false
+	e.hoveredAxis = -1
 	rl.DisableCursor()
 }
 
 func (e *Editor) Update(deltaTime float32) {
-	// Right-click: rotate camera + fly with WASD/QE
+	// Camera: right-click + drag to look, right-click + WASD to fly
 	if rl.IsMouseButtonDown(rl.MouseRightButton) {
 		mouseDelta := rl.GetMouseDelta()
 		e.camera.Yaw += mouseDelta.X * 0.1
@@ -102,10 +126,35 @@ func (e *Editor) Update(deltaTime float32) {
 		}
 	}
 
-	// Left-click: select object via raycast
+	cam := e.GetRaylibCamera()
+	ray := rl.GetScreenToWorldRay(rl.GetMousePosition(), cam)
+
+	// Handle active drag
+	if e.dragging {
+		if !rl.IsMouseButtonDown(rl.MouseLeftButton) {
+			e.dragging = false
+		} else {
+			e.updateDrag(ray)
+		}
+		return
+	}
+
+	// Update hovered axis for visual feedback
+	e.hoveredAxis = -1
+	if e.Selected != nil {
+		e.hoveredAxis = e.pickGizmoAxis(ray)
+	}
+
+	// Left-click: try gizmo first, then object selection
 	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-		cam := e.GetRaylibCamera()
-		ray := rl.GetScreenToWorldRay(rl.GetMousePosition(), cam)
+		if e.Selected != nil {
+			axisIdx := e.pickGizmoAxis(ray)
+			if axisIdx >= 0 {
+				e.startDrag(axisIdx, ray)
+				return
+			}
+		}
+
 		hit, ok := e.world.Raycast(ray.Position, ray.Direction, 1000)
 		if ok {
 			e.Selected = hit.GameObject
@@ -113,6 +162,60 @@ func (e *Editor) Update(deltaTime float32) {
 			e.Selected = nil
 		}
 	}
+}
+
+// pickGizmoAxis returns the index of the gizmo axis closest to the mouse ray, or -1.
+func (e *Editor) pickGizmoAxis(ray rl.Ray) int {
+	if e.Selected == nil {
+		return -1
+	}
+
+	center := e.Selected.Transform.Position
+	bestDist := float32(999.0)
+	bestAxis := -1
+
+	for i, axis := range gizmoAxes {
+		_, t2, dist := closestPointBetweenRays(ray.Position, ray.Direction, center, axis)
+		if t2 > 0 && t2 < gizmoLength && dist < gizmoHitDist {
+			if dist < bestDist {
+				bestDist = dist
+				bestAxis = i
+			}
+		}
+	}
+	return bestAxis
+}
+
+func (e *Editor) startDrag(axisIdx int, ray rl.Ray) {
+	e.dragging = true
+	e.dragAxisIdx = axisIdx
+	e.dragAxis = gizmoAxes[axisIdx]
+	e.dragInitPos = e.Selected.Transform.Position
+
+	// Build a drag plane that contains the axis and faces the camera
+	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(e.dragInitPos, e.camera.Position))
+	cross1 := rl.Vector3CrossProduct(viewDir, e.dragAxis)
+	e.dragPlaneNormal = rl.Vector3Normalize(rl.Vector3CrossProduct(e.dragAxis, cross1))
+
+	if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitPos, e.dragPlaneNormal); ok {
+		e.dragStart = rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitPos), e.dragAxis)
+	}
+}
+
+func (e *Editor) updateDrag(ray rl.Ray) {
+	if e.Selected == nil {
+		e.dragging = false
+		return
+	}
+
+	pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitPos, e.dragPlaneNormal)
+	if !ok {
+		return
+	}
+
+	currentT := rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitPos), e.dragAxis)
+	delta := currentT - e.dragStart
+	e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, rl.Vector3Scale(e.dragAxis, delta))
 }
 
 func (e *Editor) getDirections() (forward, right rl.Vector3) {
@@ -144,12 +247,13 @@ func (e *Editor) GetRaylibCamera() rl.Camera3D {
 	}
 }
 
-// Draw3D draws selection wireframes. Call inside BeginMode3D/EndMode3D.
+// Draw3D draws selection wireframes and gizmo. Call inside BeginMode3D/EndMode3D.
 func (e *Editor) Draw3D() {
 	if e.Selected == nil {
 		return
 	}
 
+	// Selection wireframe
 	if box := engine.GetComponent[*components.BoxCollider](e.Selected); box != nil {
 		center := box.GetCenter()
 		rl.DrawCubeWiresV(center, box.Size, rl.Yellow)
@@ -157,12 +261,30 @@ func (e *Editor) Draw3D() {
 		center := sphere.GetCenter()
 		rl.DrawSphereWires(center, sphere.Radius, 8, 8, rl.Yellow)
 	}
+
+	// Transform gizmo
+	center := e.Selected.Transform.Position
+	tip := rl.Vector3{X: gizmoTipSize, Y: gizmoTipSize, Z: gizmoTipSize}
+
+	for i, axis := range gizmoAxes {
+		end := rl.Vector3Add(center, rl.Vector3Scale(axis, gizmoLength))
+
+		color := gizmoColors[i]
+		if e.dragging && e.dragAxisIdx == i {
+			color = rl.Yellow
+		} else if !e.dragging && e.hoveredAxis == i {
+			color = rl.Yellow
+		}
+
+		rl.DrawLine3D(center, end, color)
+		rl.DrawCubeV(end, tip, color)
+	}
 }
 
 // DrawUI draws the editor overlay (mode indicator + inspector panel).
 func (e *Editor) DrawUI() {
 	rl.DrawText("EDITOR MODE", 10, 10, 24, rl.Yellow)
-	rl.DrawText("RMB+Drag: Look | RMB+WASD: Fly | Q/E: Down/Up | Scroll: Speed | LMB: Select", 10, 40, 16, rl.LightGray)
+	rl.DrawText("RMB: Look/Fly | LMB: Select/Drag | Scroll: Speed | F2: Exit", 10, 40, 16, rl.LightGray)
 	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), 10, 60, 16, rl.LightGray)
 
 	if e.Selected == nil {
@@ -203,4 +325,43 @@ func (e *Editor) DrawUI() {
 		rl.DrawText("  "+typeName, panelX+10, y, 14, rl.LightGray)
 		y += 18
 	}
+}
+
+// --- math helpers ---
+
+// closestPointBetweenRays finds the closest approach between two rays.
+// Returns (t1, t2, distance) where t1/t2 are parameters along each ray.
+func closestPointBetweenRays(a, u, b, v rl.Vector3) (t1, t2, dist float32) {
+	w := rl.Vector3Subtract(a, b)
+	uu := rl.Vector3DotProduct(u, u)
+	uv := rl.Vector3DotProduct(u, v)
+	vv := rl.Vector3DotProduct(v, v)
+	uw := rl.Vector3DotProduct(u, w)
+	vw := rl.Vector3DotProduct(v, w)
+
+	denom := uu*vv - uv*uv
+	if denom < 1e-6 {
+		return 0, 0, 999
+	}
+
+	t1 = (uv*vw - vv*uw) / denom
+	t2 = (uu*vw - uv*uw) / denom
+
+	p1 := rl.Vector3Add(a, rl.Vector3Scale(u, t1))
+	p2 := rl.Vector3Add(b, rl.Vector3Scale(v, t2))
+	dist = rl.Vector3Length(rl.Vector3Subtract(p1, p2))
+	return
+}
+
+// rayPlaneIntersect returns where a ray hits a plane (defined by point + normal).
+func rayPlaneIntersect(rayOrigin, rayDir, planePoint, planeNormal rl.Vector3) (rl.Vector3, bool) {
+	denom := rl.Vector3DotProduct(rayDir, planeNormal)
+	if math.Abs(float64(denom)) < 1e-6 {
+		return rl.Vector3{}, false
+	}
+	t := rl.Vector3DotProduct(rl.Vector3Subtract(planePoint, rayOrigin), planeNormal) / denom
+	if t < 0 {
+		return rl.Vector3{}, false
+	}
+	return rl.Vector3Add(rayOrigin, rl.Vector3Scale(rayDir, t)), true
 }
