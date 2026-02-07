@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
 	"test3d/internal/components"
 	"test3d/internal/engine"
 
@@ -35,60 +36,119 @@ func (e *Editor) handleFileDrop() {
 	}
 }
 
-// importModel copies a GLTF/GLB file to assets/models/ and spawns an object
+// importModel safely imports a GLTF/GLB file into assets/models/
 func (e *Editor) importModel(srcPath string) {
-	// Get just the filename
 	filename := filepath.Base(srcPath)
+	ext := strings.ToLower(filepath.Ext(filename))
+	name := strings.TrimSuffix(filename, ext)
 
-	// Destination path in assets/models/
-	dstDir := "assets/models"
-	dstPath := filepath.Join(dstDir, filename)
+	dstDir := filepath.Join("assets/models", name)
 
-	// Create models directory if needed
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
-		e.saveMsg = fmt.Sprintf("Failed to create models dir: %v", err)
-		e.saveMsgTime = rl.GetTime()
+		e.setMsg("Failed to create model dir: %v", err)
 		return
 	}
 
-	// Copy file
-	if err := copyFile(srcPath, dstPath); err != nil {
-		e.saveMsg = fmt.Sprintf("Failed to copy: %v", err)
-		e.saveMsgTime = rl.GetTime()
+	dstModelPath := filepath.Join(dstDir, filename)
+
+	// Copy main file (.gltf or .glb)
+	if err := copyFile(srcPath, dstModelPath); err != nil {
+		e.setMsg("Failed to copy model: %v", err)
 		return
 	}
 
-	// Create a new GameObject with the model
-	name := strings.TrimSuffix(filename, filepath.Ext(filename))
+	// Handle glTF dependencies
+	if ext == ".gltf" {
+		srcDir := filepath.Dir(srcPath)
+
+		// Copy .bin files
+		binFiles, _ := filepath.Glob(filepath.Join(srcDir, "*.bin"))
+		if len(binFiles) == 0 {
+			e.setMsg("Invalid glTF: missing .bin file")
+			return
+		}
+
+		for _, bin := range binFiles {
+			copyFile(bin, filepath.Join(dstDir, filepath.Base(bin)))
+		}
+
+		// Copy textures directory if present
+		texturesSrc := filepath.Join(srcDir, "textures")
+		texturesDst := filepath.Join(dstDir, "textures")
+		if dirExists(texturesSrc) {
+			if err := copyDir(texturesSrc, texturesDst); err != nil {
+				e.setMsg("Failed to copy textures: %v", err)
+				return
+			}
+		}
+	}
+
+	// Create a new GameObject
 	obj := engine.NewGameObject(name)
 	obj.Transform.Position = e.camera.Position
+	obj.Transform.Scale = rl.NewVector3(10, 10, 10)
 
-	// Add ModelRenderer component
-	modelRenderer := components.NewModelRendererFromFile(dstPath, rl.White)
+	// Add ModelRenderer component (safe path)
+	modelRenderer := components.NewModelRendererFromFile(dstModelPath, rl.White)
 	obj.AddComponent(modelRenderer)
 
 	// Add to scene
 	e.world.Scene.AddGameObject(obj)
 	e.Selected = obj
 
-	e.saveMsg = fmt.Sprintf("Imported: %s", filename)
+	e.setMsg("Imported: %s", filename)
+}
+
+// ---------- Helpers ----------
+
+func (e *Editor) setMsg(format string, args ...any) {
+	e.saveMsg = fmt.Sprintf(format, args...)
 	e.saveMsgTime = rl.GetTime()
 }
 
-// copyFile copies a file from src to dst
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
 func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+
+	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer srcFile.Close()
+	defer in.Close()
 
-	dstFile, err := os.Create(dst)
+	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer out.Close()
 
-	_, err = io.Copy(dstFile, srcFile)
+	_, err = io.Copy(out, in)
 	return err
+}
+
+func copyDir(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		target := filepath.Join(dst, rel)
+
+		if d.IsDir() {
+			return os.MkdirAll(target, 0755)
+		}
+
+		return copyFile(path, target)
+	})
 }
