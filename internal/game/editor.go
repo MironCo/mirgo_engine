@@ -1,3 +1,5 @@
+//go:build !game
+
 package game
 
 import (
@@ -9,6 +11,14 @@ import (
 	"test3d/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+type GizmoMode int
+
+const (
+	GizmoMove   GizmoMode = 0
+	GizmoRotate GizmoMode = 1
+	GizmoScale  GizmoMode = 2
 )
 
 const (
@@ -39,13 +49,19 @@ type Editor struct {
 	world    *world.World
 
 	// Gizmo state
+	gizmoMode       GizmoMode
 	dragging        bool
 	dragAxisIdx     int
 	dragAxis        rl.Vector3
 	dragPlaneNormal rl.Vector3
 	dragStart       float32
 	dragInitPos     rl.Vector3
+	dragInitRot     rl.Vector3
+	dragInitScale   rl.Vector3
 	hoveredAxis     int // -1 = none, 0=X, 1=Y, 2=Z
+
+	// Hierarchy panel
+	hierarchyScroll int32
 
 	// Save feedback
 	saveMsg     string
@@ -140,6 +156,19 @@ func (e *Editor) Update(deltaTime float32) {
 		}
 	}
 
+	// Gizmo mode hotkeys (only when not holding RMB for camera)
+	if !rl.IsMouseButtonDown(rl.MouseRightButton) {
+		if rl.IsKeyPressed(rl.KeyW) {
+			e.gizmoMode = GizmoMove
+		}
+		if rl.IsKeyPressed(rl.KeyE) {
+			e.gizmoMode = GizmoRotate
+		}
+		if rl.IsKeyPressed(rl.KeyR) {
+			e.gizmoMode = GizmoScale
+		}
+	}
+
 	cam := e.GetRaylibCamera()
 	ray := rl.GetScreenToWorldRay(rl.GetMousePosition(), cam)
 
@@ -159,8 +188,8 @@ func (e *Editor) Update(deltaTime float32) {
 		e.hoveredAxis = e.pickGizmoAxis(ray)
 	}
 
-	// Left-click: try gizmo first, then object selection
-	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+	// Left-click: skip 3D interaction if mouse is over a UI panel
+	if rl.IsMouseButtonPressed(rl.MouseLeftButton) && !e.mouseInPanel() {
 		if e.Selected != nil {
 			axisIdx := e.pickGizmoAxis(ray)
 			if axisIdx >= 0 {
@@ -205,6 +234,8 @@ func (e *Editor) startDrag(axisIdx int, ray rl.Ray) {
 	e.dragAxisIdx = axisIdx
 	e.dragAxis = gizmoAxes[axisIdx]
 	e.dragInitPos = e.Selected.Transform.Position
+	e.dragInitRot = e.Selected.Transform.Rotation
+	e.dragInitScale = e.Selected.Transform.Scale
 
 	// Build a drag plane that contains the axis and faces the camera
 	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(e.dragInitPos, e.camera.Position))
@@ -229,7 +260,42 @@ func (e *Editor) updateDrag(ray rl.Ray) {
 
 	currentT := rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitPos), e.dragAxis)
 	delta := currentT - e.dragStart
-	e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, rl.Vector3Scale(e.dragAxis, delta))
+
+	switch e.gizmoMode {
+	case GizmoMove:
+		e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, rl.Vector3Scale(e.dragAxis, delta))
+
+	case GizmoRotate:
+		// Map drag distance to degrees (1 unit = 45 degrees)
+		degrees := delta * 45.0
+		rot := e.dragInitRot
+		switch e.dragAxisIdx {
+		case 0:
+			rot.X += degrees
+		case 1:
+			rot.Y += degrees
+		case 2:
+			rot.Z += degrees
+		}
+		e.Selected.Transform.Rotation = rot
+
+	case GizmoScale:
+		// Map drag distance to scale factor (drag right = bigger)
+		factor := float32(1.0) + delta*0.5
+		if factor < 0.1 {
+			factor = 0.1
+		}
+		s := e.dragInitScale
+		switch e.dragAxisIdx {
+		case 0:
+			s.X = e.dragInitScale.X * factor
+		case 1:
+			s.Y = e.dragInitScale.Y * factor
+		case 2:
+			s.Z = e.dragInitScale.Z * factor
+		}
+		e.Selected.Transform.Scale = s
+	}
 }
 
 func (e *Editor) getDirections() (forward, right rl.Vector3) {
@@ -278,11 +344,8 @@ func (e *Editor) Draw3D() {
 
 	// Transform gizmo
 	center := e.Selected.Transform.Position
-	tip := rl.Vector3{X: gizmoTipSize, Y: gizmoTipSize, Z: gizmoTipSize}
 
 	for i, axis := range gizmoAxes {
-		end := rl.Vector3Add(center, rl.Vector3Scale(axis, gizmoLength))
-
 		color := gizmoColors[i]
 		if e.dragging && e.dragAxisIdx == i {
 			color = rl.Yellow
@@ -290,48 +353,169 @@ func (e *Editor) Draw3D() {
 			color = rl.Yellow
 		}
 
-		rl.DrawLine3D(center, end, color)
-		rl.DrawCubeV(end, tip, color)
+		end := rl.Vector3Add(center, rl.Vector3Scale(axis, gizmoLength))
+
+		switch e.gizmoMode {
+		case GizmoMove:
+			rl.DrawLine3D(center, end, color)
+			tip := rl.Vector3{X: gizmoTipSize, Y: gizmoTipSize, Z: gizmoTipSize}
+			rl.DrawCubeV(end, tip, color)
+		case GizmoRotate:
+			// Draw arc segments to suggest rotation
+			segments := 16
+			radius := gizmoLength * 0.8
+			for s := range segments {
+				t0 := float64(s) / float64(segments) * math.Pi * 2
+				t1 := float64(s+1) / float64(segments) * math.Pi * 2
+				var p0, p1 rl.Vector3
+				switch i {
+				case 0: // X - rotate in YZ plane
+					p0 = rl.Vector3{X: center.X, Y: center.Y + radius*float32(math.Cos(t0)), Z: center.Z + radius*float32(math.Sin(t0))}
+					p1 = rl.Vector3{X: center.X, Y: center.Y + radius*float32(math.Cos(t1)), Z: center.Z + radius*float32(math.Sin(t1))}
+				case 1: // Y - rotate in XZ plane
+					p0 = rl.Vector3{X: center.X + radius*float32(math.Cos(t0)), Y: center.Y, Z: center.Z + radius*float32(math.Sin(t0))}
+					p1 = rl.Vector3{X: center.X + radius*float32(math.Cos(t1)), Y: center.Y, Z: center.Z + radius*float32(math.Sin(t1))}
+				case 2: // Z - rotate in XY plane
+					p0 = rl.Vector3{X: center.X + radius*float32(math.Cos(t0)), Y: center.Y + radius*float32(math.Sin(t0)), Z: center.Z}
+					p1 = rl.Vector3{X: center.X + radius*float32(math.Cos(t1)), Y: center.Y + radius*float32(math.Sin(t1)), Z: center.Z}
+				}
+				rl.DrawLine3D(p0, p1, color)
+			}
+		case GizmoScale:
+			rl.DrawLine3D(center, end, color)
+			// Cube at the end instead of small tip
+			cubeSize := rl.Vector3{X: 0.18, Y: 0.18, Z: 0.18}
+			rl.DrawCubeV(end, cubeSize, color)
+			rl.DrawCubeWiresV(end, cubeSize, color)
+		}
 	}
 }
 
-// DrawUI draws the editor overlay (mode indicator + inspector panel).
+// DrawUI draws the editor overlay: top bar, hierarchy panel (left), inspector panel (right).
 func (e *Editor) DrawUI() {
-	rl.DrawText("EDITOR MODE", 10, 10, 24, rl.Yellow)
-	rl.DrawText("RMB: Look/Fly | LMB: Select/Drag | Ctrl+S: Save | F2: Exit", 10, 40, 16, rl.LightGray)
-	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), 10, 60, 16, rl.LightGray)
+	// Top bar
+	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), 32, rl.NewColor(20, 20, 20, 220))
+	rl.DrawText("EDITOR", 10, 6, 20, rl.Yellow)
+	// Gizmo mode indicator
+	modeNames := [3]string{"[W] Move", "[E] Rotate", "[R] Scale"}
+	for i, name := range modeNames {
+		x := int32(80 + i*90)
+		color := rl.Gray
+		if GizmoMode(i) == e.gizmoMode {
+			color = rl.Yellow
+		}
+		rl.DrawText(name, x, 8, 16, color)
+	}
+	rl.DrawText("| Ctrl+S: Save | F2: Play", 350, 8, 16, rl.LightGray)
+	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-100, 8, 16, rl.LightGray)
 
-	// Save message flash (visible for 2 seconds)
+	// Save message flash
 	if e.saveMsg != "" && rl.GetTime()-e.saveMsgTime < 2.0 {
 		color := rl.Green
 		if e.saveMsg != "Scene saved!" {
 			color = rl.Red
 		}
-		rl.DrawText(e.saveMsg, 10, 82, 20, color)
+		rl.DrawText(e.saveMsg, int32(rl.GetScreenWidth()/2)-50, 8, 20, color)
 	}
 
+	e.drawHierarchy()
+	e.drawInspector()
+}
+
+// drawHierarchy draws the scene hierarchy panel on the left.
+func (e *Editor) drawHierarchy() {
+	panelX := int32(0)
+	panelY := int32(32)
+	panelW := int32(200)
+	panelH := int32(rl.GetScreenHeight()) - panelY
+
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 230))
+	rl.DrawLine(panelX+panelW, panelY, panelX+panelW, panelY+panelH, rl.NewColor(60, 60, 60, 255))
+
+	rl.DrawText("Hierarchy", panelX+8, panelY+6, 16, rl.Gray)
+	y := panelY + 28
+
+	// Scroll with mouse wheel when hovering hierarchy
+	mousePos := rl.GetMousePosition()
+	mouseInPanel := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
+		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+panelH)
+
+	if mouseInPanel && !rl.IsMouseButtonDown(rl.MouseRightButton) {
+		scroll := rl.GetMouseWheelMove()
+		e.hierarchyScroll -= int32(scroll * 20)
+		if e.hierarchyScroll < 0 {
+			e.hierarchyScroll = 0
+		}
+	}
+
+	itemH := int32(22)
+	objects := e.world.Scene.GameObjects
+	maxScroll := int32(len(objects))*itemH - panelH + 30
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if e.hierarchyScroll > maxScroll {
+		e.hierarchyScroll = maxScroll
+	}
+
+	// Clip to panel area
+	rl.BeginScissorMode(panelX, panelY+24, panelW, panelH-24)
+
+	for i, g := range objects {
+		itemY := y + int32(i)*itemH - e.hierarchyScroll
+
+		// Skip if off screen
+		if itemY+itemH < panelY+24 || itemY > panelY+panelH {
+			continue
+		}
+
+		// Hover highlight
+		hovered := mouseInPanel && mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH)
+		selected := e.Selected == g
+
+		if selected {
+			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(80, 80, 20, 180))
+		} else if hovered {
+			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(50, 50, 50, 150))
+		}
+
+		// Click to select
+		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			e.Selected = g
+		}
+
+		textColor := rl.LightGray
+		if selected {
+			textColor = rl.Yellow
+		}
+		rl.DrawText(g.Name, panelX+12, itemY+4, 14, textColor)
+	}
+
+	rl.EndScissorMode()
+}
+
+// drawInspector draws the selected object's inspector on the right.
+func (e *Editor) drawInspector() {
 	if e.Selected == nil {
 		return
 	}
 
-	// Inspector panel (bottom-left, dynamic height)
-	comps := e.Selected.Components()
-	tags := e.Selected.Tags
-	tagLines := 0
-	if len(tags) > 0 {
-		tagLines = 1
-	}
-	panelX := int32(10)
-	panelH := int32(138 + tagLines*20 + len(comps)*18)
-	panelW := int32(320)
-	panelY := int32(rl.GetScreenHeight()) - panelH - 10
+	panelW := int32(300)
+	panelX := int32(rl.GetScreenWidth()) - panelW
+	panelY := int32(32)
+	panelH := int32(rl.GetScreenHeight()) - panelY
 
-	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(20, 20, 20, 200))
-	rl.DrawRectangleLines(panelX, panelY, panelW, panelH, rl.Yellow)
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 230))
+	rl.DrawLine(panelX, panelY, panelX, panelY+panelH, rl.NewColor(60, 60, 60, 255))
 
 	y := panelY + 8
+
+	// Name
 	rl.DrawText(e.Selected.Name, panelX+10, y, 20, rl.Yellow)
-	if len(tags) > 0 {
+	y += 28
+
+	// Tags
+	if tags := e.Selected.Tags; len(tags) > 0 {
 		tagStr := ""
 		for i, t := range tags {
 			if i > 0 {
@@ -339,30 +523,63 @@ func (e *Editor) DrawUI() {
 			}
 			tagStr += t
 		}
-		rl.DrawText(tagStr, panelX+int32(len(e.Selected.Name)*12)+20, y+4, 14, rl.Gray)
+		rl.DrawText("Tags: "+tagStr, panelX+10, y, 14, rl.Gray)
+		y += 20
 	}
-	y += 28
+
+	// Separator
+	rl.DrawLine(panelX+10, y+2, panelX+panelW-10, y+2, rl.NewColor(60, 60, 60, 255))
+	y += 10
+
+	// Transform
+	rl.DrawText("Transform", panelX+10, y, 16, rl.Gray)
+	y += 22
 
 	pos := e.Selected.Transform.Position
-	rl.DrawText(fmt.Sprintf("Pos:   %.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z), panelX+10, y, 16, rl.White)
-	y += 22
+	rl.DrawText(fmt.Sprintf("Pos   %.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z), panelX+14, y, 14, rl.White)
+	y += 18
 
 	rot := e.Selected.Transform.Rotation
-	rl.DrawText(fmt.Sprintf("Rot:   %.2f, %.2f, %.2f", rot.X, rot.Y, rot.Z), panelX+10, y, 16, rl.White)
-	y += 22
+	rl.DrawText(fmt.Sprintf("Rot   %.2f, %.2f, %.2f", rot.X, rot.Y, rot.Z), panelX+14, y, 14, rl.White)
+	y += 18
 
 	scale := e.Selected.Transform.Scale
-	rl.DrawText(fmt.Sprintf("Scale: %.2f, %.2f, %.2f", scale.X, scale.Y, scale.Z), panelX+10, y, 16, rl.White)
-	y += 28
+	rl.DrawText(fmt.Sprintf("Scale %.2f, %.2f, %.2f", scale.X, scale.Y, scale.Z), panelX+14, y, 14, rl.White)
+	y += 24
 
-	rl.DrawText("Components:", panelX+10, y, 16, rl.Gray)
+	// Separator
+	rl.DrawLine(panelX+10, y+2, panelX+panelW-10, y+2, rl.NewColor(60, 60, 60, 255))
+	y += 10
+
+	// Components
+	rl.DrawText("Components", panelX+10, y, 16, rl.Gray)
 	y += 22
 
-	for _, c := range comps {
+	for _, c := range e.Selected.Components() {
 		typeName := reflect.TypeOf(c).Elem().Name()
-		rl.DrawText("  "+typeName, panelX+10, y, 14, rl.LightGray)
+		rl.DrawText(typeName, panelX+14, y, 14, rl.LightGray)
 		y += 18
 	}
+}
+
+// mouseInPanel returns true if the mouse is over the hierarchy or inspector panel.
+func (e *Editor) mouseInPanel() bool {
+	m := rl.GetMousePosition()
+	screenW := float32(rl.GetScreenWidth())
+	screenH := float32(rl.GetScreenHeight())
+	// Hierarchy: left 200px
+	if m.X <= 200 && m.Y >= 32 && m.Y <= screenH {
+		return true
+	}
+	// Inspector: right 300px
+	if m.X >= screenW-300 && m.Y >= 32 && m.Y <= screenH {
+		return true
+	}
+	// Top bar
+	if m.Y <= 32 {
+		return true
+	}
+	return false
 }
 
 // --- math helpers ---

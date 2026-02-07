@@ -36,7 +36,6 @@ func (g *Game) Run() {
 	defer rl.CloseWindow()
 
 	rl.SetTargetFPS(120)
-	rl.DisableCursor()
 
 	// Initialize world after OpenGL context is created
 	g.World.Initialize()
@@ -45,6 +44,12 @@ func (g *Game) Run() {
 	// Cache player reference for camera access
 	g.player = g.World.Scene.FindByName("Player")
 	g.editor = NewEditor(g.World)
+
+	// Start in editor mode by default
+	cam := engine.GetComponent[*components.Camera](g.player)
+	if cam != nil {
+		g.editor.Enter(cam.GetRaylibCamera())
+	}
 
 	for !rl.WindowShouldClose() {
 		g.Update()
@@ -62,8 +67,10 @@ func (g *Game) Update() {
 	}
 	if rl.IsKeyPressed(rl.KeyF2) {
 		if g.editor.Active {
+			// Enter game mode
 			g.editor.Exit()
 		} else {
+			// Return to editor
 			cam := engine.GetComponent[*components.Camera](g.player)
 			if cam != nil {
 				g.editor.Enter(cam.GetRaylibCamera())
@@ -149,7 +156,7 @@ func (g *Game) Draw() {
 
 func (g *Game) DrawUI() {
 	rl.DrawText("WASD to move, Space to jump, Mouse to look", 10, 10, 20, rl.DarkGray)
-	rl.DrawText("F1: debug | F2: editor", 10, 35, 20, rl.DarkGray)
+	rl.DrawText("F1: debug | F2: back to editor", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 
 	// Crosshair
