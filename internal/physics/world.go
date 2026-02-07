@@ -115,6 +115,30 @@ func (p *PhysicsWorld) AddObject(g *engine.GameObject) {
 	}
 }
 
+func (p *PhysicsWorld) RemoveObject(g *engine.GameObject) {
+	// Remove from Objects
+	for i, obj := range p.Objects {
+		if obj == g {
+			p.Objects = append(p.Objects[:i], p.Objects[i+1:]...)
+			return
+		}
+	}
+	// Remove from Kinematics
+	for i, obj := range p.Kinematics {
+		if obj == g {
+			p.Kinematics = append(p.Kinematics[:i], p.Kinematics[i+1:]...)
+			return
+		}
+	}
+	// Remove from Statics
+	for i, obj := range p.Statics {
+		if obj == g {
+			p.Statics = append(p.Statics[:i], p.Statics[i+1:]...)
+			return
+		}
+	}
+}
+
 func (p *PhysicsWorld) Update(deltaTime float32) {
 	// 1. Apply gravity and integrate velocity
 	for _, obj := range p.Objects {

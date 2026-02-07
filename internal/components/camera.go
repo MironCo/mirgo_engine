@@ -29,20 +29,24 @@ func (c *Camera) GetRaylibCamera() rl.Camera3D {
 		return rl.Camera3D{}
 	}
 
-	// Try to get FPSController for look direction
+	// Get eye position (feet + eye height)
+	eyePos := g.Transform.Position
 	fps := engine.GetComponent[*FPSController](g)
+	if fps != nil {
+		eyePos.Y += fps.EyeHeight
+	}
 
 	var target rl.Vector3
 	if fps != nil {
 		lookDir := fps.GetLookDirection()
-		target = rl.Vector3Add(g.Transform.Position, lookDir)
+		target = rl.Vector3Add(eyePos, lookDir)
 	} else {
 		// Default: look forward along Z
-		target = rl.Vector3Add(g.Transform.Position, rl.Vector3{X: 0, Y: 0, Z: 1})
+		target = rl.Vector3Add(eyePos, rl.Vector3{X: 0, Y: 0, Z: 1})
 	}
 
 	return rl.Camera3D{
-		Position:   g.Transform.Position,
+		Position:   eyePos,
 		Target:     target,
 		Up:         rl.Vector3{X: 0, Y: 1, Z: 0},
 		Fovy:       c.FOV,

@@ -29,7 +29,7 @@ func NewFPSController() *FPSController {
 		Gravity:      20.0,
 		JumpStrength: 8.0,
 		Grounded:     false,
-		EyeHeight:    5.0,
+		EyeHeight:    1.6,
 	}
 }
 

@@ -29,6 +29,35 @@ func (s *Shooter) Update(deltaTime float32) {
 		s.Shoot()
 		s.lastShotTime = rl.GetTime()
 	}
+
+	if rl.IsMouseButtonPressed(rl.MouseRightButton) {
+		s.DeleteTarget()
+	}
+}
+
+func (s *Shooter) DeleteTarget() {
+	g := s.GetGameObject()
+	fps := engine.GetComponent[*FPSController](g)
+	if fps == nil {
+		return
+	}
+
+	// Raycast from eye level, not feet
+	origin := g.Transform.Position
+	origin.Y += fps.EyeHeight
+	direction := fps.GetLookDirection()
+
+	hit, ok := s.World.Raycast(origin, direction, 100.0)
+	if !ok {
+		return
+	}
+
+	// Don't delete the floor or the player
+	if hit.GameObject.Name == "Floor" || hit.GameObject.Name == "Player" {
+		return
+	}
+
+	s.World.Destroy(hit.GameObject)
 }
 
 func (s *Shooter) Shoot() {
@@ -40,8 +69,11 @@ func (s *Shooter) Shoot() {
 
 	s.shotCounter++
 
+	// Spawn from eye level
+	eyePos := g.Transform.Position
+	eyePos.Y += fps.EyeHeight
 	lookDir := fps.GetLookDirection()
-	spawnPos := rl.Vector3Add(g.Transform.Position, rl.Vector3Scale(lookDir, 3))
+	spawnPos := rl.Vector3Add(eyePos, rl.Vector3Scale(lookDir, 3))
 
 	radius := float32(0.5)
 

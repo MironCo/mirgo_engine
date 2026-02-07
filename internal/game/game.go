@@ -121,6 +121,13 @@ func (g *Game) DrawUI() {
 	rl.DrawText("F1 to toggle debug view", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 
+	// Crosshair
+	cx := int32(rl.GetScreenWidth() / 2)
+	cy := int32(rl.GetScreenHeight() / 2)
+	size := int32(10)
+	rl.DrawLine(cx-size, cy, cx+size, cy, rl.White)
+	rl.DrawLine(cx, cy-size, cx, cy+size, rl.White)
+
 	if g.DebugMode {
 		previewSize := int32(256)
 		screenW := int32(rl.GetScreenWidth())

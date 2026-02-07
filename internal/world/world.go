@@ -204,6 +204,30 @@ func (w *World) GetCollidableObjects() []*engine.GameObject {
 	return result
 }
 
+func (w *World) Destroy(g *engine.GameObject) {
+	w.Scene.RemoveGameObject(g)
+	w.PhysicsWorld.RemoveObject(g)
+
+	// Unload model if it has a ModelRenderer
+	if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+		renderer.Unload()
+	}
+}
+
+// Raycast performs a physics raycast and returns the result
+func (w *World) Raycast(origin, direction rl.Vector3, maxDistance float32) (engine.RaycastResult, bool) {
+	hit, ok := w.PhysicsWorld.Raycast(origin, direction, maxDistance)
+	if !ok {
+		return engine.RaycastResult{}, false
+	}
+	return engine.RaycastResult{
+		GameObject: hit.GameObject,
+		Point:      hit.Point,
+		Normal:     hit.Normal,
+		Distance:   hit.Distance,
+	}, true
+}
+
 func (w *World) Unload() {
 	w.Renderer.Unload(w.Scene.GameObjects)
 	assets.Unload()
