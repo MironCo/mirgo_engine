@@ -10,11 +10,6 @@ import (
 
 type PlayerCollision struct {
 	engine.BaseComponent
-	World *World
-}
-
-func NewPlayerCollision(world *World) *PlayerCollision {
-	return &PlayerCollision{World: world}
 }
 
 func (p *PlayerCollision) Update(deltaTime float32) {
@@ -57,7 +52,7 @@ func (p *PlayerCollision) Update(deltaTime float32) {
 		collider.Size,
 	)
 
-	for _, obj := range p.World.GetCollidableObjects() {
+	for _, obj := range p.GetGameObject().Scene.World.GetCollidableObjects() {
 		if obj == g {
 			continue
 		}

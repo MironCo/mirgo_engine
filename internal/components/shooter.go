@@ -9,16 +9,14 @@ import (
 
 type Shooter struct {
 	engine.BaseComponent
-	World       engine.WorldAccess
 	Shader      rl.Shader
 	Cooldown    float64
 	lastShotTime float64
 	shotCounter  int
 }
 
-func NewShooter(world engine.WorldAccess, shader rl.Shader) *Shooter {
+func NewShooter(shader rl.Shader) *Shooter {
 	return &Shooter{
-		World:    world,
 		Shader:   shader,
 		Cooldown: 0.15,
 	}
@@ -47,7 +45,7 @@ func (s *Shooter) DeleteTarget() {
 	origin.Y += fps.EyeHeight
 	direction := fps.GetLookDirection()
 
-	hit, ok := s.World.Raycast(origin, direction, 100.0)
+	hit, ok := s.GetGameObject().Scene.World.Raycast(origin, direction, 100.0)
 	if !ok {
 		return
 	}
@@ -57,7 +55,7 @@ func (s *Shooter) DeleteTarget() {
 		return
 	}
 
-	s.World.Destroy(hit.GameObject)
+	s.GetGameObject().Scene.World.Destroy(hit.GameObject)
 }
 
 func (s *Shooter) Shoot() {
@@ -95,5 +93,5 @@ func (s *Shooter) Shoot() {
 	sphere.AddComponent(rb)
 
 	sphere.Start()
-	s.World.SpawnObject(sphere)
+	s.GetGameObject().Scene.World.SpawnObject(sphere)
 }

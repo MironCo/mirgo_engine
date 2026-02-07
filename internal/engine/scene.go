@@ -2,6 +2,7 @@ package engine
 
 type Scene struct {
 	Name        string
+	World       WorldAccess
 	GameObjects []*GameObject
 }
 
@@ -13,6 +14,7 @@ func NewScene(name string) *Scene {
 }
 
 func (s *Scene) AddGameObject(g *GameObject) {
+	g.Scene = s
 	s.GameObjects = append(s.GameObjects, g)
 }
 

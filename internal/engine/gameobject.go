@@ -15,6 +15,7 @@ type GameObject struct {
 	Tags       []string
 	Transform  Transform
 	Active     bool
+	Scene      *Scene
 	components []Component
 	started    bool
 }

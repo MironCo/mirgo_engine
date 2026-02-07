@@ -22,11 +22,13 @@ type World struct {
 }
 
 func New() *World {
-	return &World{
+	w := &World{
 		Scene:        engine.NewScene("Main"),
 		PhysicsWorld: physics.NewPhysicsWorld(),
 		Renderer:     NewRenderer(),
 	}
+	w.Scene.World = w
+	return w
 }
 
 func (w *World) Initialize() {
@@ -68,10 +70,10 @@ func (w *World) createPlayer() {
 	player.AddComponent(rb)
 
 	// Player collision (ground check + AABB resolution)
-	player.AddComponent(NewPlayerCollision(w))
+	player.AddComponent(&PlayerCollision{})
 
 	// Shooter (sphere spawning on mouse click)
-	player.AddComponent(components.NewShooter(w, w.Renderer.Shader))
+	player.AddComponent(components.NewShooter(w.Renderer.Shader))
 
 	w.Scene.AddGameObject(player)
 	w.PhysicsWorld.AddObject(player)
