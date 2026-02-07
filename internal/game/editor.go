@@ -5,12 +5,15 @@ package game
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 	"test3d/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+	gui "github.com/gen2brain/raylib-go/raygui"
 )
 
 type GizmoMode int
@@ -65,6 +68,14 @@ type Editor struct {
 	// Hierarchy panel
 	hierarchyScroll int32
 
+	// Inspector panel
+	inspectorScroll      int32
+	showAddComponentMenu bool
+
+	// Text input state for raygui (which field is being edited)
+	activeInputID  string // e.g., "pos.x", "rot.y", "mass"
+	inputTextValue string // current text being edited
+
 	// Save feedback
 	saveMsg     string
 	saveMsgTime float64
@@ -98,6 +109,33 @@ func (e *Editor) Enter(currentCam rl.Camera3D) {
 	dir = rl.Vector3Normalize(dir)
 	e.camera.Pitch = float32(math.Asin(float64(dir.Y))) * rl.Rad2deg
 	e.camera.Yaw = float32(math.Atan2(float64(dir.Z), float64(dir.X))) * rl.Rad2deg
+
+	// Initialize raygui dark style
+	initRayguiStyle()
+}
+
+// initRayguiStyle sets up a dark theme for raygui widgets
+func initRayguiStyle() {
+	// Background colors
+	gui.SetStyle(gui.DEFAULT, gui.BACKGROUND_COLOR, gui.NewColorPropertyValue(rl.NewColor(30, 30, 35, 255)))
+	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(45, 45, 50, 255)))
+	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_FOCUSED, gui.NewColorPropertyValue(rl.NewColor(60, 60, 70, 255)))
+	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_PRESSED, gui.NewColorPropertyValue(rl.NewColor(70, 80, 90, 255)))
+
+	// Text colors
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(200, 200, 200, 255)))
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_FOCUSED, gui.NewColorPropertyValue(rl.White))
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_PRESSED, gui.NewColorPropertyValue(rl.Yellow))
+
+	// Border colors
+	gui.SetStyle(gui.DEFAULT, gui.BORDER_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(80, 80, 90, 255)))
+	gui.SetStyle(gui.DEFAULT, gui.BORDER_COLOR_FOCUSED, gui.NewColorPropertyValue(rl.NewColor(100, 100, 120, 255)))
+
+	// Line color (for separators)
+	gui.SetStyle(gui.DEFAULT, gui.LINE_COLOR, gui.NewColorPropertyValue(rl.NewColor(60, 60, 60, 255)))
+
+	// Text size
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_SIZE, 14)
 }
 
 func (e *Editor) Exit() {
@@ -523,10 +561,33 @@ func (e *Editor) drawHierarchy() {
 	rl.DrawLine(panelX+panelW, panelY, panelX+panelW, panelY+panelH, rl.NewColor(60, 60, 60, 255))
 
 	rl.DrawText("Hierarchy", panelX+8, panelY+6, 16, rl.Gray)
+
+	// "New Object" button
+	btnX := panelX + panelW - 55
+	btnY := panelY + 4
+	btnW := int32(50)
+	btnH := int32(18)
+
+	mousePos := rl.GetMousePosition()
+	btnHovered := mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
+		mousePos.Y >= float32(btnY) && mousePos.Y <= float32(btnY+btnH)
+
+	btnColor := rl.NewColor(50, 70, 50, 200)
+	if btnHovered {
+		btnColor = rl.NewColor(70, 100, 70, 220)
+	}
+	rl.DrawRectangle(btnX, btnY, btnW, btnH, btnColor)
+	rl.DrawText("+ New", btnX+6, btnY+2, 14, rl.LightGray)
+
+	clickedNewButton := false
+	if btnHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		e.createNewGameObject()
+		clickedNewButton = true
+	}
+
 	y := panelY + 28
 
 	// Scroll with mouse wheel when hovering hierarchy
-	mousePos := rl.GetMousePosition()
 	mouseInPanel := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
 		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+panelH)
 
@@ -569,8 +630,8 @@ func (e *Editor) drawHierarchy() {
 			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(50, 50, 50, 150))
 		}
 
-		// Click to select
-		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		// Click to select (but not if we just clicked the New button)
+		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !clickedNewButton {
 			e.Selected = g
 		}
 
@@ -607,7 +668,23 @@ func (e *Editor) drawInspector() {
 	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 230))
 	rl.DrawLine(panelX, panelY, panelX, panelY+panelH, rl.NewColor(60, 60, 60, 255))
 
-	y := panelY + 8
+	// Check for scroll input when mouse is in inspector
+	mousePos := rl.GetMousePosition()
+	mouseInPanel := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
+		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+panelH)
+
+	if mouseInPanel && !rl.IsMouseButtonDown(rl.MouseRightButton) && !e.showAddComponentMenu {
+		scroll := rl.GetMouseWheelMove()
+		e.inspectorScroll -= int32(scroll * 20)
+		if e.inspectorScroll < 0 {
+			e.inspectorScroll = 0
+		}
+	}
+
+	// Begin scissor mode for scrolling
+	rl.BeginScissorMode(panelX, panelY, panelW, panelH)
+
+	y := panelY + 8 - e.inspectorScroll
 
 	// Name
 	rl.DrawText(e.Selected.Name, panelX+10, y, 20, rl.Yellow)
@@ -630,41 +707,466 @@ func (e *Editor) drawInspector() {
 	rl.DrawLine(panelX+10, y+2, panelX+panelW-10, y+2, rl.NewColor(60, 60, 60, 255))
 	y += 10
 
-	// Transform
-	rl.DrawText("Transform", panelX+10, y, 16, rl.Gray)
-	y += 22
-
-	pos := e.Selected.Transform.Position
-	rl.DrawText(fmt.Sprintf("Pos   %.2f, %.2f, %.2f", pos.X, pos.Y, pos.Z), panelX+14, y, 14, rl.White)
-	y += 18
-
-	if e.Selected.Parent != nil {
-		wPos := e.Selected.WorldPosition()
-		rl.DrawText(fmt.Sprintf("World %.2f, %.2f, %.2f", wPos.X, wPos.Y, wPos.Z), panelX+14, y, 12, rl.Gray)
-		y += 16
-	}
-
-	rot := e.Selected.Transform.Rotation
-	rl.DrawText(fmt.Sprintf("Rot   %.2f, %.2f, %.2f", rot.X, rot.Y, rot.Z), panelX+14, y, 14, rl.White)
-	y += 18
-
-	scale := e.Selected.Transform.Scale
-	rl.DrawText(fmt.Sprintf("Scale %.2f, %.2f, %.2f", scale.X, scale.Y, scale.Z), panelX+14, y, 14, rl.White)
-	y += 24
+	// Transform section
+	y = e.drawTransformSection(panelX, y, panelW)
 
 	// Separator
 	rl.DrawLine(panelX+10, y+2, panelX+panelW-10, y+2, rl.NewColor(60, 60, 60, 255))
 	y += 10
 
-	// Components
+	// Components section header
 	rl.DrawText("Components", panelX+10, y, 16, rl.Gray)
 	y += 22
 
-	for _, c := range e.Selected.Components() {
-		typeName := reflect.TypeOf(c).Elem().Name()
-		rl.DrawText(typeName, panelX+14, y, 14, rl.LightGray)
-		y += 18
+	// Draw each component with properties and remove button
+	comps := e.Selected.Components()
+	removeIdx := -1
+	for i, c := range comps {
+		newY, shouldRemove := e.drawComponentEntry(panelX, y, panelW, i, c, mouseInPanel)
+		if shouldRemove {
+			removeIdx = i
+		}
+		y = newY + 8 // spacing between components
 	}
+
+	// Handle removal (deferred to avoid modifying slice during iteration)
+	if removeIdx >= 0 {
+		e.removeComponentAtIndex(removeIdx)
+	}
+
+	// Add Component button
+	y += 10
+	btnW := panelW - 40
+	btnH := int32(24)
+	btnX := panelX + 20
+	btnY := y
+
+	hovered := mouseInPanel && mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
+		mousePos.Y >= float32(btnY+e.inspectorScroll) && mousePos.Y <= float32(btnY+btnH+e.inspectorScroll)
+
+	btnColor := rl.NewColor(50, 70, 50, 220)
+	if hovered {
+		btnColor = rl.NewColor(70, 100, 70, 220)
+	}
+	rl.DrawRectangle(btnX, btnY, btnW, btnH, btnColor)
+	textW := rl.MeasureText("+ Add Component", 14)
+	rl.DrawText("+ Add Component", btnX+(btnW-textW)/2, btnY+5, 14, rl.LightGray)
+
+	clickedAddButton := false
+	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		e.showAddComponentMenu = !e.showAddComponentMenu
+		clickedAddButton = true
+	}
+
+	rl.EndScissorMode()
+
+	// Draw add component dropdown menu (outside scissor mode so it's not clipped)
+	if e.showAddComponentMenu {
+		e.drawAddComponentMenu(btnX, btnY+btnH-e.inspectorScroll, btnW, clickedAddButton)
+	}
+
+	// Clamp scroll to content
+	totalHeight := y + e.inspectorScroll - panelY + 100
+	maxScroll := totalHeight - panelH
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if e.inspectorScroll > maxScroll {
+		e.inspectorScroll = maxScroll
+	}
+}
+
+// drawTransformSection draws the transform properties and returns the new Y position.
+func (e *Editor) drawTransformSection(panelX, y, panelW int32) int32 {
+	rl.DrawText("Transform", panelX+10, y, 16, rl.Gray)
+	y += 22
+
+	labelW := int32(35)
+	fieldW := (panelW - 30 - labelW) / 3
+	fieldH := int32(20)
+	startX := panelX + 10 + labelW
+
+	// Position
+	rl.DrawText("Pos", panelX+12, y+2, 14, rl.LightGray)
+	e.Selected.Transform.Position.X = e.drawFloatField(startX, y, fieldW, fieldH, "pos.x", e.Selected.Transform.Position.X)
+	e.Selected.Transform.Position.Y = e.drawFloatField(startX+fieldW+2, y, fieldW, fieldH, "pos.y", e.Selected.Transform.Position.Y)
+	e.Selected.Transform.Position.Z = e.drawFloatField(startX+2*(fieldW+2), y, fieldW, fieldH, "pos.z", e.Selected.Transform.Position.Z)
+	y += fieldH + 4
+
+	if e.Selected.Parent != nil {
+		wPos := e.Selected.WorldPosition()
+		rl.DrawText(fmt.Sprintf("World %.1f, %.1f, %.1f", wPos.X, wPos.Y, wPos.Z), panelX+14, y, 11, rl.Gray)
+		y += 14
+	}
+
+	// Rotation
+	rl.DrawText("Rot", panelX+12, y+2, 14, rl.LightGray)
+	e.Selected.Transform.Rotation.X = e.drawFloatField(startX, y, fieldW, fieldH, "rot.x", e.Selected.Transform.Rotation.X)
+	e.Selected.Transform.Rotation.Y = e.drawFloatField(startX+fieldW+2, y, fieldW, fieldH, "rot.y", e.Selected.Transform.Rotation.Y)
+	e.Selected.Transform.Rotation.Z = e.drawFloatField(startX+2*(fieldW+2), y, fieldW, fieldH, "rot.z", e.Selected.Transform.Rotation.Z)
+	y += fieldH + 4
+
+	// Scale
+	rl.DrawText("Scale", panelX+12, y+2, 14, rl.LightGray)
+	e.Selected.Transform.Scale.X = e.drawFloatField(startX, y, fieldW, fieldH, "scale.x", e.Selected.Transform.Scale.X)
+	e.Selected.Transform.Scale.Y = e.drawFloatField(startX+fieldW+2, y, fieldW, fieldH, "scale.y", e.Selected.Transform.Scale.Y)
+	e.Selected.Transform.Scale.Z = e.drawFloatField(startX+2*(fieldW+2), y, fieldW, fieldH, "scale.z", e.Selected.Transform.Scale.Z)
+	y += fieldH + 8
+
+	return y
+}
+
+// drawFloatField draws an editable float input field and returns the new value.
+func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) float32 {
+	bounds := rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}
+	editMode := e.activeInputID == id
+
+	// Initialize text value when entering edit mode
+	if editMode && e.inputTextValue == "" {
+		e.inputTextValue = strconv.FormatFloat(float64(value), 'f', 2, 32)
+	}
+
+	// Use ValueBoxFloat for numeric input
+	textVal := e.inputTextValue
+	if !editMode {
+		textVal = strconv.FormatFloat(float64(value), 'f', 2, 32)
+	}
+
+	// Draw the value box
+	clicked := gui.ValueBoxFloat(bounds, "", &textVal, &value, editMode)
+
+	if clicked {
+		if editMode {
+			// Exiting edit mode - parse the value
+			if parsed, err := strconv.ParseFloat(textVal, 32); err == nil {
+				value = float32(parsed)
+			}
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		} else {
+			// Entering edit mode
+			e.activeInputID = id
+			e.inputTextValue = strconv.FormatFloat(float64(value), 'f', 2, 32)
+		}
+	}
+
+	// Update stored text while editing
+	if editMode {
+		e.inputTextValue = textVal
+	}
+
+	return value
+}
+
+// drawComponentEntry draws a single component with its properties and X button.
+// Returns the new Y position and whether the component should be removed.
+func (e *Editor) drawComponentEntry(panelX, y, panelW int32, index int, c engine.Component, mouseInPanel bool) (int32, bool) {
+	typeName := reflect.TypeOf(c).Elem().Name()
+
+	// Component header with X button
+	headerH := int32(20)
+	xBtnSize := int32(16)
+	xBtnX := panelX + panelW - 30
+	xBtnY := y + 2
+
+	// Draw header background
+	rl.DrawRectangle(panelX+10, y, panelW-20, headerH, rl.NewColor(40, 40, 45, 200))
+	rl.DrawText(typeName, panelX+14, y+3, 14, rl.LightGray)
+
+	// Draw X button
+	mousePos := rl.GetMousePosition()
+	// Adjust for scroll when checking hover
+	adjustedY := float32(xBtnY + e.inspectorScroll)
+	xHovered := mouseInPanel &&
+		mousePos.X >= float32(xBtnX) && mousePos.X <= float32(xBtnX+xBtnSize) &&
+		mousePos.Y >= adjustedY-float32(e.inspectorScroll) && mousePos.Y <= adjustedY+float32(xBtnSize)-float32(e.inspectorScroll)
+
+	xBtnColor := rl.NewColor(100, 50, 50, 200)
+	if xHovered {
+		xBtnColor = rl.NewColor(150, 60, 60, 220)
+	}
+	rl.DrawRectangle(xBtnX, xBtnY, xBtnSize, xBtnSize, xBtnColor)
+	rl.DrawText("X", xBtnX+4, xBtnY+2, 12, rl.White)
+
+	shouldRemove := xHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton)
+	y += headerH + 2
+
+	// Draw component-specific properties
+	y = e.drawComponentProperties(panelX, y, c, index)
+
+	return y, shouldRemove
+}
+
+// drawComponentProperties draws editable properties for each component type.
+func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, compIdx int) int32 {
+	propColor := rl.NewColor(180, 180, 180, 255)
+	indent := panelX + 14
+	labelW := int32(70)
+	fieldW := int32(70)
+	fieldH := int32(18)
+
+	switch comp := c.(type) {
+	case *components.ModelRenderer:
+		if comp.FilePath != "" {
+			rl.DrawText(fmt.Sprintf("Model: %s", filepath.Base(comp.FilePath)), indent, y, 12, propColor)
+			y += 16
+		} else {
+			rl.DrawText(fmt.Sprintf("Mesh: %s", comp.MeshType), indent, y, 12, propColor)
+			y += 16
+		}
+		// Color dropdown would go here - for now just display
+		rl.DrawText(fmt.Sprintf("Color: %s", colorName(comp.Color)), indent, y, 12, propColor)
+		y += 18
+
+	case *components.BoxCollider:
+		// Size
+		rl.DrawText("Size", indent, y+2, 12, propColor)
+		id := fmt.Sprintf("box%d.size", compIdx)
+		comp.Size.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".x", comp.Size.X)
+		comp.Size.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".y", comp.Size.Y)
+		comp.Size.Z = e.drawFloatField(indent+labelW+2*(fieldW+2), y, fieldW, fieldH, id+".z", comp.Size.Z)
+		y += fieldH + 4
+
+		// Offset
+		rl.DrawText("Offset", indent, y+2, 12, propColor)
+		id = fmt.Sprintf("box%d.off", compIdx)
+		comp.Offset.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".x", comp.Offset.X)
+		comp.Offset.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".y", comp.Offset.Y)
+		comp.Offset.Z = e.drawFloatField(indent+labelW+2*(fieldW+2), y, fieldW, fieldH, id+".z", comp.Offset.Z)
+		y += fieldH + 6
+
+	case *components.SphereCollider:
+		rl.DrawText("Radius", indent, y+2, 12, propColor)
+		id := fmt.Sprintf("sphere%d.rad", compIdx)
+		comp.Radius = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id, comp.Radius)
+		y += fieldH + 6
+
+	case *components.Rigidbody:
+		// Mass
+		rl.DrawText("Mass", indent, y+2, 12, propColor)
+		comp.Mass = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("rb%d.mass", compIdx), comp.Mass)
+		y += fieldH + 2
+
+		// Bounciness
+		rl.DrawText("Bounce", indent, y+2, 12, propColor)
+		comp.Bounciness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("rb%d.bounce", compIdx), comp.Bounciness)
+		y += fieldH + 2
+
+		// Friction
+		rl.DrawText("Friction", indent, y+2, 12, propColor)
+		comp.Friction = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("rb%d.friction", compIdx), comp.Friction)
+		y += fieldH + 4
+
+		// Checkboxes for booleans
+		gravityBounds := rl.Rectangle{X: float32(indent), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		comp.UseGravity = gui.CheckBox(gravityBounds, "Gravity", comp.UseGravity)
+
+		kinematicBounds := rl.Rectangle{X: float32(indent + 100), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		comp.IsKinematic = gui.CheckBox(kinematicBounds, "Kinematic", comp.IsKinematic)
+		y += fieldH + 6
+
+	case *components.DirectionalLight:
+		// Direction
+		rl.DrawText("Dir", indent, y+2, 12, propColor)
+		id := fmt.Sprintf("light%d.dir", compIdx)
+		comp.Direction.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".x", comp.Direction.X)
+		comp.Direction.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".y", comp.Direction.Y)
+		comp.Direction.Z = e.drawFloatField(indent+labelW+2*(fieldW+2), y, fieldW, fieldH, id+".z", comp.Direction.Z)
+		y += fieldH + 4
+
+		// Intensity slider
+		rl.DrawText("Intensity", indent, y+2, 12, propColor)
+		sliderBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
+		comp.Intensity = gui.Slider(sliderBounds, "", fmt.Sprintf("%.1f", comp.Intensity), comp.Intensity, 0, 2)
+		y += fieldH + 6
+
+	default:
+		// For scripts and unknown components, try to get script name
+		if name, props, ok := engine.SerializeScript(c); ok {
+			rl.DrawText(fmt.Sprintf("Script: %s", name), indent, y, 12, propColor)
+			y += 14
+			for k, v := range props {
+				rl.DrawText(fmt.Sprintf("  %s: %v", k, v), indent, y, 11, rl.Gray)
+				y += 12
+			}
+			y += 4
+		} else {
+			y += 16
+		}
+	}
+
+	return y
+}
+
+// drawAddComponentMenu draws the dropdown menu for adding components.
+// justOpened prevents the menu from closing on the same frame it was opened.
+func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
+	itemH := int32(22)
+	menuH := int32(len(editorComponentTypes)) * itemH
+
+	// Draw menu background
+	rl.DrawRectangle(x, y, w, menuH, rl.NewColor(35, 35, 40, 250))
+	rl.DrawRectangleLines(x, y, w, menuH, rl.NewColor(80, 80, 80, 255))
+
+	mousePos := rl.GetMousePosition()
+	mouseInMenu := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
+		mousePos.Y >= float32(y) && mousePos.Y <= float32(y+menuH)
+
+	for i, compType := range editorComponentTypes {
+		itemY := y + int32(i)*itemH
+
+		hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
+			mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH)
+
+		if hovered {
+			rl.DrawRectangle(x, itemY, w, itemH, rl.NewColor(60, 80, 60, 200))
+		}
+
+		rl.DrawText(compType.Name, x+10, itemY+4, 14, rl.LightGray)
+
+		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			e.addComponent(compType.Name)
+			e.showAddComponentMenu = false
+		}
+	}
+
+	// Close menu if clicking outside (but not on the frame we just opened it)
+	if !justOpened && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !mouseInMenu {
+		e.showAddComponentMenu = false
+	}
+}
+
+// addComponent adds a new component of the given type to the selected object.
+func (e *Editor) addComponent(typeName string) {
+	if e.Selected == nil {
+		return
+	}
+
+	for _, compType := range editorComponentTypes {
+		if compType.Name == typeName {
+			newComp := compType.Factory(e.world, e.Selected)
+			e.Selected.AddComponent(newComp)
+
+			// Re-register with physics world to update categorization
+			e.updatePhysicsRegistration(e.Selected)
+
+			e.saveMsg = fmt.Sprintf("Added %s", typeName)
+			e.saveMsgTime = rl.GetTime()
+			return
+		}
+	}
+}
+
+// removeComponentAtIndex removes the component at the given index from the selected object.
+func (e *Editor) removeComponentAtIndex(index int) {
+	if e.Selected == nil {
+		return
+	}
+
+	comps := e.Selected.Components()
+	if index < 0 || index >= len(comps) {
+		return
+	}
+
+	comp := comps[index]
+	typeName := reflect.TypeOf(comp).Elem().Name()
+
+	// Cleanup for specific component types
+	switch c := comp.(type) {
+	case *components.ModelRenderer:
+		c.Unload()
+	case *components.DirectionalLight:
+		// Clear light reference if this is the active light
+		if e.world.Light == e.Selected {
+			e.world.Light = nil
+		}
+	}
+
+	e.Selected.RemoveComponentByIndex(index)
+
+	// Update physics world registration
+	e.updatePhysicsRegistration(e.Selected)
+
+	e.saveMsg = fmt.Sprintf("Removed %s", typeName)
+	e.saveMsgTime = rl.GetTime()
+}
+
+// updatePhysicsRegistration removes and re-adds an object to the physics world
+// to update its categorization (static/kinematic/dynamic).
+func (e *Editor) updatePhysicsRegistration(g *engine.GameObject) {
+	e.world.PhysicsWorld.RemoveObject(g)
+	e.world.PhysicsWorld.AddObject(g)
+}
+
+// colorName returns a human-readable name for common colors.
+func colorName(c rl.Color) string {
+	switch c {
+	case rl.Red:
+		return "Red"
+	case rl.Blue:
+		return "Blue"
+	case rl.Green:
+		return "Green"
+	case rl.Purple:
+		return "Purple"
+	case rl.Orange:
+		return "Orange"
+	case rl.Yellow:
+		return "Yellow"
+	case rl.Pink:
+		return "Pink"
+	case rl.SkyBlue:
+		return "SkyBlue"
+	case rl.Lime:
+		return "Lime"
+	case rl.Magenta:
+		return "Magenta"
+	case rl.White:
+		return "White"
+	case rl.LightGray:
+		return "LightGray"
+	case rl.Gray:
+		return "Gray"
+	case rl.DarkGray:
+		return "DarkGray"
+	case rl.Black:
+		return "Black"
+	case rl.Brown:
+		return "Brown"
+	case rl.Beige:
+		return "Beige"
+	case rl.Maroon:
+		return "Maroon"
+	case rl.Gold:
+		return "Gold"
+	default:
+		return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
+	}
+}
+
+// createNewGameObject creates a new empty GameObject and adds it to the scene.
+func (e *Editor) createNewGameObject() {
+	// Generate unique name
+	baseName := "GameObject"
+	name := baseName
+	count := 1
+	for e.world.Scene.FindByName(name) != nil {
+		name = fmt.Sprintf("%s (%d)", baseName, count)
+		count++
+	}
+
+	obj := engine.NewGameObject(name)
+
+	// Position in front of camera
+	forward, _ := e.getDirections()
+	obj.Transform.Position = rl.Vector3Add(e.camera.Position, rl.Vector3Scale(forward, 5))
+
+	e.world.Scene.AddGameObject(obj)
+	e.world.PhysicsWorld.AddObject(obj)
+
+	e.Selected = obj
+	e.saveMsg = fmt.Sprintf("Created %s", name)
+	e.saveMsgTime = rl.GetTime()
 }
 
 // mouseInPanel returns true if the mouse is over the hierarchy or inspector panel.
