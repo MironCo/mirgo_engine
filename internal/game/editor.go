@@ -50,16 +50,17 @@ type Editor struct {
 	world    *world.World
 
 	// Gizmo state
-	gizmoMode       GizmoMode
-	dragging        bool
-	dragAxisIdx     int
-	dragAxis        rl.Vector3
-	dragPlaneNormal rl.Vector3
-	dragStart       float32
-	dragInitPos     rl.Vector3
-	dragInitRot     rl.Vector3
-	dragInitScale   rl.Vector3
-	hoveredAxis     int // -1 = none, 0=X, 1=Y, 2=Z
+	gizmoMode        GizmoMode
+	dragging         bool
+	dragAxisIdx      int
+	dragAxis         rl.Vector3
+	dragPlaneNormal  rl.Vector3
+	dragStart        float32
+	dragInitPos      rl.Vector3 // Local position
+	dragInitWorldPos rl.Vector3 // World position (for drag plane math)
+	dragInitRot      rl.Vector3
+	dragInitScale    rl.Vector3
+	hoveredAxis      int // -1 = none, 0=X, 1=Y, 2=Z
 
 	// Hierarchy panel
 	hierarchyScroll int32
@@ -271,17 +272,17 @@ func (e *Editor) startDrag(axisIdx int, ray rl.Ray) {
 	e.dragAxisIdx = axisIdx
 	e.dragAxis = gizmoAxes[axisIdx]
 	e.dragInitPos = e.Selected.Transform.Position
+	e.dragInitWorldPos = e.Selected.WorldPosition()
 	e.dragInitRot = e.Selected.Transform.Rotation
 	e.dragInitScale = e.Selected.Transform.Scale
 
 	// Build a drag plane using world position for correct 3D picking
-	worldPos := e.Selected.WorldPosition()
-	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(worldPos, e.camera.Position))
+	viewDir := rl.Vector3Normalize(rl.Vector3Subtract(e.dragInitWorldPos, e.camera.Position))
 	cross1 := rl.Vector3CrossProduct(viewDir, e.dragAxis)
 	e.dragPlaneNormal = rl.Vector3Normalize(rl.Vector3CrossProduct(e.dragAxis, cross1))
 
-	if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, worldPos, e.dragPlaneNormal); ok {
-		e.dragStart = rl.Vector3DotProduct(rl.Vector3Subtract(pt, worldPos), e.dragAxis)
+	if pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitWorldPos, e.dragPlaneNormal); ok {
+		e.dragStart = rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitWorldPos), e.dragAxis)
 	}
 }
 
@@ -291,17 +292,46 @@ func (e *Editor) updateDrag(ray rl.Ray) {
 		return
 	}
 
-	pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitPos, e.dragPlaneNormal)
+	// Use the stored initial world position for drag plane intersection
+	pt, ok := rayPlaneIntersect(ray.Position, ray.Direction, e.dragInitWorldPos, e.dragPlaneNormal)
 	if !ok {
 		return
 	}
 
-	currentT := rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitPos), e.dragAxis)
+	currentT := rl.Vector3DotProduct(rl.Vector3Subtract(pt, e.dragInitWorldPos), e.dragAxis)
 	delta := currentT - e.dragStart
 
 	switch e.gizmoMode {
 	case GizmoMove:
-		e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, rl.Vector3Scale(e.dragAxis, delta))
+		// Calculate world-space delta
+		worldDelta := rl.Vector3Scale(e.dragAxis, delta)
+
+		// Convert to local space if object has a parent
+		if e.Selected.Parent != nil {
+			// Get inverse parent rotation
+			parentRot := e.Selected.Parent.WorldRotation()
+			rx := float64(-parentRot.X) * math.Pi / 180
+			ry := float64(-parentRot.Y) * math.Pi / 180
+			rz := float64(-parentRot.Z) * math.Pi / 180
+			// Inverse rotation order: Z, Y, X (reverse of forward)
+			rotZ := rl.MatrixRotateZ(float32(rz))
+			rotY := rl.MatrixRotateY(float32(ry))
+			rotX := rl.MatrixRotateX(float32(rx))
+			invRotMatrix := rl.MatrixMultiply(rl.MatrixMultiply(rotZ, rotY), rotX)
+
+			// Rotate delta into parent's local space
+			localDelta := rl.Vector3Transform(worldDelta, invRotMatrix)
+
+			// Account for parent scale
+			parentScale := e.Selected.Parent.WorldScale()
+			localDelta.X /= parentScale.X
+			localDelta.Y /= parentScale.Y
+			localDelta.Z /= parentScale.Z
+
+			e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, localDelta)
+		} else {
+			e.Selected.Transform.Position = rl.Vector3Add(e.dragInitPos, worldDelta)
+		}
 
 	case GizmoRotate:
 		// Map drag distance to degrees (1 unit = 45 degrees)
