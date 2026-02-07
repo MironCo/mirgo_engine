@@ -68,6 +68,9 @@ type Editor struct {
 	// Save feedback
 	saveMsg     string
 	saveMsgTime float64
+
+	// Undo stack
+	undoStack []UndoState
 }
 
 func NewEditor(w *world.World) *Editor {
@@ -77,6 +80,7 @@ func NewEditor(w *world.World) *Editor {
 			MoveSpeed: 10.0,
 		},
 		hoveredAxis: -1,
+		undoStack:   make([]UndoState, 0, maxUndoStack),
 	}
 }
 
@@ -105,8 +109,13 @@ func (e *Editor) Exit() {
 }
 
 func (e *Editor) Update(deltaTime float32) {
+	// Ctrl+Z or Cmd+Z: undo
+	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyZ) {
+		e.undo()
+	}
+
 	// Ctrl+S: save scene
-	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyPressed(rl.KeyS) {
+	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyS) {
 		if err := e.world.SaveScene(world.ScenePath); err != nil {
 			e.saveMsg = fmt.Sprintf("Save failed: %v", err)
 		} else {
@@ -268,6 +277,9 @@ func (e *Editor) pickGizmoAxis(ray rl.Ray) int {
 }
 
 func (e *Editor) startDrag(axisIdx int, ray rl.Ray) {
+	// Save undo state before modifying
+	e.pushUndo()
+
 	e.dragging = true
 	e.dragAxisIdx = axisIdx
 	e.dragAxis = gizmoAxes[axisIdx]
@@ -481,7 +493,7 @@ func (e *Editor) DrawUI() {
 		}
 		rl.DrawText(name, x, 8, 16, color)
 	}
-	rl.DrawText("| Ctrl+S: Save | F2: Play", 350, 8, 16, rl.LightGray)
+	rl.DrawText("| Ctrl+S: Save | Ctrl+Z: Undo | F2: Play", 350, 8, 16, rl.LightGray)
 	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-100, 8, 16, rl.LightGray)
 
 	// Save message flash
