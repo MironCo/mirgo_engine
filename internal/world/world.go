@@ -52,8 +52,43 @@ func (w *World) Initialize() {
 	// Create cube GameObjects
 	w.createCubes()
 
+	// Create player
+	w.createPlayer()
+
 	// Start all GameObjects
 	w.Scene.Start()
+}
+
+func (w *World) createPlayer() {
+	player := engine.NewGameObject("Player")
+	player.Transform.Position = rl.Vector3{X: 10, Y: 10, Z: 10}
+
+	// FPS controller (movement + mouse look)
+	fps := components.NewFPSController()
+	player.AddComponent(fps)
+
+	// Camera
+	cam := components.NewCamera()
+	player.AddComponent(cam)
+
+	// Box collider for player body
+	collider := components.NewBoxCollider(rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6})
+	player.AddComponent(collider)
+
+	// Kinematic rigidbody so player can push things
+	rb := components.NewRigidbody()
+	rb.IsKinematic = true
+	rb.UseGravity = false // FPSController handles gravity
+	player.AddComponent(rb)
+
+	// Player collision (ground check + AABB resolution)
+	player.AddComponent(NewPlayerCollision(w))
+
+	// Shooter (sphere spawning on mouse click)
+	player.AddComponent(components.NewShooter(w, w.Renderer.Shader))
+
+	w.Scene.AddGameObject(player)
+	w.PhysicsWorld.AddObject(player)
 }
 
 func (w *World) createCubes() {
@@ -106,6 +141,12 @@ func (w *World) createCubes() {
 func (w *World) Update(deltaTime float32) {
 	w.PhysicsWorld.Update(deltaTime)
 	w.Scene.Update(deltaTime)
+}
+
+// SpawnObject adds a GameObject to both the scene and physics world.
+func (w *World) SpawnObject(g *engine.GameObject) {
+	w.Scene.AddGameObject(g)
+	w.PhysicsWorld.AddObject(g)
 }
 
 // GetCollidableObjects returns all GameObjects that have BoxColliders

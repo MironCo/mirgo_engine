@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"test3d/internal/components"
 	"test3d/internal/engine"
-	"test3d/internal/physics"
 	"test3d/internal/world"
 	"time"
 
@@ -12,17 +11,14 @@ import (
 )
 
 type Game struct {
-	Player      *engine.GameObject
-	World       *world.World
-	DebugMode   bool
-	cubeCounter int
+	World     *world.World
+	player    *engine.GameObject
+	DebugMode bool
 
 	// Debug timing (ms)
-	updateMs  float64
-	shadowMs  float64
-	drawMs    float64
-
-	lastShotTime float64
+	updateMs float64
+	shadowMs float64
+	drawMs   float64
 }
 
 func New() *Game {
@@ -44,8 +40,8 @@ func (g *Game) Run() {
 	g.World.Initialize()
 	defer g.World.Unload()
 
-	// Create player GameObject
-	g.createPlayer()
+	// Cache player reference for camera access
+	g.player = g.World.Scene.FindByName("Player")
 
 	for !rl.WindowShouldClose() {
 		g.Update()
@@ -53,122 +49,16 @@ func (g *Game) Run() {
 	}
 }
 
-func (g *Game) createPlayer() {
-	g.Player = engine.NewGameObject("Player")
-	g.Player.Transform.Position = rl.Vector3{X: 10, Y: 10, Z: 10}
-
-	// Add FPS controller
-	fps := components.NewFPSController()
-	g.Player.AddComponent(fps)
-
-	// Add camera
-	cam := components.NewCamera()
-	g.Player.AddComponent(cam)
-
-	// Add collider for player body
-	collider := components.NewBoxCollider(rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6})
-	g.Player.AddComponent(collider)
-
-	// Add kinematic rigidbody so player can push things
-	rb := components.NewRigidbody()
-	rb.IsKinematic = true
-	rb.UseGravity = false // FPSController handles gravity
-	g.Player.AddComponent(rb)
-
-	// Add to physics world
-	g.World.PhysicsWorld.AddObject(g.Player)
-
-	g.Player.Start()
-}
-
 func (g *Game) Update() {
 	updateStart := time.Now()
 	deltaTime := rl.GetFrameTime()
 
-	// Update player
-	g.Player.Update(deltaTime)
-
-	// Get player components
-	fps := engine.GetComponent[*components.FPSController](g.Player)
-	collider := engine.GetComponent[*components.BoxCollider](g.Player)
-	playerRb := engine.GetComponent[*components.Rigidbody](g.Player)
-
-	if fps == nil || collider == nil {
-		return
-	}
-
-	// Sync FPSController velocity to rigidbody for physics pushing
-	if playerRb != nil {
-		playerRb.Velocity = fps.Velocity
-	}
-
-	// Ground check - floor is at Y=0
-	floorY := float32(0.0)
-	feetY := g.Player.Transform.Position.Y - fps.EyeHeight
-	if feetY <= floorY {
-		g.Player.Transform.Position.Y = floorY + fps.EyeHeight
-		fps.Velocity.Y = 0
-		fps.Grounded = true
-	} else {
-		fps.Grounded = false
-	}
-
-	// Collision with world objects
-	// Build AABB with eye height offset
-	playerAABB := physics.NewAABBFromCenter(
-		rl.Vector3{
-			X: g.Player.Transform.Position.X,
-			Y: g.Player.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
-			Z: g.Player.Transform.Position.Z,
-		},
-		collider.Size,
-	)
-
-	for _, obj := range g.World.GetCollidableObjects() {
-		objCollider := engine.GetComponent[*components.BoxCollider](obj)
-		if objCollider == nil {
-			continue
-		}
-
-		objAABB := physics.NewAABBFromCenter(objCollider.GetCenter(), objCollider.Size)
-		pushOut := playerAABB.Resolve(objAABB)
-
-		if pushOut.X != 0 || pushOut.Y != 0 || pushOut.Z != 0 {
-			g.Player.Transform.Position = rl.Vector3Add(g.Player.Transform.Position, pushOut)
-
-			if pushOut.Y > 0 {
-				fps.Velocity.Y = 0
-				fps.Grounded = true
-			}
-			if pushOut.Y < 0 && fps.Velocity.Y > 0 {
-				fps.Velocity.Y = 0
-			}
-
-			// Update AABB for subsequent checks
-			playerAABB = physics.NewAABBFromCenter(
-				rl.Vector3{
-					X: g.Player.Transform.Position.X,
-					Y: g.Player.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
-					Z: g.Player.Transform.Position.Z,
-				},
-				collider.Size,
-			)
-		}
-	}
-
-	// Update world
+	// Update world (physics + all game objects including player)
 	g.World.Update(deltaTime)
 
 	// Toggle debug mode
 	if rl.IsKeyPressed(rl.KeyF1) {
 		g.DebugMode = !g.DebugMode
-	}
-
-	// Shoot sphere with left mouse button (with cooldown)
-	const shootCooldown = 0.15
-	if rl.IsMouseButtonDown(rl.MouseLeftButton) && rl.GetTime()-g.lastShotTime >= shootCooldown {
-		g.ShootSphere(fps)
-		g.lastShotTime = rl.GetTime()
 	}
 
 	// Light controls
@@ -196,7 +86,11 @@ func (g *Game) Update() {
 }
 
 func (g *Game) Draw() {
-	cam := engine.GetComponent[*components.Camera](g.Player)
+	if g.player == nil {
+		return
+	}
+
+	cam := engine.GetComponent[*components.Camera](g.player)
 	if cam == nil {
 		return
 	}
@@ -248,40 +142,8 @@ func (g *Game) DrawUI() {
 		rl.DrawText(fmt.Sprintf("Shadows: %.2f ms", g.shadowMs), 10, 130, 16, rl.Green)
 		rl.DrawText(fmt.Sprintf("Draw:    %.2f ms", g.drawMs), 10, 150, 16, rl.Green)
 		rl.DrawText(fmt.Sprintf("Total:   %.2f ms", g.updateMs+g.shadowMs+g.drawMs), 10, 170, 16, rl.Lime)
+
+		pos := g.player.Transform.Position
+		rl.DrawText(fmt.Sprintf("Player:  (%.1f, %.1f, %.1f)", pos.X, pos.Y, pos.Z), 10, 195, 16, rl.SkyBlue)
 	}
-}
-
-func (g *Game) ShootSphere(fps *components.FPSController) {
-	g.cubeCounter++
-
-	// Spawn position: in front of player
-	lookDir := fps.GetLookDirection()
-	spawnPos := rl.Vector3Add(g.Player.Transform.Position, rl.Vector3Scale(lookDir, 3))
-
-	radius := float32(0.5)
-
-	// Create sphere GameObject
-	sphere := engine.NewGameObject(fmt.Sprintf("Shot_%d", g.cubeCounter))
-	sphere.Transform.Position = spawnPos
-
-	// Create sphere model and renderer
-	mesh := rl.GenMeshSphere(radius, 16, 16)
-	model := rl.LoadModelFromMesh(mesh)
-	renderer := components.NewModelRenderer(model, rl.Orange)
-	renderer.SetShader(g.World.Renderer.Shader)
-	sphere.AddComponent(renderer)
-
-	// Add sphere collider
-	sphere.AddComponent(components.NewSphereCollider(radius))
-
-	// Add rigidbody with initial velocity in look direction
-	rb := components.NewRigidbody()
-	rb.Bounciness = 0.6
-	rb.Friction = 0.1
-	rb.Velocity = rl.Vector3Scale(lookDir, 30) // yeet it
-	sphere.AddComponent(rb)
-
-	sphere.Start()
-	g.World.Scene.AddGameObject(sphere)
-	g.World.PhysicsWorld.AddObject(sphere)
 }
