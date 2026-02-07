@@ -12,6 +12,7 @@ type Transform struct {
 
 type GameObject struct {
 	Name       string
+	Tags       []string
 	Transform  Transform
 	Active     bool
 	components []Component
@@ -81,4 +82,13 @@ func (g *GameObject) Update(deltaTime float32) {
 
 func (g *GameObject) Components() []Component {
 	return g.components
+}
+
+func (g *GameObject) HasTag(tag string) bool {
+	for _, t := range g.Tags {
+		if t == tag {
+			return true
+		}
+	}
+	return false
 }

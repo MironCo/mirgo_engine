@@ -46,6 +46,10 @@ type Editor struct {
 	dragStart       float32
 	dragInitPos     rl.Vector3
 	hoveredAxis     int // -1 = none, 0=X, 1=Y, 2=Z
+
+	// Save feedback
+	saveMsg     string
+	saveMsgTime float64
 }
 
 func NewEditor(w *world.World) *Editor {
@@ -79,6 +83,16 @@ func (e *Editor) Exit() {
 }
 
 func (e *Editor) Update(deltaTime float32) {
+	// Ctrl+S: save scene
+	if rl.IsKeyDown(rl.KeyLeftControl) && rl.IsKeyPressed(rl.KeyS) {
+		if err := e.world.SaveScene(world.ScenePath); err != nil {
+			e.saveMsg = fmt.Sprintf("Save failed: %v", err)
+		} else {
+			e.saveMsg = "Scene saved!"
+		}
+		e.saveMsgTime = rl.GetTime()
+	}
+
 	// Camera: right-click + drag to look, right-click + WASD to fly
 	if rl.IsMouseButtonDown(rl.MouseRightButton) {
 		mouseDelta := rl.GetMouseDelta()
@@ -284,8 +298,17 @@ func (e *Editor) Draw3D() {
 // DrawUI draws the editor overlay (mode indicator + inspector panel).
 func (e *Editor) DrawUI() {
 	rl.DrawText("EDITOR MODE", 10, 10, 24, rl.Yellow)
-	rl.DrawText("RMB: Look/Fly | LMB: Select/Drag | Scroll: Speed | F2: Exit", 10, 40, 16, rl.LightGray)
+	rl.DrawText("RMB: Look/Fly | LMB: Select/Drag | Ctrl+S: Save | F2: Exit", 10, 40, 16, rl.LightGray)
 	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), 10, 60, 16, rl.LightGray)
+
+	// Save message flash (visible for 2 seconds)
+	if e.saveMsg != "" && rl.GetTime()-e.saveMsgTime < 2.0 {
+		color := rl.Green
+		if e.saveMsg != "Scene saved!" {
+			color = rl.Red
+		}
+		rl.DrawText(e.saveMsg, 10, 82, 20, color)
+	}
 
 	if e.Selected == nil {
 		return
@@ -293,8 +316,13 @@ func (e *Editor) DrawUI() {
 
 	// Inspector panel (bottom-left, dynamic height)
 	comps := e.Selected.Components()
+	tags := e.Selected.Tags
+	tagLines := 0
+	if len(tags) > 0 {
+		tagLines = 1
+	}
 	panelX := int32(10)
-	panelH := int32(138 + len(comps)*18)
+	panelH := int32(138 + tagLines*20 + len(comps)*18)
 	panelW := int32(320)
 	panelY := int32(rl.GetScreenHeight()) - panelH - 10
 
@@ -303,6 +331,16 @@ func (e *Editor) DrawUI() {
 
 	y := panelY + 8
 	rl.DrawText(e.Selected.Name, panelX+10, y, 20, rl.Yellow)
+	if len(tags) > 0 {
+		tagStr := ""
+		for i, t := range tags {
+			if i > 0 {
+				tagStr += ", "
+			}
+			tagStr += t
+		}
+		rl.DrawText(tagStr, panelX+int32(len(e.Selected.Name)*12)+20, y+4, 14, rl.Gray)
+	}
 	y += 28
 
 	pos := e.Selected.Transform.Position

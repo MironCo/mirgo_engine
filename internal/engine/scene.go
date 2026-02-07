@@ -34,6 +34,16 @@ func (s *Scene) FindByName(name string) *GameObject {
 	return nil
 }
 
+func (s *Scene) FindByTag(tag string) []*GameObject {
+	var result []*GameObject
+	for _, g := range s.GameObjects {
+		if g.HasTag(tag) {
+			result = append(result, g)
+		}
+	}
+	return result
+}
+
 func (s *Scene) Start() {
 	for _, g := range s.GameObjects {
 		g.Start()

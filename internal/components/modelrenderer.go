@@ -12,14 +12,15 @@ type ModelRenderer struct {
 	Model    rl.Model
 	Color    rl.Color
 	shader   rl.Shader
-	fromFile bool // true if loaded via asset manager
+	FilePath string    // non-empty for file-loaded models
+	MeshType string    // "cube", "plane", "sphere" for generated meshes
+	MeshSize []float32 // mesh generation parameters
 }
 
 func NewModelRenderer(model rl.Model, color rl.Color) *ModelRenderer {
 	return &ModelRenderer{
-		Model:    model,
-		Color:    color,
-		fromFile: false,
+		Model: model,
+		Color: color,
 	}
 }
 
@@ -27,7 +28,7 @@ func NewModelRendererFromFile(path string, color rl.Color) *ModelRenderer {
 	return &ModelRenderer{
 		Model:    assets.LoadModel(path),
 		Color:    color,
-		fromFile: true,
+		FilePath: path,
 	}
 }
 
@@ -66,7 +67,7 @@ func (m *ModelRenderer) Draw() {
 
 func (m *ModelRenderer) Unload() {
 	// Only unload if not from asset manager (asset manager handles its own cleanup)
-	if !m.fromFile {
+	if m.FilePath == "" {
 		rl.UnloadModel(m.Model)
 	}
 }
