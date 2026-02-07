@@ -16,12 +16,11 @@ const (
 )
 
 type Renderer struct {
-	Shader     rl.Shader
-	ShadowMap  rl.RenderTexture2D
-	LightDir   rl.Vector3
+	Shader      rl.Shader
+	ShadowMap   rl.RenderTexture2D
+	LightDir    rl.Vector3
 	LightCamera rl.Camera3D
-	MatLightVP rl.Matrix
-	FloorModel rl.Model
+	MatLightVP  rl.Matrix
 }
 
 func NewRenderer() *Renderer {
@@ -57,11 +56,6 @@ func (r *Renderer) Initialize(floorSize float32) {
 	ambientLoc := rl.GetShaderLocation(r.Shader, "ambient")
 	rl.SetShaderValue(r.Shader, ambientLoc, []float32{0.1, 0.1, 0.1, 1.0}, rl.ShaderUniformVec4)
 
-	// Create floor model with lighting shader
-	floorMesh := rl.GenMeshPlane(floorSize, floorSize, 1, 1)
-	r.FloorModel = rl.LoadModelFromMesh(floorMesh)
-	r.FloorModel.Materials.Shader = r.Shader
-	r.FloorModel.Materials.Maps.Color = rl.LightGray
 }
 
 func (r *Renderer) DrawShadowMap(gameObjects []*engine.GameObject) {
@@ -117,9 +111,6 @@ func (r *Renderer) DrawWithShadows(cameraPos rl.Vector3, gameObjects []*engine.G
 }
 
 func (r *Renderer) drawScene(gameObjects []*engine.GameObject) {
-	// Draw floor
-	rl.DrawModel(r.FloorModel, rl.Vector3Zero(), 1.0, rl.White)
-
 	// Draw all GameObjects with ModelRenderer
 	for _, g := range gameObjects {
 		if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
@@ -150,7 +141,6 @@ func (r *Renderer) Unload(gameObjects []*engine.GameObject) {
 			renderer.Unload()
 		}
 	}
-	rl.UnloadModel(r.FloorModel)
 }
 
 func lightCameraUp(lightDir rl.Vector3) rl.Vector3 {

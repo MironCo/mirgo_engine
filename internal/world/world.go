@@ -30,11 +30,22 @@ func New() *World {
 func (w *World) Initialize() {
 	w.Renderer.Initialize(FloorSize)
 
-	// Create floor collider for physics (thin box at Y=0)
+	// Create floor as a regular game object
 	floor := engine.NewGameObject("Floor")
-	floor.Transform.Position = rl.Vector3{X: 0, Y: -0.5, Z: 0} // Center of box is below surface
+	floor.Transform.Position = rl.Vector3Zero()
+
+	// Floor visual (plane mesh at Y=0)
+	floorMesh := rl.GenMeshPlane(FloorSize, FloorSize, 1, 1)
+	floorModel := rl.LoadModelFromMesh(floorMesh)
+	floorRenderer := components.NewModelRenderer(floorModel, rl.LightGray)
+	floorRenderer.SetShader(w.Renderer.Shader)
+	floor.AddComponent(floorRenderer)
+
+	// Floor collider (offset down so top face is at Y=0)
 	floorCollider := components.NewBoxCollider(rl.Vector3{X: FloorSize, Y: 1.0, Z: FloorSize})
+	floorCollider.Offset = rl.Vector3{X: 0, Y: -0.5, Z: 0}
 	floor.AddComponent(floorCollider)
+
 	w.Scene.AddGameObject(floor)
 	w.PhysicsWorld.AddObject(floor) // No rigidbody = static
 
@@ -85,11 +96,6 @@ func (w *World) createCubes() {
 		rb.Bounciness = 0.4 + rand.Float32()*0.4 // Random bounce 0.4-0.8
 		rb.Friction = 0.05 + rand.Float32()*0.1
 		// Give some initial spin
-		rb.AngularVelocity = rl.Vector3{
-			X: (rand.Float32() - 0.5) * 200,
-			Y: (rand.Float32() - 0.5) * 200,
-			Z: (rand.Float32() - 0.5) * 200,
-		}
 		cube.AddComponent(rb)
 
 		w.Scene.AddGameObject(cube)

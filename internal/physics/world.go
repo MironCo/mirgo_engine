@@ -134,18 +134,21 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 			rl.Vector3Scale(rb.Velocity, deltaTime),
 		)
 
-		// Integrate rotation (angular velocity in degrees/sec)
-		obj.Transform.Rotation = rl.Vector3Add(
-			obj.Transform.Rotation,
-			rl.Vector3Scale(rb.AngularVelocity, deltaTime),
-		)
+		// Integrate rotation only for spheres (AABB boxes don't rotate)
+		sphere := engine.GetComponent[*components.SphereCollider](obj)
+		if sphere != nil {
+			obj.Transform.Rotation = rl.Vector3Add(
+				obj.Transform.Rotation,
+				rl.Vector3Scale(rb.AngularVelocity, deltaTime),
+			)
 
-		// Apply angular damping (time-based so it's framerate independent)
-		damping := float32(1.0) - (1.0-rb.AngularDamping)*deltaTime*60
-		if damping < 0 {
-			damping = 0
+			// Apply angular damping (time-based so it's framerate independent)
+			damping := float32(1.0) - (1.0-rb.AngularDamping)*deltaTime*60
+			if damping < 0 {
+				damping = 0
+			}
+			rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, damping)
 		}
-		rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, damping)
 	}
 
 	// 2. Rebuild spatial grid and do broad-phase collision
@@ -224,8 +227,8 @@ func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
 		return
 	}
 
-	aabbA := NewAABBFromCenter(a.Transform.Position, boxA.Size)
-	aabbB := NewAABBFromCenter(b.Transform.Position, boxB.Size)
+	aabbA := NewAABBFromCenter(boxA.GetCenter(), boxA.Size)
+	aabbB := NewAABBFromCenter(boxB.GetCenter(), boxB.Size)
 
 	pushOut := aabbA.Resolve(aabbB)
 	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {
@@ -241,7 +244,6 @@ func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
 	b.Transform.Position = rl.Vector3Subtract(b.Transform.Position, rl.Vector3Scale(pushOut, ratioB))
 
 	// Bounce velocities
-	// Find collision normal (normalize pushOut)
 	pushLen := rl.Vector3Length(pushOut)
 	if pushLen < 0.0001 {
 		return
@@ -268,25 +270,6 @@ func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
 	impulse := rl.Vector3Scale(normal, j)
 	rbA.Velocity = rl.Vector3Add(rbA.Velocity, rl.Vector3Scale(impulse, 1/rbA.Mass))
 	rbB.Velocity = rl.Vector3Subtract(rbB.Velocity, rl.Vector3Scale(impulse, 1/rbB.Mass))
-
-	// Apply torque from off-center collision
-	halfSizeA := rl.Vector3{X: boxA.Size.X / 2, Y: boxA.Size.Y / 2, Z: boxA.Size.Z / 2}
-	halfSizeB := rl.Vector3{X: boxB.Size.X / 2, Y: boxB.Size.Y / 2, Z: boxB.Size.Z / 2}
-
-	contactA := estimateContactPoint(a.Transform.Position, halfSizeA, normal)
-	contactB := estimateContactPoint(b.Transform.Position, halfSizeB, rl.Vector3Scale(normal, -1))
-
-	// r = contact point - center of mass
-	rA := rl.Vector3Subtract(contactA, a.Transform.Position)
-	rB := rl.Vector3Subtract(contactB, b.Transform.Position)
-
-	// torque = r × impulse (scaled down for stability)
-	torqueScale := float32(50.0) // convert to degrees/sec-ish
-	torqueA := cross(rA, impulse)
-	torqueB := cross(rB, rl.Vector3Scale(impulse, -1))
-
-	rbA.AngularVelocity = rl.Vector3Add(rbA.AngularVelocity, rl.Vector3Scale(torqueA, torqueScale/rbA.Mass))
-	rbB.AngularVelocity = rl.Vector3Add(rbB.AngularVelocity, rl.Vector3Scale(torqueB, torqueScale/rbB.Mass))
 }
 
 // Sphere vs Sphere collision
@@ -346,7 +329,7 @@ func (p *PhysicsWorld) resolveSphereVsSphere(a, b *engine.GameObject, rbA, rbB *
 func (p *PhysicsWorld) resolveSphereVsBox(sphereObj, boxObj *engine.GameObject, rbSphere, rbBox *components.Rigidbody, sphere *components.SphereCollider, box *components.BoxCollider) {
 	// Find closest point on box to sphere center
 	sphereCenter := sphereObj.Transform.Position
-	boxCenter := boxObj.Transform.Position
+	boxCenter := box.GetCenter()
 	halfSize := rl.Vector3{X: box.Size.X / 2, Y: box.Size.Y / 2, Z: box.Size.Z / 2}
 
 	// Clamp sphere center to box bounds
@@ -394,16 +377,11 @@ func (p *PhysicsWorld) resolveSphereVsBox(sphereObj, boxObj *engine.GameObject, 
 	rbSphere.Velocity = rl.Vector3Add(rbSphere.Velocity, rl.Vector3Scale(impulse, 1/rbSphere.Mass))
 	rbBox.Velocity = rl.Vector3Subtract(rbBox.Velocity, rl.Vector3Scale(impulse, 1/rbBox.Mass))
 
-	// Torque
+	// Torque only for spheres (AABB boxes don't rotate)
 	rSphere := rl.Vector3Scale(normal, -sphere.Radius)
-	rBox := rl.Vector3Subtract(closest, boxCenter)
-
 	torqueScale := float32(50.0)
 	torqueSphere := cross(rSphere, impulse)
-	torqueBox := cross(rBox, rl.Vector3Scale(impulse, -1))
-
 	rbSphere.AngularVelocity = rl.Vector3Add(rbSphere.AngularVelocity, rl.Vector3Scale(torqueSphere, torqueScale/rbSphere.Mass))
-	rbBox.AngularVelocity = rl.Vector3Add(rbBox.AngularVelocity, rl.Vector3Scale(torqueBox, torqueScale/rbBox.Mass))
 }
 
 func clamp(v, min, max float32) float32 {
@@ -437,8 +415,8 @@ func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 		return
 	}
 
-	aabbObj := NewAABBFromCenter(obj.Transform.Position, colObj.Size)
-	aabbStatic := NewAABBFromCenter(static.Transform.Position, colStatic.Size)
+	aabbObj := NewAABBFromCenter(colObj.GetCenter(), colObj.Size)
+	aabbStatic := NewAABBFromCenter(colStatic.GetCenter(), colStatic.Size)
 
 	pushOut := aabbObj.Resolve(aabbStatic)
 	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {
@@ -464,30 +442,13 @@ func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 		// Apply friction perpendicular to normal
 		rb.Velocity.X *= (1 - rb.Friction)
 		rb.Velocity.Z *= (1 - rb.Friction)
-
-		// Apply torque from collision
-		halfSize := rl.Vector3{X: colObj.Size.X / 2, Y: colObj.Size.Y / 2, Z: colObj.Size.Z / 2}
-		contact := estimateContactPoint(obj.Transform.Position, halfSize, normal)
-		r := rl.Vector3Subtract(contact, obj.Transform.Position)
-
-		// The impulse is the reflect vector (change in momentum)
-		impulse := reflect
-		torque := cross(r, impulse)
-		torqueScale := float32(30.0)
-		rb.AngularVelocity = rl.Vector3Add(rb.AngularVelocity, rl.Vector3Scale(torque, torqueScale/rb.Mass))
-
-		// Also apply friction to angular velocity when touching ground
-		if normal.Y > 0.5 {
-			rb.AngularVelocity.X *= (1 - rb.Friction*0.5)
-			rb.AngularVelocity.Z *= (1 - rb.Friction*0.5)
-		}
 	}
 }
 
 // resolveSphereVsStaticBox handles sphere colliding with static box (floor, walls)
 func (p *PhysicsWorld) resolveSphereVsStaticBox(obj, static *engine.GameObject, rb *components.Rigidbody, sphere *components.SphereCollider, box *components.BoxCollider) {
 	sphereCenter := obj.Transform.Position
-	boxCenter := static.Transform.Position
+	boxCenter := box.GetCenter()
 	halfSize := rl.Vector3{X: box.Size.X / 2, Y: box.Size.Y / 2, Z: box.Size.Z / 2}
 
 	// Find closest point on box to sphere center
@@ -546,8 +507,8 @@ func (p *PhysicsWorld) resolveKinematicCollision(kinematic, obj *engine.GameObje
 		return
 	}
 
-	aabbKin := NewAABBFromCenter(kinematic.Transform.Position, colKin.Size)
-	aabbObj := NewAABBFromCenter(obj.Transform.Position, colObj.Size)
+	aabbKin := NewAABBFromCenter(colKin.GetCenter(), colKin.Size)
+	aabbObj := NewAABBFromCenter(colObj.GetCenter(), colObj.Size)
 
 	pushOut := aabbKin.Resolve(aabbObj)
 	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {

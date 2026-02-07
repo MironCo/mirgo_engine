@@ -130,7 +130,7 @@ func (g *Game) Update() {
 			continue
 		}
 
-		objAABB := physics.NewAABBFromCenter(obj.Transform.Position, objCollider.Size)
+		objAABB := physics.NewAABBFromCenter(objCollider.GetCenter(), objCollider.Size)
 		pushOut := playerAABB.Resolve(objAABB)
 
 		if pushOut.X != 0 || pushOut.Y != 0 || pushOut.Z != 0 {
