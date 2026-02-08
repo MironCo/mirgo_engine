@@ -101,6 +101,10 @@ func (r *Renderer) DrawShadowMap(gameObjects []*engine.GameObject) {
 }
 
 func (r *Renderer) DrawWithShadows(cameraPos rl.Vector3, gameObjects []*engine.GameObject) {
+	// Sync light uniforms and camera every frame (in case editor changed them)
+	r.updateLightCamera()
+	r.updateShaderUniforms()
+
 	viewPosLoc := rl.GetShaderLocation(r.Shader, "viewPos")
 	rl.SetShaderValue(r.Shader, viewPosLoc, []float32{cameraPos.X, cameraPos.Y, cameraPos.Z}, rl.ShaderUniformVec3)
 

@@ -56,9 +56,10 @@ float calculateShadow(vec3 normal, vec3 lightDirection)
 void main()
 {
     vec3 normal = normalize(fragNormal);
+    bool hasValidTangent = length(fragTangent) > 0.1;
 
     // Check if we have valid tangent data (non-zero) and sample normal map
-    if (length(fragTangent) > 0.1)
+    if (hasValidTangent)
     {
         // Build TBN matrix to transform from tangent space to world space
         vec3 T = normalize(fragTangent);
@@ -83,8 +84,8 @@ void main()
     }
 
     vec3 viewDir = normalize(viewPos - fragPosition);
-    // lightDir is direction light points (e.g. down), we need direction TOWARD light
-    vec3 lightDirection = normalize(-lightDir);
+    // lightDir is direction light points (e.g. down), use directly
+    vec3 lightDirection = normalize(lightDir);
 
     // Calculate shadow factor (pass normal and light dir for slope-scaled bias)
     float shadow = calculateShadow(normal, lightDirection);
