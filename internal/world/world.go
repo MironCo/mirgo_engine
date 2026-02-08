@@ -127,6 +127,10 @@ func (w *World) Unload() {
 	assets.Unload()
 }
 
+func (w *World) GetShader() rl.Shader {
+	return w.Renderer.Shader
+}
+
 // FindMainCamera returns the first Camera component with IsMain=true, or the first Camera found
 func (w *World) FindMainCamera() *components.Camera {
 	var firstCamera *components.Camera

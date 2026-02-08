@@ -379,10 +379,6 @@ func (w *World) SaveScene(path string) error {
 		if g.Parent != nil {
 			continue
 		}
-		// Skip runtime-spawned projectiles
-		if engine.GetComponent[*components.Shooter](g) != nil {
-			continue
-		}
 
 		sf.Objects = append(sf.Objects, serializeObject(g))
 	}

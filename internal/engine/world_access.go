@@ -18,4 +18,5 @@ type WorldAccess interface {
 	SpawnObject(g *GameObject)
 	Destroy(g *GameObject)
 	Raycast(origin, direction rl.Vector3, maxDistance float32) (RaycastResult, bool)
+	GetShader() rl.Shader
 }

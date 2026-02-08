@@ -1,7 +1,8 @@
-package components
+package scripts
 
 import (
 	"fmt"
+	"test3d/internal/components"
 	"test3d/internal/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -9,17 +10,9 @@ import (
 
 type Shooter struct {
 	engine.BaseComponent
-	Shader       rl.Shader
 	Cooldown     float64
 	lastShotTime float64
 	shotCounter  int
-}
-
-func NewShooter(shader rl.Shader) *Shooter {
-	return &Shooter{
-		Shader:   shader,
-		Cooldown: 0.15,
-	}
 }
 
 func (s *Shooter) Update(deltaTime float32) {
@@ -35,12 +28,11 @@ func (s *Shooter) Update(deltaTime float32) {
 
 func (s *Shooter) DeleteTarget() {
 	g := s.GetGameObject()
-	fps := engine.GetComponent[*FPSController](g)
+	fps := engine.GetComponent[*components.FPSController](g)
 	if fps == nil {
 		return
 	}
 
-	// Raycast from eye level, not feet
 	origin := g.Transform.Position
 	origin.Y += fps.EyeHeight
 	direction := fps.GetLookDirection()
@@ -50,7 +42,6 @@ func (s *Shooter) DeleteTarget() {
 		return
 	}
 
-	// Don't delete the floor or the player
 	if hit.GameObject.Name == "Floor" || hit.GameObject.Name == "Player" {
 		return
 	}
@@ -60,14 +51,13 @@ func (s *Shooter) DeleteTarget() {
 
 func (s *Shooter) Shoot() {
 	g := s.GetGameObject()
-	fps := engine.GetComponent[*FPSController](g)
+	fps := engine.GetComponent[*components.FPSController](g)
 	if fps == nil {
 		return
 	}
 
 	s.shotCounter++
 
-	// Spawn from eye level
 	eyePos := g.Transform.Position
 	eyePos.Y += fps.EyeHeight
 	lookDir := fps.GetLookDirection()
@@ -80,13 +70,13 @@ func (s *Shooter) Shoot() {
 
 	mesh := rl.GenMeshSphere(radius, 16, 16)
 	model := rl.LoadModelFromMesh(mesh)
-	renderer := NewModelRenderer(model, rl.Orange)
-	renderer.SetShader(s.Shader)
+	renderer := components.NewModelRenderer(model, rl.Orange)
+	renderer.SetShader(s.GetGameObject().Scene.World.GetShader())
 	sphere.AddComponent(renderer)
 
-	sphere.AddComponent(NewSphereCollider(radius))
+	sphere.AddComponent(components.NewSphereCollider(radius))
 
-	rb := NewRigidbody()
+	rb := components.NewRigidbody()
 	rb.Bounciness = 0.6
 	rb.Friction = 0.1
 	rb.Velocity = rl.Vector3Scale(lookDir, 30)
@@ -94,4 +84,26 @@ func (s *Shooter) Shoot() {
 
 	sphere.Start()
 	s.GetGameObject().Scene.World.SpawnObject(sphere)
+}
+
+func init() {
+	engine.RegisterScript("Shooter", shooterFactory, shooterSerializer)
+}
+
+func shooterFactory(props map[string]any) engine.Component {
+	cooldown := 0.15
+	if v, ok := props["cooldown"].(float64); ok {
+		cooldown = v
+	}
+	return &Shooter{Cooldown: cooldown}
+}
+
+func shooterSerializer(c engine.Component) map[string]any {
+	s, ok := c.(*Shooter)
+	if !ok {
+		return nil
+	}
+	return map[string]any{
+		"cooldown": s.Cooldown,
+	}
 }

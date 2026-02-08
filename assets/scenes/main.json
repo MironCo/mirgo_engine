@@ -52,6 +52,11 @@
           "friction": 0.1,
           "useGravity": false,
           "isKinematic": true
+        },
+        {
+          "type": "Script",
+          "name": "Shooter",
+          "props": { "cooldown": 0.15 }
         }
       ]
     },
