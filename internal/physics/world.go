@@ -412,6 +412,13 @@ func clamp(v, min, max float32) float32 {
 	return v
 }
 
+func sign(v float32) float32 {
+	if v < 0 {
+		return -1
+	}
+	return 1
+}
+
 func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 	rb := engine.GetComponent[*components.Rigidbody](obj)
 	if rb == nil {
@@ -473,6 +480,104 @@ func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 		if normal.Y > 0.5 {
 			rb.AngularVelocity.X *= (1 - rb.Friction*0.5)
 			rb.AngularVelocity.Z *= (1 - rb.Friction*0.5)
+		}
+	}
+
+	// Apply gravity-induced torque when resting on surface
+	// This makes boxes tip over when balanced on corners/edges
+	if normal.Y > 0.3 && rb.UseGravity {
+		// Get the OBB to access the rotated axes
+		obbAxes := obbObj.Axes
+
+		// Check if any face is nearly flat on the ground
+		// If local Y (or any axis) is nearly aligned with world up, we're settled
+		worldUp := rl.Vector3{X: 0, Y: 1, Z: 0}
+		alignmentX := absf(rl.Vector3DotProduct(obbAxes[0], worldUp))
+		alignmentY := absf(rl.Vector3DotProduct(obbAxes[1], worldUp))
+		alignmentZ := absf(rl.Vector3DotProduct(obbAxes[2], worldUp))
+		maxAlignment := alignmentX
+		if alignmentY > maxAlignment {
+			maxAlignment = alignmentY
+		}
+		if alignmentZ > maxAlignment {
+			maxAlignment = alignmentZ
+		}
+
+		// If a face is very close to flat, snap to perfectly flat
+		if maxAlignment > 0.9995 {
+			// Find which local axis is most aligned with world up
+			// and make it perfectly aligned (keeping Y rotation for horizontal spin)
+			if alignmentY >= alignmentX && alignmentY >= alignmentZ {
+				// Local Y is up - snap X and Z to 0
+				obj.Transform.Rotation.X = 0
+				obj.Transform.Rotation.Z = 0
+			} else if alignmentX >= alignmentZ {
+				// Local X is up - snap to X=90 or X=-90, Z=0
+				if obbAxes[0].Y > 0 {
+					obj.Transform.Rotation.X = 90
+				} else {
+					obj.Transform.Rotation.X = -90
+				}
+				obj.Transform.Rotation.Z = 0
+			} else {
+				// Local Z is up - snap to Z=90 or Z=-90, X=0
+				if obbAxes[2].Y > 0 {
+					obj.Transform.Rotation.Z = 90
+				} else {
+					obj.Transform.Rotation.Z = -90
+				}
+				obj.Transform.Rotation.X = 0
+			}
+			rb.AngularVelocity = rl.Vector3{}
+		} else if maxAlignment > 0.99 {
+			// Close to flat - strong damping to settle
+			rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, 0.8)
+		} else {
+			// The contact point is on the bottom of the box (opposite to push normal)
+			// In the box's local frame, find which corner/edge is lowest
+			// The "down" direction in local space
+			localDown := rl.Vector3{
+				X: -rl.Vector3DotProduct(normal, obbAxes[0]),
+				Y: -rl.Vector3DotProduct(normal, obbAxes[1]),
+				Z: -rl.Vector3DotProduct(normal, obbAxes[2]),
+			}
+
+			// Contact point in local space is the corner in the "down" direction
+			halfSize := obbObj.HalfSize
+			contactLocal := rl.Vector3{
+				X: sign(localDown.X) * halfSize.X,
+				Y: sign(localDown.Y) * halfSize.Y,
+				Z: sign(localDown.Z) * halfSize.Z,
+			}
+
+			// Transform contact point to world space offset from center
+			contactWorld := rl.Vector3Add(
+				rl.Vector3Scale(obbAxes[0], contactLocal.X),
+				rl.Vector3Add(
+					rl.Vector3Scale(obbAxes[1], contactLocal.Y),
+					rl.Vector3Scale(obbAxes[2], contactLocal.Z),
+				),
+			)
+
+			// r = vector from contact point to center of mass (center is at 0,0,0 relative to contact)
+			r := rl.Vector3Scale(contactWorld, -1)
+
+			// Gravity force (world space, pointing down)
+			gravityForce := rl.Vector3Scale(p.Gravity, rb.Mass)
+
+			// Torque = r × F (cross product of lever arm and force)
+			gravityTorque := cross(r, gravityForce)
+
+			// Scale and apply - this creates the "tipping over" effect
+			torqueScale := float32(8.0) // Tuned to feel natural
+			rb.AngularVelocity = rl.Vector3Add(rb.AngularVelocity, rl.Vector3Scale(gravityTorque, torqueScale/rb.Mass))
+
+			// Extra damping when angular velocity is low (helps settling)
+			angSpeed := rl.Vector3Length(rb.AngularVelocity)
+			if angSpeed < 50 && angSpeed > 0.1 {
+				settleDamping := float32(0.9)
+				rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, settleDamping)
+			}
 		}
 	}
 }

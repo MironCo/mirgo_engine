@@ -32,7 +32,7 @@ func (g *Game) Run() {
 	rl.InitWindow(1280, 720, "3D Animated Cubes with Lighting")
 	defer rl.CloseWindow()
 
-	rl.SetTargetFPS(120)
+	// rl.SetTargetFPS(120) // Disabled for performance testing
 
 	// Initialize world after OpenGL context is created
 	g.World.Initialize()
