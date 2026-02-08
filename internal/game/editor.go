@@ -198,6 +198,11 @@ func (e *Editor) Update(deltaTime float32) {
 		e.saveMsgTime = rl.GetTime()
 	}
 
+	// Ctrl+B: build game
+	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyB) {
+		e.buildGame()
+	}
+
 	// Tab: toggle asset browser
 	if rl.IsKeyPressed(rl.KeyTab) {
 		e.showAssetBrowser = !e.showAssetBrowser
@@ -589,7 +594,7 @@ func (e *Editor) DrawUI() {
 		}
 		rl.DrawText(name, x, 8, 16, color)
 	}
-	rl.DrawText("| Ctrl+S: Save | Ctrl+Z: Undo | F2: Play", 350, 8, 16, rl.LightGray)
+	rl.DrawText("| Ctrl+S: Save | Ctrl+B: Build | Ctrl+Z: Undo", 350, 8, 16, rl.LightGray)
 	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-100, 8, 16, rl.LightGray)
 
 	// Save message flash
@@ -1662,6 +1667,23 @@ func (e *Editor) scanAssetModels() {
 			}
 		}
 	}
+}
+
+// buildGame runs the Rust utility to build and package the game
+func (e *Editor) buildGame() {
+	e.saveMsg = "Building game..."
+	e.saveMsgTime = rl.GetTime()
+
+	cmd := exec.Command("./mirgo-utils", "build")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		e.saveMsg = fmt.Sprintf("Build failed: %v", err)
+		fmt.Printf("Build error: %v\nOutput: %s\n", err, string(output))
+	} else {
+		e.saveMsg = "Build complete! See build/"
+		fmt.Printf("Build output:\n%s\n", string(output))
+	}
+	e.saveMsgTime = rl.GetTime()
 }
 
 // drawRotatedBoxWires draws a wireframe box with rotation applied
