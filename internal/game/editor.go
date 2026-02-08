@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -1075,6 +1076,33 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		rl.DrawText("Emissive", indent, y+2, 12, propColor)
 		comp.Emissive = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".emit", comp.Emissive)
 		y += fieldH + 4
+
+		// Flip Normals button for GLTF models
+		if comp.FilePath != "" {
+			btnW := int32(90)
+			btnH := int32(18)
+			btnX := indent
+			btnY := y
+			mousePos := rl.GetMousePosition()
+			btnHovered := mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
+				mousePos.Y >= float32(btnY) && mousePos.Y <= float32(btnY+btnH)
+			btnColor := rl.NewColor(60, 60, 70, 200)
+			if btnHovered {
+				btnColor = rl.NewColor(80, 80, 90, 220)
+			}
+			rl.DrawRectangle(btnX, btnY, btnW, btnH, btnColor)
+			rl.DrawText("Flip Normals", btnX+6, btnY+3, 11, rl.LightGray)
+
+			if btnHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+				cmd := exec.Command("./mirgo-utils", "flipnormals", comp.FilePath)
+				if err := cmd.Run(); err != nil {
+					fmt.Printf("Failed to flip normals: %v\n", err)
+				} else {
+					fmt.Printf("Flipped normals for %s\n", comp.FilePath)
+				}
+			}
+			y += btnH + 4
+		}
 
 	case *components.BoxCollider:
 		// Size
