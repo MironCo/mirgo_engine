@@ -69,13 +69,28 @@ func (g *Game) Update() {
 	if rl.IsKeyPressed(rl.KeyF1) {
 		g.DebugMode = !g.DebugMode
 	}
-	// Cmd/Ctrl+P to toggle play mode
+
+	// P (no modifier) to pause/unpause - preserves scene state
+	if rl.IsKeyPressed(rl.KeyP) && !rl.IsKeyDown(rl.KeyLeftSuper) && !rl.IsKeyDown(rl.KeyRightSuper) && !rl.IsKeyDown(rl.KeyLeftControl) && !rl.IsKeyDown(rl.KeyRightControl) {
+		if g.editor.Active {
+			// Resume game from pause
+			g.editor.Exit()
+		} else {
+			// Pause game (enter editor without reset)
+			cam := g.World.FindMainCamera()
+			if cam != nil {
+				g.editor.Pause(cam.GetRaylibCamera())
+			}
+		}
+	}
+
+	// Cmd/Ctrl+P to toggle play mode (resets scene when entering editor)
 	if rl.IsKeyPressed(rl.KeyP) && (rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)) {
 		if g.editor.Active {
 			// Enter game mode
 			g.editor.Exit()
 		} else {
-			// Return to editor
+			// Return to editor (resets scene)
 			cam := g.World.FindMainCamera()
 			if cam != nil {
 				g.editor.Enter(cam.GetRaylibCamera())
@@ -162,7 +177,7 @@ func (g *Game) Draw() {
 
 func (g *Game) DrawUI() {
 	rl.DrawText("WASD to move, Space to jump, Mouse to look", 10, 10, 20, rl.DarkGray)
-	rl.DrawText("F1: debug | Cmd+P: back to editor", 10, 35, 20, rl.DarkGray)
+	rl.DrawText("F1: debug | P: pause | Cmd+P: editor (reset)", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 
 	// Crosshair

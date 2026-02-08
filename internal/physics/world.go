@@ -341,7 +341,7 @@ func (p *PhysicsWorld) resolveSphereVsSphere(a, b *engine.GameObject, rbA, rbB *
 	rA := rl.Vector3Scale(normal, -sA.Radius)
 	rB := rl.Vector3Scale(normal, sB.Radius)
 
-	torqueScale := float32(50.0)
+	torqueScale := float32(500.0)
 	torqueA := cross(rA, impulse)
 	torqueB := cross(rB, rl.Vector3Scale(impulse, -1))
 
@@ -395,11 +395,19 @@ func (p *PhysicsWorld) resolveSphereVsBox(sphereObj, boxObj *engine.GameObject, 
 	rbSphere.Velocity = rl.Vector3Add(rbSphere.Velocity, rl.Vector3Scale(impulse, 1/rbSphere.Mass))
 	rbBox.Velocity = rl.Vector3Subtract(rbBox.Velocity, rl.Vector3Scale(impulse, 1/rbBox.Mass))
 
-	// Torque only for spheres (AABB boxes don't rotate)
+	// Apply torque to both sphere and box
+	torqueScale := float32(500.0)
+
+	// Sphere torque
 	rSphere := rl.Vector3Scale(normal, -sphere.Radius)
-	torqueScale := float32(50.0)
 	torqueSphere := cross(rSphere, impulse)
 	rbSphere.AngularVelocity = rl.Vector3Add(rbSphere.AngularVelocity, rl.Vector3Scale(torqueSphere, torqueScale/rbSphere.Mass))
+
+	// Box torque - contact point on box surface
+	halfSize := rl.Vector3{X: box.Size.X / 2, Y: box.Size.Y / 2, Z: box.Size.Z / 2}
+	rBox := estimateContactPoint(rl.Vector3{}, halfSize, normal)
+	torqueBox := cross(rBox, rl.Vector3Scale(impulse, -1))
+	rbBox.AngularVelocity = rl.Vector3Add(rbBox.AngularVelocity, rl.Vector3Scale(torqueBox, torqueScale/rbBox.Mass))
 }
 
 func clamp(v, min, max float32) float32 {
@@ -504,34 +512,33 @@ func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 		}
 
 		// If a face is very close to flat, snap to perfectly flat
-		if maxAlignment > 0.9995 {
-			// Find which local axis is most aligned with world up
-			// and make it perfectly aligned (keeping Y rotation for horizontal spin)
-			if alignmentY >= alignmentX && alignmentY >= alignmentZ {
-				// Local Y is up - snap X and Z to 0
-				obj.Transform.Rotation.X = 0
-				obj.Transform.Rotation.Z = 0
-			} else if alignmentX >= alignmentZ {
-				// Local X is up - snap to X=90 or X=-90, Z=0
-				if obbAxes[0].Y > 0 {
-					obj.Transform.Rotation.X = 90
-				} else {
-					obj.Transform.Rotation.X = -90
+		// 0.9925 ≈ 7° from flat
+		if maxAlignment > 0.9925 {
+			// Snap each rotation component to nearest 90 degrees
+			snapTo90 := func(v float32) float32 {
+				// Normalize to 0-360 range first
+				for v < 0 {
+					v += 360
 				}
-				obj.Transform.Rotation.Z = 0
-			} else {
-				// Local Z is up - snap to Z=90 or Z=-90, X=0
-				if obbAxes[2].Y > 0 {
-					obj.Transform.Rotation.Z = 90
-				} else {
-					obj.Transform.Rotation.Z = -90
+				for v >= 360 {
+					v -= 360
 				}
-				obj.Transform.Rotation.X = 0
+				// Round to nearest 90
+				snapped := float32(int((v+45)/90)*90)
+				if snapped >= 360 {
+					snapped = 0
+				}
+				return snapped
+			}
+			obj.Transform.Rotation = rl.Vector3{
+				X: snapTo90(obj.Transform.Rotation.X),
+				Y: snapTo90(obj.Transform.Rotation.Y),
+				Z: snapTo90(obj.Transform.Rotation.Z),
 			}
 			rb.AngularVelocity = rl.Vector3{}
-		} else if maxAlignment > 0.99 {
-			// Close to flat - strong damping to settle
-			rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, 0.8)
+			// Stop all motion to prevent drift
+			rb.Velocity.X = 0
+			rb.Velocity.Z = 0
 		} else {
 			// The contact point is on the bottom of the box (opposite to push normal)
 			// In the box's local frame, find which corner/edge is lowest
@@ -569,7 +576,7 @@ func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 			gravityTorque := cross(r, gravityForce)
 
 			// Scale and apply - this creates the "tipping over" effect
-			torqueScale := float32(8.0) // Tuned to feel natural
+			torqueScale := float32(5.0) // Lower = gentler settling
 			rb.AngularVelocity = rl.Vector3Add(rb.AngularVelocity, rl.Vector3Scale(gravityTorque, torqueScale/rb.Mass))
 
 			// Extra damping when angular velocity is low (helps settling)
