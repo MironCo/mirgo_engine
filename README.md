@@ -4,15 +4,46 @@ A 3D game engine written in Go, built on top of [raylib-go](https://github.com/g
 
 ## Features
 
-- **Entity-Component System** - GameObjects with attachable components, generic `GetComponent[T]()` lookups, tags, and scene queries
-- **Physics** - Gravity, rigidbodies, box/sphere colliders, AABB collision resolution, spatial hashing for broad-phase, raycasting
-- **Shadow Mapping** - 2048x2048 depth map, directional light with orthographic projection, PCF 5x5 soft shadows, slope-scaled bias
-- **Custom GLSL 330 Shaders** - Diffuse + wrap lighting, Blinn-Phong specular, fresnel, rim lighting, tone mapping, gamma correction
-- **Scene Editor** - Unity-style editor mode with free-fly camera, object selection via raycast, transform gizmos with axis-constrained dragging, inspector panel
-- **JSON Scene Files** - Data-driven level layout, load/save at runtime (Ctrl+S), hot-editable
-- **Script Registry** - Register custom component factories by name, reference them from scene JSON, auto-serialization for save/load, scaffolding tool
-- **FPS Controller** - WASD movement, mouse look, gravity, jumping, player collision resolution
-- **Asset Management** - Cached model/texture loading, GLTF support
+### Rendering
+
+- **PBR-style Materials** - Metallic/roughness workflow with per-object properties
+- **Normal Mapping** - Tangent-space normal maps with TBN matrix, auto-detected from GLTF models
+- **Shadow Mapping** - 2048x2048 depth map, directional light, PCF 5x5 soft shadows, slope-scaled bias
+- **Lighting Model** - Wrap diffuse, Blinn-Phong specular, fresnel, rim lighting, emissive
+- **Post-processing** - Reinhard tone mapping, gamma correction
+- **GLTF Support** - Load models with albedo textures, normal maps, and embedded materials
+
+### Entity-Component System
+
+- **GameObjects** - Transform (position, rotation, scale), tags, component list
+- **Generic Lookups** - `GetComponent[T](gameObject)` with type safety
+- **Scene Queries** - `FindByTag()`, `FindByName()`, iterate all objects
+- **Lifecycle Hooks** - `Start()`, `Update(deltaTime)` per component
+
+### Physics
+
+- **Rigidbodies** - Mass, velocity, bounciness, friction, gravity toggle, kinematic mode
+- **Colliders** - Box and sphere shapes with offset support
+- **Collision Detection** - AABB intersection, spatial hashing for broad-phase
+- **Raycasting** - Ray-box and ray-sphere intersection, returns hit info
+
+### Editor
+
+- **Free-fly Camera** - Right-click + WASD, scroll to adjust speed
+- **Object Selection** - Click to select, raycast-based picking
+- **Transform Gizmos** - Axis-constrained dragging for move/rotate/scale
+- **Inspector Panel** - Edit component properties, add/remove components
+- **Asset Browser** - Drag-and-drop GLTF models into the scene
+- **Hierarchy Panel** - View and select scene objects
+- **Undo System** - Ctrl+Z to undo transform changes
+- **Scene Save** - Ctrl+S saves to JSON
+
+### Scripting
+
+- **Script Registry** - Register custom components by name
+- **JSON Integration** - Reference scripts from scene files with properties
+- **Code Generation** - `mirgo-utils newscript` scaffolds new scripts
+- **World Access** - Spawn, destroy, raycast from any component
 
 ## Requirements
 
@@ -156,12 +187,33 @@ Scenes are JSON files in `assets/scenes/`. Objects have a transform and a list o
 
 | Type | Fields |
 |------|--------|
-| ModelRenderer | `mesh` (cube/plane/sphere) + `meshSize`, or `model` (file path), `color` |
+| ModelRenderer | `mesh` (cube/plane/sphere) + `meshSize`, or `model` (file path), `color`, `metallic`, `roughness`, `emissive` |
 | BoxCollider | `size` [3], `offset` [3] |
 | SphereCollider | `radius` |
 | Rigidbody | `mass`, `bounciness`, `friction`, `useGravity`, `isKinematic` |
 | DirectionalLight | `direction` [3], `intensity` |
 | Script | `name` (registry key), `props` (key-value) |
+
+### Material Properties
+
+ModelRenderer supports PBR-style material properties:
+
+| Property | Range | Description |
+|----------|-------|-------------|
+| `metallic` | 0.0 - 1.0 | 0 = dielectric (plastic, wood), 1 = metal (gold, steel) |
+| `roughness` | 0.0 - 1.0 | 0 = mirror-smooth, 1 = completely rough |
+| `emissive` | 0.0+ | Glow intensity, adds to final color |
+
+Example:
+```json
+{
+  "type": "ModelRenderer",
+  "model": "assets/models/helmet.gltf",
+  "metallic": 0.9,
+  "roughness": 0.3,
+  "emissive": 0.0
+}
+```
 
 ## Script Registry
 
@@ -173,13 +225,11 @@ Use the scaffolding tool:
 
 ```bash
 # Build the utils (once)
-cd utilities && make
+cd utilities && cargo build --release && cp target/release/mirgo-utils ../
 
 # Generate a new script
 ./mirgo-utils newscript MyScript
 ```
-
-The utils are written in Rust. Why? For the meme. 🤷
 
 This generates `internal/components/scripts/my_script.go` with the struct, factory, serializer, and registration all wired up. Edit the struct fields and factory to match your needs, then reference it in a scene file:
 
@@ -273,3 +323,35 @@ Component Interface
 ```
 
 Components access the world through `GetGameObject().Scene.World` - no singletons, no constructor injection. The `WorldAccess` interface in the engine package prevents circular dependencies between engine and world packages.
+
+## Utilities (mirgo-utils)
+
+A Rust CLI tool for asset processing and code generation. Build with:
+
+```bash
+cd utilities && cargo build --release && cp target/release/mirgo-utils ../
+```
+
+### Commands
+
+#### `newscript <ScriptName>`
+
+Generates a new script component with factory and serializer boilerplate.
+
+```bash
+./mirgo-utils newscript EnemyChaser
+# Creates: internal/components/scripts/enemy_chaser.go
+```
+
+#### `flipnormals <path/to/model.gltf>`
+
+Inverts all vertex normals in a GLTF model's binary buffer. Useful when imported models have inverted lighting (lit from below instead of above).
+
+```bash
+./mirgo-utils flipnormals assets/models/rubber_duck_toy_1k.gltf
+# Flipped 2489 normal vectors in assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy.bin
+```
+
+If you pass a directory, it will find the `.gltf` file inside automatically. This command modifies the `.bin` file in place - run it again to flip back.
+
+The editor also has a "Flip Normals" button in the inspector when a GLTF model is selected.
