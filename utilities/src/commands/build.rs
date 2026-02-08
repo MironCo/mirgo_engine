@@ -20,7 +20,6 @@ pub fn run(output_name: Option<&str>) {
     #[cfg(target_os = "macos")]
     {
         build_macos_app(name, build_dir);
-        return;
     }
 
     // Non-macOS: just build the binary

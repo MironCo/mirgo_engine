@@ -45,7 +45,6 @@ func (w *World) Initialize() {
 	w.Scene.Start()
 }
 
-
 // ResetScene reloads the scene from disk, removing all dynamically spawned
 // objects and restoring scene objects to their saved state.
 func (w *World) ResetScene() {
