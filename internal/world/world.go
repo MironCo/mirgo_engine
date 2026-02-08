@@ -4,7 +4,7 @@ import (
 	"log"
 	"test3d/internal/assets"
 	"test3d/internal/components"
-	_ "test3d/internal/components/scripts"
+	_ "test3d/internal/scripts"
 	"test3d/internal/engine"
 	"test3d/internal/physics"
 

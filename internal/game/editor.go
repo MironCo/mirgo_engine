@@ -3,6 +3,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -93,9 +94,14 @@ type Editor struct {
 	undoStack []UndoState
 
 	// Asset browser
-	showAssetBrowser bool
+	showAssetBrowser   bool
 	assetBrowserScroll int32
-	assetFiles       []AssetEntry
+	assetFiles         []AssetEntry
+
+	// Script hot-reload
+	scriptModTimes    map[string]int64 // path -> mod time (unix nano)
+	scriptsChanged    bool
+	lastScriptCheck   float64
 }
 
 // AssetEntry represents a model file in the asset browser
@@ -125,6 +131,9 @@ func (e *Editor) Enter(currentCam rl.Camera3D) {
 	e.world.ResetScene()
 	e.Selected = nil
 
+	// Initialize script hot-reload watcher
+	e.scanScriptModTimes()
+
 	e.camera.Position = currentCam.Position
 
 	dir := rl.Vector3Subtract(currentCam.Target, currentCam.Position)
@@ -144,6 +153,9 @@ func (e *Editor) Pause(currentCam rl.Camera3D) {
 
 	// Don't reset scene - preserve current state
 	e.Selected = nil
+
+	// Initialize script hot-reload watcher
+	e.scanScriptModTimes()
 
 	e.camera.Position = currentCam.Position
 
@@ -203,6 +215,9 @@ func (e *Editor) Exit() {
 }
 
 func (e *Editor) Update(deltaTime float32) {
+	// Check for script file changes
+	e.checkScriptChanges()
+
 	// Handle file drops (GLTF models, etc.)
 	e.handleFileDrop()
 
@@ -224,6 +239,11 @@ func (e *Editor) Update(deltaTime float32) {
 	// Ctrl+B: build game
 	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyB) {
 		e.buildGame()
+	}
+
+	// Ctrl+R: rebuild and relaunch (for script hot-reload)
+	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyR) {
+		e.rebuildAndRelaunch()
 	}
 
 	// Tab: toggle asset browser
@@ -627,6 +647,15 @@ func (e *Editor) DrawUI() {
 	}
 	rl.DrawText(helpText, 350, 8, 16, rl.LightGray)
 	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-100, 8, 16, rl.LightGray)
+
+	// Scripts changed banner
+	if e.scriptsChanged {
+		bannerText := "Scripts changed - Press Ctrl+R to rebuild"
+		textWidth := rl.MeasureText(bannerText, 16)
+		bannerX := (int32(rl.GetScreenWidth()) - textWidth) / 2
+		rl.DrawRectangle(bannerX-10, 36, textWidth+20, 24, rl.NewColor(80, 60, 0, 230))
+		rl.DrawText(bannerText, bannerX, 40, 16, rl.Yellow)
+	}
 
 	// Save message flash
 	if e.saveMsg != "" && rl.GetTime()-e.saveMsgTime < 2.0 {
@@ -1716,6 +1745,182 @@ func (e *Editor) buildGame() {
 	}
 	e.saveMsgTime = rl.GetTime()
 }
+
+// scanScriptModTimes records the modification times of all script files
+func (e *Editor) scanScriptModTimes() {
+	e.scriptModTimes = make(map[string]int64)
+	e.scriptsChanged = false
+	scriptsDir := "internal/scripts"
+
+	entries, err := os.ReadDir(scriptsDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		path := filepath.Join(scriptsDir, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		e.scriptModTimes[path] = info.ModTime().UnixNano()
+	}
+	e.lastScriptCheck = rl.GetTime()
+}
+
+// checkScriptChanges checks if any script files have been modified
+func (e *Editor) checkScriptChanges() {
+	// Only check every 0.5 seconds
+	if rl.GetTime()-e.lastScriptCheck < 0.5 {
+		return
+	}
+	e.lastScriptCheck = rl.GetTime()
+
+	scriptsDir := "internal/scripts"
+	entries, err := os.ReadDir(scriptsDir)
+	if err != nil {
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") {
+			continue
+		}
+		path := filepath.Join(scriptsDir, entry.Name())
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		modTime := info.ModTime().UnixNano()
+
+		// Check if file is new or modified
+		if oldTime, exists := e.scriptModTimes[path]; !exists || modTime != oldTime {
+			e.scriptsChanged = true
+			return
+		}
+	}
+}
+
+// EditorRestoreState holds editor state for hot-reload restoration
+type EditorRestoreState struct {
+	CameraPosition  rl.Vector3 `json:"cameraPosition"`
+	CameraYaw       float32    `json:"cameraYaw"`
+	CameraPitch     float32    `json:"cameraPitch"`
+	CameraMoveSpeed float32    `json:"cameraMoveSpeed"`
+	GizmoMode       int        `json:"gizmoMode"`
+	SelectedObject  string     `json:"selectedObject,omitempty"`
+}
+
+const editorRestoreFile = ".editor_restore.json"
+
+// RestoreState restores editor camera state from the restore file after hot-reload
+func (e *Editor) RestoreState() {
+	data, err := os.ReadFile(editorRestoreFile)
+	if err != nil {
+		return // No restore file, that's fine
+	}
+
+	var state EditorRestoreState
+	if err := json.Unmarshal(data, &state); err != nil {
+		fmt.Printf("Failed to parse restore state: %v\n", err)
+		os.Remove(editorRestoreFile)
+		return
+	}
+
+	// Apply restored state
+	e.camera.Position = state.CameraPosition
+	e.camera.Yaw = state.CameraYaw
+	e.camera.Pitch = state.CameraPitch
+	if state.CameraMoveSpeed > 0 {
+		e.camera.MoveSpeed = state.CameraMoveSpeed
+	}
+	e.gizmoMode = GizmoMode(state.GizmoMode)
+
+	// Clean up the restore file
+	os.Remove(editorRestoreFile)
+
+	fmt.Println("Scripts reloaded successfully")
+}
+
+// rebuildAndRelaunch saves state, rebuilds the binary, and relaunches
+func (e *Editor) rebuildAndRelaunch() {
+	e.saveMsg = "Compiling..."
+	e.saveMsgTime = rl.GetTime()
+
+	// Get the current executable path
+	execPath, err := os.Executable()
+	if err != nil {
+		e.saveMsg = fmt.Sprintf("Failed to get executable: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Build to a temp file first to check if it compiles
+	tempExec := execPath + ".new"
+	fmt.Println("Compiling...")
+	cmd := exec.Command("go", "build", "-o", tempExec, "./cmd/test3d")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Build failed - show error, keep window open
+		e.saveMsg = "Build failed!"
+		e.saveMsgTime = rl.GetTime()
+		fmt.Printf("Build error:\n%s\n", string(output))
+		os.Remove(tempExec)
+		return
+	}
+
+	// Build succeeded - now save state and relaunch
+	e.saveMsg = "Reloading..."
+	e.saveMsgTime = rl.GetTime()
+
+	// Save the scene
+	if err := e.world.SaveScene(world.ScenePath); err != nil {
+		e.saveMsg = fmt.Sprintf("Save failed: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		os.Remove(tempExec)
+		return
+	}
+
+	// Save editor state for restoration
+	state := EditorRestoreState{
+		CameraPosition:  e.camera.Position,
+		CameraYaw:       e.camera.Yaw,
+		CameraPitch:     e.camera.Pitch,
+		CameraMoveSpeed: e.camera.MoveSpeed,
+		GizmoMode:       int(e.gizmoMode),
+	}
+	stateJSON, _ := json.MarshalIndent(state, "", "  ")
+	if err := os.WriteFile(editorRestoreFile, stateJSON, 0644); err != nil {
+		e.saveMsg = fmt.Sprintf("Failed to save state: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		os.Remove(tempExec)
+		return
+	}
+
+	// Replace old binary with new one
+	if err := os.Rename(tempExec, execPath); err != nil {
+		e.saveMsg = fmt.Sprintf("Failed to replace binary: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		os.Remove(tempExec)
+		os.Remove(editorRestoreFile)
+		return
+	}
+
+	fmt.Println("Relaunching...")
+
+	// Close the window before relaunching
+	rl.CloseWindow()
+
+	// Replace current process with new binary
+	err = execNewBinary(execPath, []string{execPath, "--restore-editor"})
+	if err != nil {
+		fmt.Printf("Failed to exec: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 
 // drawRotatedBoxWires draws a wireframe box with rotation applied
 func drawRotatedBoxWires(center, size, rotation rl.Vector3, color rl.Color) {

@@ -6,7 +6,7 @@ import (
 )
 
 func init() {
-	engine.RegisterScript("CubeAnimator", cubeAnimatorFactory, cubeAnimatorSerializer)
+	engine.RegisterScript("CubeAnimatorScript", cubeAnimatorFactory, cubeAnimatorSerializer)
 }
 
 func cubeAnimatorFactory(props map[string]any) engine.Component {

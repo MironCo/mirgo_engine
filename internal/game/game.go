@@ -27,7 +27,7 @@ func New() *Game {
 	}
 }
 
-func (g *Game) Run() {
+func (g *Game) Run(restoreEditor bool) {
 	rl.SetConfigFlags(rl.FlagWindowHighdpi | rl.FlagWindowResizable)
 	rl.InitWindow(1280, 720, "3D Animated Cubes with Lighting")
 	defer rl.CloseWindow()
@@ -53,6 +53,11 @@ func (g *Game) Run() {
 			Fovy:       45,
 			Projection: rl.CameraPerspective,
 		})
+	}
+
+	// Restore editor state if relaunching after hot-reload
+	if restoreEditor {
+		g.editor.RestoreState()
 	}
 
 	for !rl.WindowShouldClose() {

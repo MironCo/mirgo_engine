@@ -56,7 +56,9 @@
         {
           "type": "Script",
           "name": "Shooter",
-          "props": { "cooldown": 0.15 }
+          "props": {
+            "cooldown": 0.15
+          }
         }
       ]
     },
@@ -106,9 +108,9 @@
     {
       "name": "Duck",
       "position": [
-        0.71012974,
-        0.9672081,
-        0
+        4.4829907,
+        1.2887056,
+        -2.239946
       ],
       "rotation": [
         0,
