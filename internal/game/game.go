@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"test3d/internal/components"
-	"test3d/internal/engine"
 	"test3d/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -13,7 +11,6 @@ import (
 
 type Game struct {
 	World     *world.World
-	player    *engine.GameObject
 	editor    *Editor
 	DebugMode bool
 
@@ -41,14 +38,21 @@ func (g *Game) Run() {
 	g.World.Initialize()
 	defer g.World.Unload()
 
-	// Cache player reference for camera access
-	g.player = g.World.Scene.FindByName("Player")
 	g.editor = NewEditor(g.World)
 
 	// Start in editor mode by default
-	cam := engine.GetComponent[*components.Camera](g.player)
+	cam := g.World.FindMainCamera()
 	if cam != nil {
 		g.editor.Enter(cam.GetRaylibCamera())
+	} else {
+		// No camera in scene, start with default editor camera
+		g.editor.Enter(rl.Camera3D{
+			Position:   rl.Vector3{X: 10, Y: 10, Z: 10},
+			Target:     rl.Vector3{},
+			Up:         rl.Vector3{Y: 1},
+			Fovy:       45,
+			Projection: rl.CameraPerspective,
+		})
 	}
 
 	for !rl.WindowShouldClose() {
@@ -65,13 +69,14 @@ func (g *Game) Update() {
 	if rl.IsKeyPressed(rl.KeyF1) {
 		g.DebugMode = !g.DebugMode
 	}
-	if rl.IsKeyPressed(rl.KeyF2) {
+	// Cmd/Ctrl+P to toggle play mode
+	if rl.IsKeyPressed(rl.KeyP) && (rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)) {
 		if g.editor.Active {
 			// Enter game mode
 			g.editor.Exit()
 		} else {
 			// Return to editor
-			cam := engine.GetComponent[*components.Camera](g.player)
+			cam := g.World.FindMainCamera()
 			if cam != nil {
 				g.editor.Enter(cam.GetRaylibCamera())
 			}
@@ -112,17 +117,18 @@ func (g *Game) Update() {
 }
 
 func (g *Game) Draw() {
-	if g.player == nil {
-		return
-	}
-
 	// Get camera based on mode
 	var camera rl.Camera3D
 	if g.editor.Active {
 		camera = g.editor.GetRaylibCamera()
 	} else {
-		cam := engine.GetComponent[*components.Camera](g.player)
+		cam := g.World.FindMainCamera()
 		if cam == nil {
+			// No camera, just draw editor UI
+			rl.BeginDrawing()
+			rl.ClearBackground(rl.NewColor(20, 20, 30, 255))
+			rl.DrawText("No Camera in scene! Add a Camera component to a GameObject.", 10, 10, 20, rl.Red)
+			rl.EndDrawing()
 			return
 		}
 		camera = cam.GetRaylibCamera()
@@ -156,7 +162,7 @@ func (g *Game) Draw() {
 
 func (g *Game) DrawUI() {
 	rl.DrawText("WASD to move, Space to jump, Mouse to look", 10, 10, 20, rl.DarkGray)
-	rl.DrawText("F1: debug | F2: back to editor", 10, 35, 20, rl.DarkGray)
+	rl.DrawText("F1: debug | Cmd+P: back to editor", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 
 	// Crosshair
@@ -188,8 +194,5 @@ func (g *Game) DrawUI() {
 		rl.DrawText(fmt.Sprintf("Shadows: %.2f ms", g.shadowMs), 10, 130, 16, rl.Green)
 		rl.DrawText(fmt.Sprintf("Draw:    %.2f ms", g.drawMs), 10, 150, 16, rl.Green)
 		rl.DrawText(fmt.Sprintf("Total:   %.2f ms", g.updateMs+g.shadowMs+g.drawMs), 10, 170, 16, rl.Lime)
-
-		pos := g.player.Transform.Position
-		rl.DrawText(fmt.Sprintf("Player:  (%.1f, %.1f, %.1f)", pos.X, pos.Y, pos.Z), 10, 195, 16, rl.SkyBlue)
 	}
 }

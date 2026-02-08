@@ -1377,13 +1377,6 @@ func (e *Editor) deleteSelectedObject() {
 		return
 	}
 
-	// Don't allow deleting the player
-	if e.Selected.Name == "Player" {
-		e.saveMsg = "Cannot delete Player"
-		e.saveMsgTime = rl.GetTime()
-		return
-	}
-
 	// Push undo state before deleting (keeps the object reference alive)
 	e.pushDeleteUndo(e.Selected)
 

@@ -41,79 +41,28 @@ func (w *World) Initialize() {
 		log.Fatalf("failed to load scene: %v", err)
 	}
 
-	// Create player (code-managed, not in scene file)
-	w.createPlayer()
-
 	// Start all GameObjects
 	w.Scene.Start()
-}
-
-func (w *World) createPlayer() {
-	player := engine.NewGameObject("Player")
-	player.Transform.Position = rl.Vector3{X: 10, Y: 10, Z: 10}
-
-	// FPS controller (movement + mouse look)
-	fps := components.NewFPSController()
-	player.AddComponent(fps)
-
-	// Camera
-	cam := components.NewCamera()
-	player.AddComponent(cam)
-
-	// Box collider for player body
-	collider := components.NewBoxCollider(rl.Vector3{X: 0.6, Y: 1.8, Z: 0.6})
-	player.AddComponent(collider)
-
-	// Kinematic rigidbody so player can push things
-	rb := components.NewRigidbody()
-	rb.IsKinematic = true
-	rb.UseGravity = false // FPSController handles gravity
-	player.AddComponent(rb)
-
-	// Player collision (ground check + AABB resolution)
-	player.AddComponent(&PlayerCollision{})
-
-	// Shooter (sphere spawning on mouse click)
-	player.AddComponent(components.NewShooter(w.Renderer.Shader))
-
-	w.Scene.AddGameObject(player)
-	w.PhysicsWorld.AddObject(player)
 }
 
 
 // ResetScene reloads the scene from disk, removing all dynamically spawned
 // objects and restoring scene objects to their saved state.
-// The Player is preserved but reset to its spawn position.
 func (w *World) ResetScene() {
-	player := w.Scene.FindByName("Player")
-
-	// Unload models for all non-player objects
+	// Unload all models
 	for _, g := range w.Scene.GameObjects {
-		if g == player {
-			continue
-		}
 		if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
 			renderer.Unload()
 		}
 	}
 
-	// Clear scene and physics, keeping only player
+	// Clear scene and physics
 	w.Scene.GameObjects = w.Scene.GameObjects[:0]
 	w.PhysicsWorld.Objects = w.PhysicsWorld.Objects[:0]
 	w.PhysicsWorld.Statics = w.PhysicsWorld.Statics[:0]
 	w.PhysicsWorld.Kinematics = w.PhysicsWorld.Kinematics[:0]
 
-	if player != nil {
-		w.Scene.AddGameObject(player)
-		w.PhysicsWorld.AddObject(player)
-		player.Transform.Position = rl.Vector3{X: 10, Y: 10, Z: 10}
-		player.Transform.Rotation = rl.Vector3{}
-		if rb := engine.GetComponent[*components.Rigidbody](player); rb != nil {
-			rb.Velocity = rl.Vector3{}
-		}
-	}
-
-	// Reload scene from disk
+	// Reload scene from disk (includes Player now)
 	if err := w.LoadScene(ScenePath); err != nil {
 		log.Printf("failed to reload scene: %v", err)
 		return
@@ -177,4 +126,20 @@ func (w *World) Raycast(origin, direction rl.Vector3, maxDistance float32) (engi
 func (w *World) Unload() {
 	w.Renderer.Unload(w.Scene.GameObjects)
 	assets.Unload()
+}
+
+// FindMainCamera returns the first Camera component with IsMain=true, or the first Camera found
+func (w *World) FindMainCamera() *components.Camera {
+	var firstCamera *components.Camera
+	for _, g := range w.Scene.GameObjects {
+		if cam := engine.GetComponent[*components.Camera](g); cam != nil {
+			if cam.IsMain {
+				return cam
+			}
+			if firstCamera == nil {
+				firstCamera = cam
+			}
+		}
+	}
+	return firstCamera
 }

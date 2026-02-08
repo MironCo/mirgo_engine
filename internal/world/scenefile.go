@@ -73,6 +73,22 @@ type scriptDef struct {
 	Props map[string]any `json:"props,omitempty"`
 }
 
+type cameraDef struct {
+	Type       string `json:"type"`
+	FOV        float32 `json:"fov,omitempty"`
+	Near       float32 `json:"near,omitempty"`
+	Far        float32 `json:"far,omitempty"`
+	IsMain     bool    `json:"isMain,omitempty"`
+}
+
+type fpsControllerDef struct {
+	Type         string  `json:"type"`
+	MoveSpeed    float32 `json:"moveSpeed,omitempty"`
+	LookSpeed    float32 `json:"lookSpeed,omitempty"`
+	JumpStrength float32 `json:"jumpStrength,omitempty"`
+	EyeHeight    float32 `json:"eyeHeight,omitempty"`
+}
+
 // --- Color mapping ---
 
 var colorByName = map[string]rl.Color{
@@ -170,6 +186,12 @@ func (w *World) loadObject(objDef ObjectDef, parent *engine.GameObject) {
 			w.loadRigidbody(g, raw)
 		case "DirectionalLight":
 			w.loadDirectionalLight(g, raw)
+		case "Camera":
+			w.loadCamera(g, raw)
+		case "FPSController":
+			loadFPSController(g, raw)
+			// Auto-attach PlayerCollision for FPS characters
+			g.AddComponent(&PlayerCollision{})
 		case "Script":
 			loadScript(g, raw)
 		}
@@ -307,6 +329,46 @@ func loadScript(g *engine.GameObject, raw json.RawMessage) {
 	}
 }
 
+func (w *World) loadCamera(g *engine.GameObject, raw json.RawMessage) {
+	var def cameraDef
+	if err := json.Unmarshal(raw, &def); err != nil {
+		return
+	}
+	cam := components.NewCamera()
+	if def.FOV > 0 {
+		cam.FOV = def.FOV
+	}
+	if def.Near > 0 {
+		cam.Near = def.Near
+	}
+	if def.Far > 0 {
+		cam.Far = def.Far
+	}
+	cam.IsMain = def.IsMain
+	g.AddComponent(cam)
+}
+
+func loadFPSController(g *engine.GameObject, raw json.RawMessage) {
+	var def fpsControllerDef
+	if err := json.Unmarshal(raw, &def); err != nil {
+		return
+	}
+	fps := components.NewFPSController()
+	if def.MoveSpeed > 0 {
+		fps.MoveSpeed = def.MoveSpeed
+	}
+	if def.LookSpeed > 0 {
+		fps.LookSpeed = def.LookSpeed
+	}
+	if def.JumpStrength > 0 {
+		fps.JumpStrength = def.JumpStrength
+	}
+	if def.EyeHeight > 0 {
+		fps.EyeHeight = def.EyeHeight
+	}
+	g.AddComponent(fps)
+}
+
 // --- Saving ---
 
 func (w *World) SaveScene(path string) error {
@@ -315,10 +377,6 @@ func (w *World) SaveScene(path string) error {
 	for _, g := range w.Scene.GameObjects {
 		// Skip children (saved recursively under their parent)
 		if g.Parent != nil {
-			continue
-		}
-		// Skip player (code-managed)
-		if engine.GetComponent[*components.FPSController](g) != nil {
 			continue
 		}
 		// Skip runtime-spawned projectiles
@@ -412,6 +470,24 @@ func serializeComponent(c engine.Component) json.RawMessage {
 			Type:      "DirectionalLight",
 			Direction: [3]float32{comp.Direction.X, comp.Direction.Y, comp.Direction.Z},
 			Intensity: comp.Intensity,
+		}
+
+	case *components.Camera:
+		def = cameraDef{
+			Type:   "Camera",
+			FOV:    comp.FOV,
+			Near:   comp.Near,
+			Far:    comp.Far,
+			IsMain: comp.IsMain,
+		}
+
+	case *components.FPSController:
+		def = fpsControllerDef{
+			Type:         "FPSController",
+			MoveSpeed:    comp.MoveSpeed,
+			LookSpeed:    comp.LookSpeed,
+			JumpStrength: comp.JumpStrength,
+			EyeHeight:    comp.EyeHeight,
 		}
 
 	default:

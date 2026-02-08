@@ -1,6 +1,61 @@
 {
   "objects": [
     {
+      "name": "Player",
+      "position": [
+        10,
+        5,
+        10
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "Camera",
+          "fov": 45,
+          "near": 0.1,
+          "far": 1000,
+          "isMain": true
+        },
+        {
+          "type": "FPSController",
+          "moveSpeed": 8,
+          "lookSpeed": 0.1,
+          "jumpStrength": 8,
+          "eyeHeight": 1.6
+        },
+        {
+          "type": "BoxCollider",
+          "size": [
+            0.8,
+            2.7526171,
+            0.8
+          ],
+          "offset": [
+            0,
+            1.4517187,
+            0
+          ]
+        },
+        {
+          "type": "Rigidbody",
+          "mass": 1,
+          "bounciness": 0.5,
+          "friction": 0.1,
+          "useGravity": false,
+          "isKinematic": true
+        }
+      ]
+    },
+    {
       "name": "Floor",
       "position": [
         0,
@@ -25,7 +80,8 @@
             60,
             60
           ],
-          "color": "LightGray"
+          "color": "LightGray",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -68,7 +124,8 @@
             1.5,
             1.5
           ],
-          "color": "Red"
+          "color": "Red",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -118,7 +175,8 @@
                 1,
                 1
               ],
-              "color": "Gold"
+              "color": "Gold",
+              "roughness": 0.5
             }
           ]
         }
@@ -150,7 +208,8 @@
             1.5,
             1.5
           ],
-          "color": "Blue"
+          "color": "Blue",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -200,7 +259,8 @@
             1.5,
             1.5
           ],
-          "color": "Green"
+          "color": "Green",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -250,7 +310,8 @@
             1.5,
             1.5
           ],
-          "color": "Purple"
+          "color": "Purple",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -300,7 +361,8 @@
             1.5,
             1.5
           ],
-          "color": "Orange"
+          "color": "Orange",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -350,7 +412,8 @@
             1.5,
             1.5
           ],
-          "color": "Yellow"
+          "color": "Yellow",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -400,7 +463,8 @@
             1.5,
             1.5
           ],
-          "color": "Pink"
+          "color": "Pink",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -450,7 +514,8 @@
             1.5,
             1.5
           ],
-          "color": "SkyBlue"
+          "color": "SkyBlue",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -500,7 +565,8 @@
             1.5,
             1.5
           ],
-          "color": "Lime"
+          "color": "Lime",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -550,7 +616,8 @@
             1.5,
             1.5
           ],
-          "color": "Magenta"
+          "color": "Magenta",
+          "roughness": 0.5
         },
         {
           "type": "BoxCollider",
@@ -595,7 +662,8 @@
         {
           "type": "ModelRenderer",
           "model": "assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
-          "color": "White"
+          "color": "White",
+          "roughness": 0.5
         },
         {
           "type": "Script",

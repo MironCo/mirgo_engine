@@ -12,6 +12,7 @@ type Camera struct {
 	Near       float32
 	Far        float32
 	Projection rl.CameraProjection
+	IsMain     bool // If true, this is the active game camera
 }
 
 func NewCamera() *Camera {
@@ -20,6 +21,7 @@ func NewCamera() *Camera {
 		Near:       0.1,
 		Far:        1000.0,
 		Projection: rl.CameraPerspective,
+		IsMain:     false,
 	}
 }
 

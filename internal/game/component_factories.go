@@ -24,6 +24,8 @@ var editorComponentTypes = []ComponentType{
 	{"Rigidbody", createRigidbody},
 	{"DirectionalLight", createDirectionalLight},
 	{"PointLight", createPointLight},
+	{"Camera", createCamera},
+	{"FPSController", createFPSController},
 }
 
 func createModelRenderer(w *world.World, g *engine.GameObject) engine.Component {
@@ -58,4 +60,12 @@ func createDirectionalLight(w *world.World, g *engine.GameObject) engine.Compone
 
 func createPointLight(w *world.World, g *engine.GameObject) engine.Component {
 	return components.NewPointLight()
+}
+
+func createCamera(w *world.World, g *engine.GameObject) engine.Component {
+	return components.NewCamera()
+}
+
+func createFPSController(w *world.World, g *engine.GameObject) engine.Component {
+	return components.NewFPSController()
 }
