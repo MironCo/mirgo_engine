@@ -9,6 +9,7 @@ import (
 )
 
 const ShadowMapResolution = 2048
+const MaxPointLights = 4
 
 const (
 	ShadowNear float32 = 1.0
@@ -112,6 +113,9 @@ func (r *Renderer) DrawWithShadows(cameraPos rl.Vector3, gameObjects []*engine.G
 	lightVPLoc := rl.GetShaderLocation(r.Shader, "matLightVP")
 	rl.SetShaderValueMatrix(r.Shader, lightVPLoc, r.MatLightVP)
 
+	// Collect and set point lights
+	r.updatePointLights(gameObjects)
+
 	shadowMapLoc := rl.GetShaderLocation(r.Shader, "shadowMap")
 	rl.EnableShader(r.Shader.ID)
 
@@ -137,6 +141,45 @@ func (r *Renderer) drawScene(gameObjects []*engine.GameObject) {
 			renderer.Draw()
 		}
 	}
+}
+
+func (r *Renderer) updatePointLights(gameObjects []*engine.GameObject) {
+	var positions []float32
+	var colors []float32
+	var radii []float32
+	count := 0
+
+	for _, g := range gameObjects {
+		if count >= MaxPointLights {
+			break
+		}
+		if pl := engine.GetComponent[*components.PointLight](g); pl != nil {
+			pos := pl.GetPosition()
+			positions = append(positions, pos.X, pos.Y, pos.Z)
+			colors = append(colors, pl.GetColorFloat()...)
+			radii = append(radii, pl.Radius)
+			count++
+		}
+	}
+
+	// Pad arrays to MaxPointLights size (shader expects fixed-size arrays)
+	for i := count; i < MaxPointLights; i++ {
+		positions = append(positions, 0, 0, 0)
+		colors = append(colors, 0, 0, 0)
+		radii = append(radii, 0)
+	}
+
+	countLoc := rl.GetShaderLocation(r.Shader, "pointLightCount")
+	rl.SetUniform(countLoc, []int32{int32(count)}, int32(rl.ShaderUniformInt), 1)
+
+	posLoc := rl.GetShaderLocation(r.Shader, "pointLightPos")
+	rl.SetShaderValue(r.Shader, posLoc, positions, rl.ShaderUniformVec3)
+
+	colorLoc := rl.GetShaderLocation(r.Shader, "pointLightColor")
+	rl.SetShaderValue(r.Shader, colorLoc, colors, rl.ShaderUniformVec3)
+
+	radiusLoc := rl.GetShaderLocation(r.Shader, "pointLightRadius")
+	rl.SetShaderValue(r.Shader, radiusLoc, radii, rl.ShaderUniformFloat)
 }
 
 func (r *Renderer) MoveLightDir(dx, dy, dz float32) {

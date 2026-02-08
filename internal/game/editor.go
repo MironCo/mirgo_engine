@@ -496,6 +496,17 @@ func (e *Editor) GetRaylibCamera() rl.Camera3D {
 
 // Draw3D draws selection wireframes and gizmo. Call inside BeginMode3D/EndMode3D.
 func (e *Editor) Draw3D() {
+	// Draw point light gizmos for all point lights (not just selected)
+	for _, g := range e.world.Scene.GameObjects {
+		if pl := engine.GetComponent[*components.PointLight](g); pl != nil {
+			pos := pl.GetPosition()
+			// Draw small sphere at light position
+			rl.DrawSphere(pos, 0.15, pl.Color)
+			// Draw radius wireframe
+			rl.DrawSphereWires(pos, pl.Radius, 8, 8, rl.Fade(pl.Color, 0.3))
+		}
+	}
+
 	if e.Selected == nil {
 		return
 	}
@@ -508,6 +519,10 @@ func (e *Editor) Draw3D() {
 	} else if sphere := engine.GetComponent[*components.SphereCollider](e.Selected); sphere != nil {
 		center := sphere.GetCenter()
 		rl.DrawSphereWires(center, sphere.Radius, 8, 8, rl.Yellow)
+	} else if pl := engine.GetComponent[*components.PointLight](e.Selected); pl != nil {
+		// Highlight selected point light
+		pos := pl.GetPosition()
+		rl.DrawSphereWires(pos, pl.Radius, 12, 12, rl.Yellow)
 	}
 
 	// Transform gizmo
@@ -1164,6 +1179,32 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		rl.DrawText("Intensity", indent, y+2, 12, propColor)
 		sliderBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
 		comp.Intensity = gui.Slider(sliderBounds, "", fmt.Sprintf("%.1f", comp.Intensity), comp.Intensity, 0, 2)
+		y += fieldH + 6
+
+	case *components.PointLight:
+		id := fmt.Sprintf("pointlight%d", compIdx)
+
+		// Color picker (simplified - show RGB sliders)
+		rl.DrawText("Color", indent, y+2, 12, propColor)
+		colorPreview := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(colorPreview, comp.Color)
+		rl.DrawRectangleLinesEx(colorPreview, 1, rl.Gray)
+		// R/G/B fields
+		comp.Color.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".r", float32(comp.Color.R)))
+		comp.Color.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".g", float32(comp.Color.G)))
+		comp.Color.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".b", float32(comp.Color.B)))
+		y += fieldH + 4
+
+		// Intensity slider
+		rl.DrawText("Intensity", indent, y+2, 12, propColor)
+		intensityBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
+		comp.Intensity = gui.Slider(intensityBounds, "", fmt.Sprintf("%.1f", comp.Intensity), comp.Intensity, 0, 5)
+		y += fieldH + 4
+
+		// Radius slider
+		rl.DrawText("Radius", indent, y+2, 12, propColor)
+		radiusBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
+		comp.Radius = gui.Slider(radiusBounds, "", fmt.Sprintf("%.1f", comp.Radius), comp.Radius, 1, 50)
 		y += fieldH + 6
 
 	default:

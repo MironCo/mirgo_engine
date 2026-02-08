@@ -23,6 +23,13 @@ uniform float metallic;   // 0 = diffuse, 1 = metallic
 uniform float roughness;  // 0 = shiny, 1 = rough
 uniform float emissive;   // emission intensity
 
+// Point lights (up to 4)
+#define MAX_POINT_LIGHTS 4
+uniform int pointLightCount;
+uniform vec3 pointLightPos[MAX_POINT_LIGHTS];
+uniform vec3 pointLightColor[MAX_POINT_LIGHTS];
+uniform float pointLightRadius[MAX_POINT_LIGHTS];
+
 out vec4 finalColor;
 
 float calculateShadow(vec3 normal, vec3 lightDirection)
@@ -100,8 +107,37 @@ void main()
     vec3 rimLight = rim * lightColor.rgb * 0.5 * shadow;
     vec3 fresnelLight = fresnel * ambient.rgb * 0.3;
 
-    // Final lighting (ambient is not affected by shadow)
-    vec3 lighting = ambient.rgb + diffuseLight + specularLight + rimLight + fresnelLight;
+    // Point lights contribution
+    vec3 pointLighting = vec3(0.0);
+    for (int i = 0; i < pointLightCount && i < MAX_POINT_LIGHTS; i++) {
+        vec3 toLight = pointLightPos[i] - fragPosition;
+        float distance = length(toLight);
+        vec3 pointLightDir = normalize(toLight);
+
+        // Attenuation with smooth falloff
+        float attenuation = clamp(1.0 - distance / pointLightRadius[i], 0.0, 1.0);
+        attenuation *= attenuation;  // quadratic falloff
+
+        // Diffuse
+        float pointDiff = max(dot(normal, pointLightDir), 0.0);
+
+        // Specular
+        vec3 pointHalfway = normalize(pointLightDir + viewDir);
+        float pointSpec = pow(max(dot(normal, pointHalfway), 0.0), shininess);
+
+        vec3 pointDiffuse = pointDiff * pointLightColor[i] * attenuation;
+        vec3 pointSpecular = pointSpec * specColor * pointLightColor[i] * specIntensity * attenuation;
+
+        pointLighting += pointDiffuse + pointSpecular;
+    }
+
+    // Fake ambient occlusion - darken objects near ground (Y=0)
+    float aoHeight = 2.0;  // height over which AO fades out
+    float aoStrength = 0.4;  // how dark at ground level (0 = black, 1 = no effect)
+    float ao = mix(aoStrength, 1.0, clamp(fragPosition.y / aoHeight, 0.0, 1.0));
+
+    // Final lighting (ambient is not affected by shadow, but is affected by AO)
+    vec3 lighting = ambient.rgb * ao + diffuseLight + specularLight + rimLight + fresnelLight + pointLighting;
 
     // Apply material color
     vec3 result = lighting * baseColor;

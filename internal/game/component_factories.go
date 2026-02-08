@@ -23,6 +23,7 @@ var editorComponentTypes = []ComponentType{
 	{"SphereCollider", createSphereCollider},
 	{"Rigidbody", createRigidbody},
 	{"DirectionalLight", createDirectionalLight},
+	{"PointLight", createPointLight},
 }
 
 func createModelRenderer(w *world.World, g *engine.GameObject) engine.Component {
@@ -53,4 +54,8 @@ func createDirectionalLight(w *world.World, g *engine.GameObject) engine.Compone
 	w.Light = g
 	w.Renderer.SetLight(light)
 	return light
+}
+
+func createPointLight(w *world.World, g *engine.GameObject) engine.Component {
+	return components.NewPointLight()
 }
