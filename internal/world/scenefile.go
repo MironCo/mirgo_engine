@@ -17,6 +17,7 @@ type SceneFile struct {
 }
 
 type ObjectDef struct {
+	UID        uint64            `json:"uid,omitempty"`
 	Name       string            `json:"name"`
 	Tags       []string          `json:"tags,omitempty"`
 	Position   [3]float32        `json:"position"`
@@ -157,7 +158,12 @@ func (w *World) LoadScene(path string) error {
 }
 
 func (w *World) loadObject(objDef ObjectDef, parent *engine.GameObject) {
-	g := engine.NewGameObject(objDef.Name)
+	var g *engine.GameObject
+	if objDef.UID > 0 {
+		g = engine.NewGameObjectWithUID(objDef.Name, objDef.UID)
+	} else {
+		g = engine.NewGameObject(objDef.Name)
+	}
 	g.Tags = objDef.Tags
 	g.Transform.Position = rl.Vector3{X: objDef.Position[0], Y: objDef.Position[1], Z: objDef.Position[2]}
 	g.Transform.Rotation = rl.Vector3{X: objDef.Rotation[0], Y: objDef.Rotation[1], Z: objDef.Rotation[2]}
@@ -397,6 +403,7 @@ func (w *World) SaveScene(path string) error {
 
 func serializeObject(g *engine.GameObject) ObjectDef {
 	objDef := ObjectDef{
+		UID:      g.UID,
 		Name:     g.Name,
 		Tags:     g.Tags,
 		Position: [3]float32{g.Transform.Position.X, g.Transform.Position.Y, g.Transform.Position.Z},

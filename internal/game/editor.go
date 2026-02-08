@@ -1810,7 +1810,7 @@ type EditorRestoreState struct {
 	CameraPitch     float32    `json:"cameraPitch"`
 	CameraMoveSpeed float32    `json:"cameraMoveSpeed"`
 	GizmoMode       int        `json:"gizmoMode"`
-	SelectedObject  string     `json:"selectedObject,omitempty"`
+	SelectedUID     uint64     `json:"selectedUID,omitempty"`
 }
 
 const editorRestoreFile = ".editor_restore.json"
@@ -1837,6 +1837,11 @@ func (e *Editor) RestoreState() {
 		e.camera.MoveSpeed = state.CameraMoveSpeed
 	}
 	e.gizmoMode = GizmoMode(state.GizmoMode)
+
+	// Restore selected object by UID
+	if state.SelectedUID > 0 {
+		e.Selected = e.world.Scene.FindByUID(state.SelectedUID)
+	}
 
 	// Clean up the restore file
 	os.Remove(editorRestoreFile)
@@ -1890,6 +1895,9 @@ func (e *Editor) rebuildAndRelaunch() {
 		CameraPitch:     e.camera.Pitch,
 		CameraMoveSpeed: e.camera.MoveSpeed,
 		GizmoMode:       int(e.gizmoMode),
+	}
+	if e.Selected != nil {
+		state.SelectedUID = e.Selected.UID
 	}
 	stateJSON, _ := json.MarshalIndent(state, "", "  ")
 	if err := os.WriteFile(editorRestoreFile, stateJSON, 0644); err != nil {

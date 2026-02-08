@@ -2,9 +2,13 @@ package engine
 
 import (
 	"math"
+	"sync/atomic"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+// UID counter for generating unique IDs
+var uidCounter uint64
 
 type Transform struct {
 	Position rl.Vector3
@@ -13,6 +17,7 @@ type Transform struct {
 }
 
 type GameObject struct {
+	UID        uint64
 	Name       string
 	Tags       []string
 	Transform  Transform
@@ -26,6 +31,33 @@ type GameObject struct {
 
 func NewGameObject(name string) *GameObject {
 	return &GameObject{
+		UID:    atomic.AddUint64(&uidCounter, 1),
+		Name:   name,
+		Active: true,
+		Transform: Transform{
+			Position: rl.Vector3{},
+			Rotation: rl.Vector3{},
+			Scale:    rl.Vector3{X: 1, Y: 1, Z: 1},
+		},
+		components: make([]Component, 0),
+		Children:   make([]*GameObject, 0),
+	}
+}
+
+// NewGameObjectWithUID creates a GameObject with a specific UID (for loading from files)
+func NewGameObjectWithUID(name string, uid uint64) *GameObject {
+	// Update counter if loaded UID is higher to avoid collisions
+	for {
+		current := atomic.LoadUint64(&uidCounter)
+		if uid <= current {
+			break
+		}
+		if atomic.CompareAndSwapUint64(&uidCounter, current, uid) {
+			break
+		}
+	}
+	return &GameObject{
+		UID:    uid,
 		Name:   name,
 		Active: true,
 		Transform: Transform{

@@ -52,6 +52,15 @@ func (s *Scene) FindByName(name string) *GameObject {
 	return nil
 }
 
+func (s *Scene) FindByUID(uid uint64) *GameObject {
+	for _, g := range s.GameObjects {
+		if g.UID == uid {
+			return g
+		}
+	}
+	return nil
+}
+
 func (s *Scene) FindByTag(tag string) []*GameObject {
 	var result []*GameObject
 	for _, g := range s.GameObjects {

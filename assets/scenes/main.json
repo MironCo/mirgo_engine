@@ -1,6 +1,7 @@
 {
   "objects": [
     {
+      "uid": 5,
       "name": "Player",
       "position": [
         10,
@@ -63,6 +64,7 @@
       ]
     },
     {
+      "uid": 6,
       "name": "Floor",
       "position": [
         0,
@@ -106,6 +108,7 @@
       ]
     },
     {
+      "uid": 7,
       "name": "Duck",
       "position": [
         4.4829907,
@@ -159,6 +162,7 @@
       ]
     },
     {
+      "uid": 8,
       "name": "DirectionalLight",
       "position": [
         0,
