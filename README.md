@@ -37,6 +37,7 @@ A 3D game engine written in Go, built on top of [raylib-go](https://github.com/g
 - **Hierarchy Panel** - View and select scene objects
 - **Undo System** - Ctrl+Z to undo transform changes
 - **Scene Save** - Ctrl+S saves to JSON
+- **Game Build** - Cmd/Ctrl+B builds standalone .app bundle
 
 ### Scripting
 
@@ -78,7 +79,7 @@ go run ./cmd/test3d
 | Right Click | Delete targeted object |
 | Arrow Keys / Q / E | Adjust light direction |
 | F1 | Toggle debug overlay |
-| F2 | Toggle editor mode |
+| Cmd/Ctrl+P | Toggle editor mode |
 
 ### Editor Mode
 
@@ -90,7 +91,8 @@ go run ./cmd/test3d
 | Left Click | Select object |
 | Drag Gizmo Arrow | Move object along axis |
 | Ctrl+S | Save scene to JSON |
-| F2 | Return to game mode |
+| Cmd/Ctrl+B | Build game (.app bundle on macOS) |
+| Cmd/Ctrl+P | Return to game mode |
 
 ## Project Structure
 
@@ -114,11 +116,10 @@ internal/
     rigidbody.go                Physics body (mass, velocity, bounciness)
     boxcollider.go              Box collision shape
     spherecollider.go           Sphere collision shape
-    shooter.go                  Projectile spawning + object deletion
     cubeanimator.go             Animated movement + rotation
     scripts/                    User scripts (one file per script)
       rotator.go                Spins objects around Y axis
-      cubeanimator.go           CubeAnimator factory + serializer
+      shooter.go                Projectile spawning + object deletion
   physics/                      Physics simulation
     world.go                    Gravity, spatial hashing, collision pipeline
     aabb.go                     AABB intersection + resolution
@@ -355,3 +356,17 @@ Inverts all vertex normals in a GLTF model's binary buffer. Useful when imported
 If you pass a directory, it will find the `.gltf` file inside automatically. This command modifies the `.bin` file in place - run it again to flip back.
 
 The editor also has a "Flip Normals" button in the inspector when a GLTF model is selected.
+
+#### `build [name]`
+
+Builds a standalone game executable. On macOS, creates a proper `.app` bundle that can be double-clicked or dragged to Applications.
+
+```bash
+./mirgo-utils build          # Creates build/game.app
+./mirgo-utils build MyGame   # Creates build/MyGame.app
+```
+
+The build:
+- Compiles with `-tags game` (excludes editor code)
+- Copies assets into the bundle
+- Creates Info.plist for macOS
