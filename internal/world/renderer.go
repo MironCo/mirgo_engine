@@ -38,6 +38,7 @@ func (r *Renderer) Initialize(floorSize float32) {
 	// Normal map goes to texture slot 1 (texture1 in our shader)
 	locs := unsafe.Slice(r.Shader.Locs, rl.ShaderLocMapCubemap+1) // Enough for all shader locs
 	locs[rl.ShaderLocMapNormal] = rl.GetShaderLocation(r.Shader, "texture1")
+	locs[rl.ShaderLocMatrixNormal] = rl.GetShaderLocation(r.Shader, "matNormal")
 
 	// Create shadowmap render texture
 	r.ShadowMap = loadShadowmapRenderTexture(ShadowMapResolution, ShadowMapResolution)

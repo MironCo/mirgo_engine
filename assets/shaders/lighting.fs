@@ -56,36 +56,9 @@ float calculateShadow(vec3 normal, vec3 lightDirection)
 void main()
 {
     vec3 normal = normalize(fragNormal);
-    bool hasValidTangent = length(fragTangent) > 0.1;
-
-    // Check if we have valid tangent data (non-zero) and sample normal map
-    if (hasValidTangent)
-    {
-        // Build TBN matrix to transform from tangent space to world space
-        vec3 T = normalize(fragTangent);
-        vec3 B = normalize(fragBitangent);
-        vec3 N = normalize(fragNormal);
-        mat3 TBN = mat3(T, B, N);
-
-        // Sample normal map and convert from [0,1] to [-1,1] range
-        vec3 normalMap = texture(texture1, fragTexCoord).rgb;
-        normalMap = normalMap * 2.0 - 1.0;
-
-        // Normal map strength (1.0 = normal, higher = exaggerated)
-        float normalStrength = 1.0;
-        normalMap.xy *= normalStrength;
-        normalMap = normalize(normalMap);
-
-        // Only apply if normal map has actual data (not just flat blue)
-        if (abs(normalMap.x) > 0.01 || abs(normalMap.y) > 0.01)
-        {
-            normal = normalize(TBN * normalMap);
-        }
-    }
 
     vec3 viewDir = normalize(viewPos - fragPosition);
-    // lightDir is direction light points (e.g. down), use directly
-    vec3 lightDirection = normalize(lightDir);
+    vec3 lightDirection = normalize(-lightDir);
 
     // Calculate shadow factor (pass normal and light dir for slope-scaled bias)
     float shadow = calculateShadow(normal, lightDirection);
@@ -94,21 +67,18 @@ void main()
     vec4 texColor = texture(texture0, fragTexCoord);
     vec3 baseColor = texColor.rgb * colDiffuse.rgb;
 
-    // Diffuse lighting (wrap lighting for softer look)
+    // Diffuse lighting
     float NdotL = dot(normal, lightDirection);
     float diff = max(NdotL, 0.0);
-    // Add slight wrap lighting for softer shadows on geometry
-    float wrapDiff = max(NdotL * 0.5 + 0.5, 0.0);
-    diff = mix(diff, wrapDiff, 0.3);
 
     // Specular (Blinn-Phong) - shininess based on roughness
     vec3 halfwayDir = normalize(lightDirection + viewDir);
     float NdotH = max(dot(normal, halfwayDir), 0.0);
     // Roughness affects specular power: rough = wide soft highlight, smooth = tight sharp highlight
-    float shininess = mix(256.0, 8.0, roughness);
+    float shininess = mix(64.0, 4.0, roughness);
     float spec = pow(NdotH, shininess);
     // Roughness also affects specular intensity
-    float specIntensity = mix(2.0, 0.2, roughness);
+    float specIntensity = mix(1.0, 0.1, roughness);
 
     // Fresnel effect - brighter edges (stronger for metals)
     float fresnel = pow(1.0 - max(dot(normal, viewDir), 0.0), 3.0);
