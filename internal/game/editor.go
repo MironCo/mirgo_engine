@@ -51,6 +51,7 @@ type EditorCamera struct {
 
 type Editor struct {
 	Active   bool
+	Paused   bool // True if entered via pause (preserves scene state)
 	camera   EditorCamera
 	Selected *engine.GameObject
 	world    *world.World
@@ -117,10 +118,31 @@ func NewEditor(w *world.World) *Editor {
 
 func (e *Editor) Enter(currentCam rl.Camera3D) {
 	e.Active = true
+	e.Paused = false
 	rl.EnableCursor()
 
 	// Reload scene from disk to undo all play mode changes
 	e.world.ResetScene()
+	e.Selected = nil
+
+	e.camera.Position = currentCam.Position
+
+	dir := rl.Vector3Subtract(currentCam.Target, currentCam.Position)
+	dir = rl.Vector3Normalize(dir)
+	e.camera.Pitch = float32(math.Asin(float64(dir.Y))) * rl.Rad2deg
+	e.camera.Yaw = float32(math.Atan2(float64(dir.Z), float64(dir.X))) * rl.Rad2deg
+
+	// Initialize raygui dark style
+	initRayguiStyle()
+}
+
+// Pause enters editor mode without resetting the scene (preserves physics state)
+func (e *Editor) Pause(currentCam rl.Camera3D) {
+	e.Active = true
+	e.Paused = true
+	rl.EnableCursor()
+
+	// Don't reset scene - preserve current state
 	e.Selected = nil
 
 	e.camera.Position = currentCam.Position
@@ -173,6 +195,7 @@ func initRayguiStyle() {
 
 func (e *Editor) Exit() {
 	e.Active = false
+	e.Paused = false
 	e.Selected = nil
 	e.dragging = false
 	e.hoveredAxis = -1
@@ -583,7 +606,11 @@ func (e *Editor) Draw3D() {
 func (e *Editor) DrawUI() {
 	// Top bar
 	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), 32, rl.NewColor(20, 20, 20, 220))
-	rl.DrawText("EDITOR", 10, 6, 20, rl.Yellow)
+	if e.Paused {
+		rl.DrawText("PAUSED", 10, 6, 20, rl.Orange)
+	} else {
+		rl.DrawText("EDITOR", 10, 6, 20, rl.Yellow)
+	}
 	// Gizmo mode indicator
 	modeNames := [3]string{"[W] Move", "[E] Rotate", "[R] Scale"}
 	for i, name := range modeNames {
@@ -594,7 +621,11 @@ func (e *Editor) DrawUI() {
 		}
 		rl.DrawText(name, x, 8, 16, color)
 	}
-	rl.DrawText("| Ctrl+S: Save | Ctrl+B: Build | Ctrl+Z: Undo", 350, 8, 16, rl.LightGray)
+	helpText := "| Ctrl+S: Save | Ctrl+B: Build | Ctrl+Z: Undo"
+	if e.Paused {
+		helpText = "| P: Resume | Ctrl+S: Save"
+	}
+	rl.DrawText(helpText, 350, 8, 16, rl.LightGray)
 	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-100, 8, 16, rl.LightGray)
 
 	// Save message flash
