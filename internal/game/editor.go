@@ -1167,8 +1167,12 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 				rl.DrawText(fmt.Sprintf("  Emissive: %.2f", comp.Material.Emissive), indent, y, 11, rl.Gray)
 				y += 16
 			}
+		} else if comp.FilePath != "" {
+			// GLTF model using built-in materials
+			rl.DrawText("Material: Built-in", indent, y, 12, rl.Gray)
+			y += 16
 		} else {
-			// Inline material properties (editable)
+			// Generated mesh - inline material properties (editable)
 			// Color dropdown would go here - for now just display
 			rl.DrawText(fmt.Sprintf("Color: %s", colorName(comp.Color)), indent, y, 12, propColor)
 			y += 18

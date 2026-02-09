@@ -99,16 +99,21 @@ func (m *ModelRenderer) Draw() {
 		color = m.Color
 	}
 
-	// Apply material to generated meshes (not file-loaded models which have textures)
-	if m.FilePath == "" {
-		// If material has a texture, use it; otherwise use color
-		if m.Material != nil && m.Material.Albedo.ID > 0 {
-			m.Model.Materials.Maps.Texture = m.Material.Albedo
-			m.Model.Materials.Maps.Color = rl.White // tint white so texture shows true color
-		} else {
-			m.Model.Materials.Maps.Color = color
+	// Apply material texture/color to ALL materials (GLTF models can have multiple)
+	materials := unsafe.Slice(m.Model.Materials, m.Model.MaterialCount)
+	if m.Material != nil && m.Material.Albedo.ID > 0 {
+		// Material has texture - apply to all models (overrides GLTF textures)
+		for i := range materials {
+			materials[i].Maps.Texture = m.Material.Albedo
+			materials[i].Maps.Color = rl.White // tint white so texture shows true color
+		}
+	} else if m.FilePath == "" {
+		// Generated mesh with no material texture - use color
+		for i := range materials {
+			materials[i].Maps.Color = color
 		}
 	}
+	// else: file-loaded model with no material texture - keep original GLTF texture
 
 	if m.shader.ID > 0 {
 		metallicLoc := rl.GetShaderLocation(m.shader, "metallic")
