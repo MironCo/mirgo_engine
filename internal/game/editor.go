@@ -1153,23 +1153,39 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 			rl.DrawText(fmt.Sprintf("Mesh: %s", comp.MeshType), indent, y, 12, propColor)
 			y += 16
 		}
-		// Color dropdown would go here - for now just display
-		rl.DrawText(fmt.Sprintf("Color: %s", colorName(comp.Color)), indent, y, 12, propColor)
-		y += 18
 
-		// Material properties
-		id := fmt.Sprintf("mr%d", compIdx)
-		rl.DrawText("Metallic", indent, y+2, 12, propColor)
-		comp.Metallic = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".met", comp.Metallic)
-		y += fieldH + 2
+		// Material asset reference
+		if comp.MaterialPath != "" {
+			rl.DrawText(fmt.Sprintf("Material: %s", filepath.Base(comp.MaterialPath)), indent, y, 12, rl.SkyBlue)
+			y += 16
+			// Show material properties (read-only from asset)
+			if comp.Material != nil {
+				rl.DrawText(fmt.Sprintf("  Metallic: %.2f", comp.Material.Metallic), indent, y, 11, rl.Gray)
+				y += 14
+				rl.DrawText(fmt.Sprintf("  Roughness: %.2f", comp.Material.Roughness), indent, y, 11, rl.Gray)
+				y += 14
+				rl.DrawText(fmt.Sprintf("  Emissive: %.2f", comp.Material.Emissive), indent, y, 11, rl.Gray)
+				y += 16
+			}
+		} else {
+			// Inline material properties (editable)
+			// Color dropdown would go here - for now just display
+			rl.DrawText(fmt.Sprintf("Color: %s", colorName(comp.Color)), indent, y, 12, propColor)
+			y += 18
 
-		rl.DrawText("Roughness", indent, y+2, 12, propColor)
-		comp.Roughness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".rough", comp.Roughness)
-		y += fieldH + 2
+			id := fmt.Sprintf("mr%d", compIdx)
+			rl.DrawText("Metallic", indent, y+2, 12, propColor)
+			comp.Metallic = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".met", comp.Metallic)
+			y += fieldH + 2
 
-		rl.DrawText("Emissive", indent, y+2, 12, propColor)
-		comp.Emissive = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".emit", comp.Emissive)
-		y += fieldH + 4
+			rl.DrawText("Roughness", indent, y+2, 12, propColor)
+			comp.Roughness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".rough", comp.Roughness)
+			y += fieldH + 2
+
+			rl.DrawText("Emissive", indent, y+2, 12, propColor)
+			comp.Emissive = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".emit", comp.Emissive)
+			y += fieldH + 4
+		}
 
 		// Flip Normals button for GLTF models
 		if comp.FilePath != "" {
