@@ -259,6 +259,12 @@ func (e *Editor) Update(deltaTime float32) {
 		}
 	}
 
+	// Ctrl+D: duplicate selected object
+	if e.Selected != nil && (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyD) {
+		newObj := e.world.DuplicateObject(e.Selected)
+		e.Selected = newObj
+	}
+
 	// Cmd+Delete (Mac) or Ctrl+Delete: delete selected object
 	if e.Selected != nil && (rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyLeftControl)) && rl.IsKeyPressed(rl.KeyBackspace) {
 		e.deleteSelectedObject()

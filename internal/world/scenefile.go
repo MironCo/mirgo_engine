@@ -382,6 +382,92 @@ func loadFPSController(g *engine.GameObject, raw json.RawMessage) {
 	g.AddComponent(fps)
 }
 
+// --- Duplicating ---
+
+// DuplicateObject creates a deep copy of a GameObject and adds it to the scene.
+// Returns the new root object.
+func (w *World) DuplicateObject(original *engine.GameObject) *engine.GameObject {
+	// Serialize the object (including children)
+	objDef := serializeObject(original)
+
+	// Clear UIDs so new ones are generated
+	clearUIDs(&objDef)
+
+	// Rename to indicate copy
+	objDef.Name = objDef.Name + "_copy"
+
+	// Offset position slightly so it's visible
+	objDef.Position[0] += 1.0
+
+	// Load as new object with same parent
+	return w.loadObjectAndReturn(objDef, original.Parent)
+}
+
+func clearUIDs(def *ObjectDef) {
+	def.UID = 0
+	for i := range def.Children {
+		clearUIDs(&def.Children[i])
+	}
+}
+
+// loadObjectAndReturn is like loadObject but returns the created object
+func (w *World) loadObjectAndReturn(objDef ObjectDef, parent *engine.GameObject) *engine.GameObject {
+	g := engine.NewGameObject(objDef.Name)
+	g.Tags = objDef.Tags
+	g.Transform.Position = rl.Vector3{X: objDef.Position[0], Y: objDef.Position[1], Z: objDef.Position[2]}
+	g.Transform.Rotation = rl.Vector3{X: objDef.Rotation[0], Y: objDef.Rotation[1], Z: objDef.Rotation[2]}
+
+	if objDef.Scale == [3]float32{} {
+		g.Transform.Scale = rl.Vector3{X: 1, Y: 1, Z: 1}
+	} else {
+		g.Transform.Scale = rl.Vector3{X: objDef.Scale[0], Y: objDef.Scale[1], Z: objDef.Scale[2]}
+	}
+
+	for _, raw := range objDef.Components {
+		var header componentHeader
+		if err := json.Unmarshal(raw, &header); err != nil {
+			continue
+		}
+
+		switch header.Type {
+		case "ModelRenderer":
+			w.loadModelRenderer(g, raw)
+		case "BoxCollider":
+			w.loadBoxCollider(g, raw)
+		case "SphereCollider":
+			w.loadSphereCollider(g, raw)
+		case "Rigidbody":
+			w.loadRigidbody(g, raw)
+		case "DirectionalLight":
+			w.loadDirectionalLight(g, raw)
+		case "Camera":
+			w.loadCamera(g, raw)
+		case "FPSController":
+			loadFPSController(g, raw)
+			g.AddComponent(&PlayerCollision{})
+		case "Script":
+			loadScript(g, raw)
+		}
+	}
+
+	if parent != nil {
+		parent.AddChild(g)
+	}
+
+	w.Scene.AddGameObject(g)
+
+	if parent == nil {
+		w.PhysicsWorld.AddObject(g)
+	}
+
+	// Recursively load children
+	for _, childDef := range objDef.Children {
+		w.loadObjectAndReturn(childDef, g)
+	}
+
+	return g
+}
+
 // --- Saving ---
 
 func (w *World) SaveScene(path string) error {
