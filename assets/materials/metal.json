@@ -1,7 +1,7 @@
 {
   "name": "Brushed Metal",
   "color": "Gray",
-  "metallic": 0.9,
+  "metallic": 1.310703,
   "roughness": 0.3,
-  "emissive": 0.0
+  "emissive": 0
 }

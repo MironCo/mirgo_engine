@@ -1,8 +1,8 @@
 {
   "name": "Brick",
   "color": "White",
-  "metallic": 0.0,
-  "roughness": 0.8,
-  "emissive": 0.0,
+  "metallic": 0.16308594,
+  "roughness": 0.88,
+  "emissive": 0.03285157,
   "albedo": "assets/models/building-a/Textures/colormap.png"
 }

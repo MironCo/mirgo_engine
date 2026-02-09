@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"test3d/internal/assets"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 	"test3d/internal/world"
@@ -1158,14 +1159,29 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		if comp.MaterialPath != "" {
 			rl.DrawText(fmt.Sprintf("Material: %s", filepath.Base(comp.MaterialPath)), indent, y, 12, rl.SkyBlue)
 			y += 16
-			// Show material properties (read-only from asset)
+			// Editable material properties (saves to material file)
 			if comp.Material != nil {
-				rl.DrawText(fmt.Sprintf("  Metallic: %.2f", comp.Material.Metallic), indent, y, 11, rl.Gray)
-				y += 14
-				rl.DrawText(fmt.Sprintf("  Roughness: %.2f", comp.Material.Roughness), indent, y, 11, rl.Gray)
-				y += 14
-				rl.DrawText(fmt.Sprintf("  Emissive: %.2f", comp.Material.Emissive), indent, y, 11, rl.Gray)
-				y += 16
+				id := fmt.Sprintf("mat%d", compIdx)
+				oldMet := comp.Material.Metallic
+				oldRough := comp.Material.Roughness
+				oldEmit := comp.Material.Emissive
+
+				rl.DrawText("Metallic", indent, y+2, 12, propColor)
+				comp.Material.Metallic = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".met", comp.Material.Metallic)
+				y += fieldH + 2
+
+				rl.DrawText("Roughness", indent, y+2, 12, propColor)
+				comp.Material.Roughness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".rough", comp.Material.Roughness)
+				y += fieldH + 2
+
+				rl.DrawText("Emissive", indent, y+2, 12, propColor)
+				comp.Material.Emissive = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".emit", comp.Material.Emissive)
+				y += fieldH + 4
+
+				// Save material if any value changed
+				if comp.Material.Metallic != oldMet || comp.Material.Roughness != oldRough || comp.Material.Emissive != oldEmit {
+					assets.SaveMaterial(comp.MaterialPath, comp.Material)
+				}
 			}
 		} else if comp.FilePath != "" {
 			// GLTF model using built-in materials

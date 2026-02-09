@@ -9,12 +9,13 @@ import (
 
 // Material defines surface properties for rendering
 type Material struct {
-	Name      string
-	Color     rl.Color
-	Metallic  float32
-	Roughness float32
-	Emissive  float32
-	Albedo    rl.Texture2D // diffuse/albedo texture (if ID > 0, use texture instead of color)
+	Name       string
+	Color      rl.Color
+	Metallic   float32
+	Roughness  float32
+	Emissive   float32
+	Albedo     rl.Texture2D // diffuse/albedo texture (if ID > 0, use texture instead of color)
+	AlbedoPath string       // path to albedo texture (for saving)
 }
 
 // materialDef is the JSON format for material files
@@ -65,6 +66,16 @@ func LookupColor(name string) rl.Color {
 		return c
 	}
 	return rl.White
+}
+
+// LookupColorName returns the name of a color, or "White" if not found
+func LookupColorName(c rl.Color) string {
+	for name, col := range colorByName {
+		if col.R == c.R && col.G == c.G && col.B == c.B && col.A == c.A {
+			return name
+		}
+	}
+	return "White"
 }
 
 func Init() {
@@ -143,10 +154,30 @@ func LoadMaterial(path string) *Material {
 	// Load albedo texture if specified
 	if def.Albedo != "" {
 		material.Albedo = LoadTexture(def.Albedo)
+		material.AlbedoPath = def.Albedo
 	}
 
 	manager.materials[path] = material
 	return material
+}
+
+// SaveMaterial saves a material back to its JSON file
+func SaveMaterial(path string, mat *Material) error {
+	def := materialDef{
+		Name:      mat.Name,
+		Color:     LookupColorName(mat.Color),
+		Metallic:  mat.Metallic,
+		Roughness: mat.Roughness,
+		Emissive:  mat.Emissive,
+		Albedo:    mat.AlbedoPath,
+	}
+
+	data, err := json.MarshalIndent(def, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
 }
 
 func Unload() {

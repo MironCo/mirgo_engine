@@ -1,7 +1,7 @@
 {
   "name": "Emissive Glow",
   "color": "Orange",
-  "metallic": 0.0,
+  "metallic": 0,
   "roughness": 0.5,
-  "emissive": 2.0
+  "emissive": 8.164765
 }
