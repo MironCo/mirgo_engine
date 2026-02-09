@@ -227,26 +227,19 @@ func (p *PhysicsWorld) EditorRaycast(origin, direction rl.Vector3, maxDistance f
 
 		// No collider - try ModelRenderer bounding box
 		if mr := engine.GetComponent[*components.ModelRenderer](obj); mr != nil {
-			// Get model bounding box and transform it to world space
+			// Get model bounding box in model space
 			bounds := rl.GetModelBoundingBox(mr.Model)
-
-			// Apply object transform to bounding box
 			pos := obj.WorldPosition()
 			scale := obj.WorldScale()
 
-			// Scale and translate the bounding box
-			worldMin := rl.Vector3{
-				X: pos.X + bounds.Min.X*scale.X,
-				Y: pos.Y + bounds.Min.Y*scale.Y,
-				Z: pos.Z + bounds.Min.Z*scale.Z,
-			}
-			worldMax := rl.Vector3{
-				X: pos.X + bounds.Max.X*scale.X,
-				Y: pos.Y + bounds.Max.Y*scale.Y,
-				Z: pos.Z + bounds.Max.Z*scale.Z,
-			}
+			// Calculate half-extents (size/2) from bounds, scaled
+			halfX := (bounds.Max.X - bounds.Min.X) / 2 * abs(scale.X)
+			halfY := (bounds.Max.Y - bounds.Min.Y) / 2 * abs(scale.Y)
+			halfZ := (bounds.Max.Z - bounds.Min.Z) / 2 * abs(scale.Z)
 
-			// Create world-space bounding box
+			// World bounding box centered at object position
+			worldMin := rl.Vector3{X: pos.X - halfX, Y: pos.Y - halfY, Z: pos.Z - halfZ}
+			worldMax := rl.Vector3{X: pos.X + halfX, Y: pos.Y + halfY, Z: pos.Z + halfZ}
 			worldBounds := rl.NewBoundingBox(worldMin, worldMax)
 
 			// Use Raylib's ray-box collision

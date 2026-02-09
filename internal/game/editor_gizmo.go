@@ -201,6 +201,26 @@ func (e *Editor) Draw3D() {
 			// Draw radius wireframe
 			rl.DrawSphereWires(pos, pl.Radius, 8, 8, rl.Fade(pl.Color, 0.3))
 		}
+
+		// Debug: draw bounding boxes for objects without colliders
+		if engine.GetComponent[*components.BoxCollider](g) == nil &&
+			engine.GetComponent[*components.SphereCollider](g) == nil {
+			if mr := engine.GetComponent[*components.ModelRenderer](g); mr != nil {
+				bounds := rl.GetModelBoundingBox(mr.Model)
+				pos := g.WorldPosition()
+				scale := g.WorldScale()
+
+				// Calculate size from bounds (always positive)
+				size := rl.Vector3{
+					X: (bounds.Max.X - bounds.Min.X) * absF(scale.X),
+					Y: (bounds.Max.Y - bounds.Min.Y) * absF(scale.Y),
+					Z: (bounds.Max.Z - bounds.Min.Z) * absF(scale.Z),
+				}
+
+				// Bounding box is centered at object position
+				rl.DrawCubeWiresV(pos, size, rl.Magenta)
+			}
+		}
 	}
 
 	if e.Selected == nil {
@@ -223,6 +243,26 @@ func (e *Editor) Draw3D() {
 		// Highlight selected point light
 		pos := pl.GetPosition()
 		rl.DrawSphereWires(pos, pl.Radius, 12, 12, rl.Yellow)
+	} else if mr := engine.GetComponent[*components.ModelRenderer](e.Selected); mr != nil {
+		// Draw model bounding box for objects without colliders
+		bounds := rl.GetModelBoundingBox(mr.Model)
+		pos := e.Selected.WorldPosition()
+		scale := e.Selected.WorldScale()
+
+		// Calculate world-space bounding box size
+		size := rl.Vector3{
+			X: (bounds.Max.X - bounds.Min.X) * scale.X,
+			Y: (bounds.Max.Y - bounds.Min.Y) * scale.Y,
+			Z: (bounds.Max.Z - bounds.Min.Z) * scale.Z,
+		}
+		// Calculate center offset
+		localCenter := rl.Vector3{
+			X: (bounds.Min.X + bounds.Max.X) / 2 * scale.X,
+			Y: (bounds.Min.Y + bounds.Max.Y) / 2 * scale.Y,
+			Z: (bounds.Min.Z + bounds.Max.Z) / 2 * scale.Z,
+		}
+		worldCenter := rl.Vector3Add(pos, localCenter)
+		rl.DrawCubeWiresV(worldCenter, size, rl.Yellow)
 	}
 
 	// Transform gizmo
@@ -365,4 +405,11 @@ func drawRotatedBoxWires(center, size, rotation rl.Vector3, color rl.Color) {
 	rl.DrawLine3D(corners[1], corners[5], color)
 	rl.DrawLine3D(corners[2], corners[6], color)
 	rl.DrawLine3D(corners[3], corners[7], color)
+}
+
+func absF(x float32) float32 {
+	if x < 0 {
+		return -x
+	}
+	return x
 }
