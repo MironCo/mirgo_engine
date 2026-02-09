@@ -27,7 +27,7 @@ This compiles and launches the engine with the default scene.
 
 ### Understanding the Editor
 
-When you launch the engine, you start in **Game Mode**. Press `Cmd/Ctrl+P` to enter **Editor Mode**.
+When you launch the engine, you start in **Editor Mode**. Press `Cmd/Ctrl+P` to toggle between editor and game mode.
 
 **Editor Controls:**
 - **Right Mouse + Drag** - Look around
@@ -245,7 +245,10 @@ When you're ready to distribute:
 1. Press `Cmd/Ctrl+B` in the editor, or
 2. Run `./mirgo-utils build MyGame`
 
-This creates a standalone `.app` bundle (macOS) with all assets included.
+This creates a standalone executable with all assets included:
+- **macOS**: `.app` bundle
+- **Windows**: `.exe` executable
+- **Linux**: Standard binary
 
 ## Next Steps
 
