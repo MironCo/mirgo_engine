@@ -122,6 +122,20 @@ func (w *World) Raycast(origin, direction rl.Vector3, maxDistance float32) (engi
 	}, true
 }
 
+// EditorRaycast performs raycast that also hits objects without colliders (using model bounds)
+func (w *World) EditorRaycast(origin, direction rl.Vector3, maxDistance float32) (engine.RaycastResult, bool) {
+	hit, ok := w.PhysicsWorld.EditorRaycast(origin, direction, maxDistance, w.Scene.GameObjects)
+	if !ok {
+		return engine.RaycastResult{}, false
+	}
+	return engine.RaycastResult{
+		GameObject: hit.GameObject,
+		Point:      hit.Point,
+		Normal:     hit.Normal,
+		Distance:   hit.Distance,
+	}, true
+}
+
 func (w *World) Unload() {
 	w.Renderer.Unload(w.Scene.GameObjects)
 	assets.Unload()

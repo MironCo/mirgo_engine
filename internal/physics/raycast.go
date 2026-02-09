@@ -187,3 +187,83 @@ func abs(x float32) float32 {
 	}
 	return x
 }
+
+// EditorRaycast performs raycast against all objects, including those without colliders
+// by using their ModelRenderer's bounding box as a fallback
+func (p *PhysicsWorld) EditorRaycast(origin, direction rl.Vector3, maxDistance float32, allObjects []*engine.GameObject) (RaycastHit, bool) {
+	direction = rl.Vector3Normalize(direction)
+	var closestHit RaycastHit
+	closestHit.Distance = maxDistance
+	hit := false
+
+	for _, obj := range allObjects {
+		if !obj.Active {
+			continue
+		}
+
+		// First try box collider
+		if box := engine.GetComponent[*components.BoxCollider](obj); box != nil {
+			if hitInfo, ok := raycastBox(origin, direction, box, maxDistance); ok {
+				if hitInfo.Distance < closestHit.Distance {
+					closestHit = hitInfo
+					closestHit.GameObject = obj
+					hit = true
+				}
+			}
+			continue // If has collider, don't check model bounds
+		}
+
+		// Try sphere collider
+		if sphere := engine.GetComponent[*components.SphereCollider](obj); sphere != nil {
+			if hitInfo, ok := raycastSphere(origin, direction, sphere, maxDistance); ok {
+				if hitInfo.Distance < closestHit.Distance {
+					closestHit = hitInfo
+					closestHit.GameObject = obj
+					hit = true
+				}
+			}
+			continue // If has collider, don't check model bounds
+		}
+
+		// No collider - try ModelRenderer bounding box
+		if mr := engine.GetComponent[*components.ModelRenderer](obj); mr != nil {
+			// Get model bounding box and transform it to world space
+			bounds := rl.GetModelBoundingBox(mr.Model)
+
+			// Apply object transform to bounding box
+			pos := obj.WorldPosition()
+			scale := obj.WorldScale()
+
+			// Scale and translate the bounding box
+			worldMin := rl.Vector3{
+				X: pos.X + bounds.Min.X*scale.X,
+				Y: pos.Y + bounds.Min.Y*scale.Y,
+				Z: pos.Z + bounds.Min.Z*scale.Z,
+			}
+			worldMax := rl.Vector3{
+				X: pos.X + bounds.Max.X*scale.X,
+				Y: pos.Y + bounds.Max.Y*scale.Y,
+				Z: pos.Z + bounds.Max.Z*scale.Z,
+			}
+
+			// Create world-space bounding box
+			worldBounds := rl.NewBoundingBox(worldMin, worldMax)
+
+			// Use Raylib's ray-box collision
+			ray := rl.Ray{Position: origin, Direction: direction}
+			collision := rl.GetRayCollisionBox(ray, worldBounds)
+
+			if collision.Hit && collision.Distance < closestHit.Distance && collision.Distance <= maxDistance {
+				closestHit = RaycastHit{
+					GameObject: obj,
+					Point:      collision.Point,
+					Normal:     collision.Normal,
+					Distance:   collision.Distance,
+				}
+				hit = true
+			}
+		}
+	}
+
+	return closestHit, hit
+}

@@ -83,9 +83,21 @@ type Editor struct {
 	lastClickedAsset     string           // Path of last clicked asset
 
 	// Script hot-reload
-	scriptModTimes    map[string]int64 // path -> mod time (unix nano)
-	scriptsChanged    bool
-	lastScriptCheck   float64
+	scriptModTimes  map[string]int64 // path -> mod time (unix nano)
+	scriptsChanged  bool
+	lastScriptCheck float64
+
+	// Drag-and-drop state
+	draggingAsset       bool         // True if dragging an asset from the browser
+	draggedAsset        *AssetEntry  // The asset being dragged
+	draggingHierarchy   bool         // True if dragging an object in hierarchy
+	draggedObject       *engine.GameObject // The object being dragged for reparenting
+	hierarchyDropTarget *engine.GameObject // Target for hierarchy drop (parent candidate)
+	hierarchyDropIndex  int          // Index where to drop (-1 = as child, >= 0 = at position)
+
+	// Name editing state
+	editingName    bool   // True if editing the object name
+	nameEditBuffer string // Current text in name edit field
 }
 
 // AssetEntry represents a file or folder in the asset browser
@@ -341,7 +353,7 @@ func (e *Editor) Update(deltaTime float32) {
 			}
 		}
 
-		hit, ok := e.world.Raycast(ray.Position, ray.Direction, 1000)
+		hit, ok := e.world.EditorRaycast(ray.Position, ray.Direction, 1000)
 		if ok {
 			e.Selected = hit.GameObject
 		} else {
@@ -462,6 +474,22 @@ func (e *Editor) DrawUI() {
 		e.drawAssetBrowser()
 	}
 
+	// Draw material drag indicator
+	if e.draggingAsset && e.draggedAsset != nil {
+		mousePos := rl.GetMousePosition()
+		rl.DrawRectangle(int32(mousePos.X)+12, int32(mousePos.Y)-10, 80, 20, rl.NewColor(40, 60, 80, 220))
+		name := e.draggedAsset.Name
+		if len(name) > 12 {
+			name = name[:11] + "…"
+		}
+		rl.DrawText(name, int32(mousePos.X)+16, int32(mousePos.Y)-6, 12, rl.SkyBlue)
+
+		// Handle drop on mouse release
+		if rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+			e.handleMaterialDrop()
+		}
+	}
+
 	// Set cursor based on field hover state
 	if e.fieldHoveredAny || e.fieldDragging {
 		rl.SetMouseCursor(rl.MouseCursorResizeEW)
@@ -529,6 +557,9 @@ func (e *Editor) drawHierarchy() {
 		e.hierarchyScroll = maxScroll
 	}
 
+	// Reset drop target each frame
+	e.hierarchyDropTarget = nil
+
 	// Clip to panel area
 	rl.BeginScissorMode(panelX, panelY+24, panelW, panelH-24)
 
@@ -543,16 +574,23 @@ func (e *Editor) drawHierarchy() {
 		// Hover highlight
 		hovered := mouseInPanel && mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH)
 		selected := e.Selected == g
+		isDragTarget := e.draggingHierarchy && hovered && e.draggedObject != g && !e.isDescendantOf(g, e.draggedObject)
 
-		if selected {
+		if isDragTarget {
+			// Highlight as drop target
+			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(50, 80, 120, 200))
+			e.hierarchyDropTarget = g
+		} else if selected {
 			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(80, 80, 20, 180))
 		} else if hovered {
 			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(50, 50, 50, 150))
 		}
 
-		// Click to select (but not if we just clicked the New button)
-		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !clickedNewButton {
+		// Start drag on mouse down (if not already dragging)
+		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !clickedNewButton && !e.draggingHierarchy {
 			e.Selected = g
+			e.draggingHierarchy = true
+			e.draggedObject = g
 		}
 
 		// Compute depth for indentation
@@ -568,10 +606,96 @@ func (e *Editor) drawHierarchy() {
 		if selected {
 			textColor = rl.Yellow
 		}
+		if e.draggingHierarchy && e.draggedObject == g {
+			textColor = rl.SkyBlue // Indicate dragged item
+		}
 		rl.DrawText(g.Name, panelX+indent, itemY+4, 14, textColor)
 	}
 
 	rl.EndScissorMode()
+
+	// "Unparent" drop zone at bottom of hierarchy (drawn outside scissor mode)
+	if e.draggingHierarchy && e.draggedObject != nil && e.draggedObject.Parent != nil {
+		unparentY := panelY + panelH - itemH - 4
+		unparentHovered := mouseInPanel && mousePos.Y >= float32(unparentY) && mousePos.Y <= float32(panelY+panelH)
+
+		bgColor := rl.NewColor(60, 40, 40, 200)
+		if unparentHovered {
+			bgColor = rl.NewColor(100, 60, 60, 220)
+			e.hierarchyDropTarget = nil // nil means unparent
+			e.hierarchyDropIndex = -2   // special value for unparent
+		}
+		rl.DrawRectangle(panelX, unparentY, panelW, itemH, bgColor)
+		rl.DrawText("-- Unparent --", panelX+50, unparentY+4, 14, rl.LightGray)
+	}
+
+	// Handle drop on mouse release
+	if e.draggingHierarchy && rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+		if e.draggedObject != nil {
+			if e.hierarchyDropIndex == -2 {
+				// Unparent
+				e.reparentObject(e.draggedObject, nil)
+			} else if e.hierarchyDropTarget != nil && e.hierarchyDropTarget != e.draggedObject {
+				// Reparent to drop target
+				e.reparentObject(e.draggedObject, e.hierarchyDropTarget)
+			}
+		}
+		e.draggingHierarchy = false
+		e.draggedObject = nil
+		e.hierarchyDropTarget = nil
+		e.hierarchyDropIndex = 0
+	}
+
+	// Draw drag indicator if dragging
+	if e.draggingHierarchy && e.draggedObject != nil {
+		rl.DrawText(e.draggedObject.Name, int32(mousePos.X)+10, int32(mousePos.Y)-8, 12, rl.SkyBlue)
+	}
+}
+
+// isDescendantOf checks if 'potential' is a descendant of 'ancestor'
+func (e *Editor) isDescendantOf(potential, ancestor *engine.GameObject) bool {
+	p := potential.Parent
+	for p != nil {
+		if p == ancestor {
+			return true
+		}
+		p = p.Parent
+	}
+	return false
+}
+
+// reparentObject changes the parent of an object, preserving world position
+func (e *Editor) reparentObject(child, newParent *engine.GameObject) {
+	if child == nil || child == newParent {
+		return
+	}
+
+	// Don't allow parenting to a descendant
+	if newParent != nil && e.isDescendantOf(newParent, child) {
+		return
+	}
+
+	// Store world position before reparenting
+	worldPos := child.WorldPosition()
+
+	// Remove from old parent
+	if child.Parent != nil {
+		child.Parent.RemoveChild(child)
+	}
+
+	// Add to new parent
+	if newParent != nil {
+		newParent.AddChild(child)
+		// Convert world position to new local position
+		parentWorldPos := newParent.WorldPosition()
+		child.Transform.Position = rl.Vector3Subtract(worldPos, parentWorldPos)
+	} else {
+		child.Parent = nil
+		child.Transform.Position = worldPos
+	}
+
+	e.saveMsg = fmt.Sprintf("Reparented %s", child.Name)
+	e.saveMsgTime = rl.GetTime()
 }
 
 // drawInspector draws the selected object's inspector on the right.
@@ -606,9 +730,77 @@ func (e *Editor) drawInspector() {
 
 	y := panelY + 8 - e.inspectorScroll
 
-	// Name
-	rl.DrawText(e.Selected.Name, panelX+10, y, 20, rl.Yellow)
-	y += 28
+	// Name (editable)
+	nameFieldW := panelW - 20
+	nameFieldH := int32(24)
+	nameFieldX := panelX + 10
+	nameFieldY := y
+
+	nameHovered := mousePos.X >= float32(nameFieldX) && mousePos.X <= float32(nameFieldX+nameFieldW) &&
+		mousePos.Y >= float32(nameFieldY) && mousePos.Y <= float32(nameFieldY+nameFieldH)
+
+	// Background for name field
+	nameBgColor := rl.NewColor(40, 40, 45, 255)
+	if e.editingName {
+		nameBgColor = rl.NewColor(50, 50, 60, 255)
+	} else if nameHovered {
+		nameBgColor = rl.NewColor(45, 45, 50, 255)
+	}
+	rl.DrawRectangle(nameFieldX, nameFieldY, nameFieldW, nameFieldH, nameBgColor)
+	rl.DrawRectangleLines(nameFieldX, nameFieldY, nameFieldW, nameFieldH, rl.NewColor(70, 70, 80, 255))
+
+	if e.editingName {
+		// Draw editing text with cursor
+		rl.DrawText(e.nameEditBuffer+"_", nameFieldX+6, nameFieldY+4, 16, rl.White)
+
+		// Handle typing
+		for {
+			key := rl.GetCharPressed()
+			if key == 0 {
+				break
+			}
+			e.nameEditBuffer += string(rune(key))
+		}
+
+		// Backspace
+		if rl.IsKeyPressed(rl.KeyBackspace) && len(e.nameEditBuffer) > 0 {
+			e.nameEditBuffer = e.nameEditBuffer[:len(e.nameEditBuffer)-1]
+		}
+
+		// Enter to confirm
+		if rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) {
+			if e.nameEditBuffer != "" {
+				e.Selected.Name = e.nameEditBuffer
+			}
+			e.editingName = false
+			e.nameEditBuffer = ""
+		}
+
+		// Escape to cancel
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			e.editingName = false
+			e.nameEditBuffer = ""
+		}
+
+		// Click outside to confirm
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) && !nameHovered {
+			if e.nameEditBuffer != "" {
+				e.Selected.Name = e.nameEditBuffer
+			}
+			e.editingName = false
+			e.nameEditBuffer = ""
+		}
+	} else {
+		// Display name
+		rl.DrawText(e.Selected.Name, nameFieldX+6, nameFieldY+4, 16, rl.Yellow)
+
+		// Click to edit
+		if nameHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			e.editingName = true
+			e.nameEditBuffer = e.Selected.Name
+		}
+	}
+	y += nameFieldH + 4
 
 	// Tags
 	if tags := e.Selected.Tags; len(tags) > 0 {
@@ -1472,7 +1664,7 @@ func (e *Editor) drawAssetBrowser() {
 		rl.DrawText(name, x+(itemW-textW)/2, y+itemH-14, 10, rl.LightGray)
 
 		// Handle clicks
-		if itemHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		if itemHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !e.draggingAsset {
 			now := rl.GetTime()
 			isDoubleClick := (now-e.lastClickTime < 0.3) && (e.lastClickedAsset == asset.Path)
 
@@ -1486,7 +1678,10 @@ func (e *Editor) drawAssetBrowser() {
 					e.scanAssets()
 				}
 			} else if asset.Type == "material" {
-				// Click material: select for editing
+				// Start dragging material
+				e.draggingAsset = true
+				assetCopy := asset // Make a copy to avoid referencing loop variable
+				e.draggedAsset = &assetCopy
 				e.selectedMaterialPath = asset.Path
 				e.selectedMaterial = assets.LoadMaterial(asset.Path)
 			} else if asset.Type == "model" {
@@ -1606,6 +1801,67 @@ func (e *Editor) drawMaterialEditor(x, y, w, h int32) {
 	if mat.Metallic != oldMet || mat.Roughness != oldRough || mat.Emissive != oldEmit {
 		assets.SaveMaterial(e.selectedMaterialPath, mat)
 	}
+}
+
+// handleMaterialDrop handles dropping a material onto an object
+func (e *Editor) handleMaterialDrop() {
+	if e.draggedAsset == nil || e.draggedAsset.Type != "material" {
+		e.draggingAsset = false
+		e.draggedAsset = nil
+		return
+	}
+
+	mousePos := rl.GetMousePosition()
+	materialPath := e.draggedAsset.Path
+
+	// Check if dropped on hierarchy item
+	panelX := int32(0)
+	panelY := int32(32)
+	panelW := int32(200)
+	panelH := int32(rl.GetScreenHeight()) - panelY
+	itemH := int32(22)
+
+	if mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
+		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+panelH) {
+		// Find which object was dropped on
+		y := panelY + 28
+		for i, g := range e.world.Scene.GameObjects {
+			itemY := y + int32(i)*itemH - e.hierarchyScroll
+			if mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH) {
+				e.applyMaterialToObject(g, materialPath)
+				break
+			}
+		}
+	} else if !e.mouseInPanel() {
+		// Dropped in 3D scene area - raycast to find object
+		cam := e.GetRaylibCamera()
+		ray := rl.GetScreenToWorldRay(mousePos, cam)
+		hit, ok := e.world.EditorRaycast(ray.Position, ray.Direction, 1000)
+		if ok && hit.GameObject != nil {
+			e.applyMaterialToObject(hit.GameObject, materialPath)
+		}
+	}
+
+	e.draggingAsset = false
+	e.draggedAsset = nil
+}
+
+// applyMaterialToObject applies a material to an object's ModelRenderer
+func (e *Editor) applyMaterialToObject(obj *engine.GameObject, materialPath string) {
+	mr := engine.GetComponent[*components.ModelRenderer](obj)
+	if mr == nil {
+		e.saveMsg = fmt.Sprintf("%s has no ModelRenderer", obj.Name)
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Load and apply the material
+	mat := assets.LoadMaterial(materialPath)
+	mr.Material = mat
+	mr.MaterialPath = materialPath
+
+	e.saveMsg = fmt.Sprintf("Applied material to %s", obj.Name)
+	e.saveMsgTime = rl.GetTime()
 }
 
 // spawnModelFromAsset creates a new GameObject with the given model
