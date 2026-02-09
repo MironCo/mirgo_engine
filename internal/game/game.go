@@ -29,7 +29,7 @@ func New() *Game {
 
 func (g *Game) Run(restoreEditor bool) {
 	rl.SetConfigFlags(rl.FlagWindowHighdpi | rl.FlagWindowResizable)
-	rl.InitWindow(1280, 720, "3D Animated Cubes with Lighting")
+	rl.InitWindow(1280, 720, "Mirgo Engine")
 	defer rl.CloseWindow()
 
 	rl.SetTargetFPS(120)

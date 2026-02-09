@@ -5,6 +5,7 @@ package game
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -206,6 +207,11 @@ func initRayguiStyle() {
 }
 
 func (e *Editor) Exit() {
+	// Save scene before entering play mode
+	if err := e.world.SaveScene(world.ScenePath); err != nil {
+		log.Printf("Warning: Failed to save scene before play mode: %v", err)
+	}
+
 	e.Active = false
 	e.Paused = false
 	e.Selected = nil
@@ -559,6 +565,10 @@ func (e *Editor) Draw3D() {
 		return
 	}
 
+	// Disable depth testing so gizmos always draw on top
+	rl.DrawRenderBatchActive() // Force flush of previous draw calls
+	rl.DisableDepthTest()
+
 	// Selection wireframe
 	if box := engine.GetComponent[*components.BoxCollider](e.Selected); box != nil {
 		center := box.GetCenter()
@@ -620,6 +630,10 @@ func (e *Editor) Draw3D() {
 			rl.DrawCubeWiresV(end, cubeSize, color)
 		}
 	}
+
+	// Re-enable depth testing
+	rl.DrawRenderBatchActive() // Force flush of gizmo draw calls
+	rl.EnableDepthTest()
 }
 
 // DrawUI draws the editor overlay: top bar, hierarchy panel (left), inspector panel (right).
