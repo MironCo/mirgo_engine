@@ -90,9 +90,10 @@ func (r *Renderer) DrawShadowMap(gameObjects []*engine.GameObject) {
 	lightView := rl.GetMatrixModelview()
 	lightProj := rl.GetMatrixProjection()
 
-	rl.SetCullFace(0)
+	// Disable face culling during shadow pass for better shadow coverage
+	rl.DisableBackfaceCulling()
 	r.drawScene(gameObjects)
-	rl.SetCullFace(1)
+	rl.EnableBackfaceCulling()
 
 	rl.EndMode3D()
 	rl.EndTextureMode()

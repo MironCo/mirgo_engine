@@ -1035,6 +1035,87 @@ func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) floa
 	return value
 }
 
+// drawTextureField draws an editable text field for texture paths
+func (e *Editor) drawTextureField(x, y, w, h int32, id string, value string) string {
+	mousePos := rl.GetMousePosition()
+	hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
+		mousePos.Y >= float32(y) && mousePos.Y <= float32(y+h)
+
+	editMode := e.activeInputID == id
+
+	// Background color
+	bgColor := rl.NewColor(45, 45, 50, 255)
+	if editMode {
+		bgColor = rl.NewColor(60, 60, 70, 255)
+	} else if hovered {
+		bgColor = rl.NewColor(55, 55, 60, 255)
+	}
+	rl.DrawRectangle(x, y, w, h, bgColor)
+	rl.DrawRectangleLines(x, y, w, h, rl.NewColor(80, 80, 90, 255))
+
+	// Click to edit
+	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !editMode {
+		e.activeInputID = id
+		e.inputTextValue = value
+	}
+
+	// Text display/editing
+	if editMode {
+		// Draw text input with cursor
+		displayText := e.inputTextValue
+		if len(displayText) > 14 {
+			displayText = "…" + displayText[len(displayText)-13:]
+		}
+		rl.DrawText(displayText+"_", x+4, y+3, 11, rl.White)
+
+		// Handle typing
+		for {
+			key := rl.GetCharPressed()
+			if key == 0 {
+				break
+			}
+			e.inputTextValue += string(rune(key))
+		}
+
+		// Backspace
+		if rl.IsKeyPressed(rl.KeyBackspace) && len(e.inputTextValue) > 0 {
+			e.inputTextValue = e.inputTextValue[:len(e.inputTextValue)-1]
+		}
+
+		// Enter or click outside to confirm
+		clickedOutside := rl.IsMouseButtonPressed(rl.MouseLeftButton) && !hovered
+		if rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) || clickedOutside || rl.IsKeyPressed(rl.KeyTab) {
+			value = e.inputTextValue
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+
+		// Escape to cancel
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+	} else {
+		// Display current value (truncated)
+		displayText := value
+		if displayText == "" {
+			displayText = "(none)"
+		} else {
+			displayText = filepath.Base(displayText)
+		}
+		if len(displayText) > 15 {
+			displayText = displayText[:14] + "…"
+		}
+		textColor := rl.LightGray
+		if value == "" {
+			textColor = rl.Gray
+		}
+		rl.DrawText(displayText, x+4, y+3, 11, textColor)
+	}
+
+	return value
+}
+
 // drawComponentEntry draws a single component with its properties and X button.
 // Returns the new Y position and whether the component should be removed.
 func (e *Editor) drawComponentEntry(panelX, y, panelW int32, index int, c engine.Component, mouseInPanel bool) (int32, bool) {
@@ -1787,18 +1868,22 @@ func (e *Editor) drawMaterialEditor(x, y, w, h int32) {
 	mat.Emissive = e.drawFloatField(indent+labelW, propY, fieldW, fieldH, "mated.emit", mat.Emissive)
 	propY += fieldH + 4
 
-	// Albedo texture path (read-only)
-	if mat.AlbedoPath != "" {
-		rl.DrawText("Albedo:", indent, propY+2, 11, rl.Gray)
-		albedoName := filepath.Base(mat.AlbedoPath)
-		if len(albedoName) > 12 {
-			albedoName = albedoName[:11] + "…"
-		}
-		rl.DrawText(albedoName, indent+labelW, propY+2, 11, rl.LightGray)
+	// Albedo texture path (editable)
+	rl.DrawText("Albedo:", indent, propY+2, 11, rl.Gray)
+	oldAlbedo := mat.AlbedoPath
+	mat.AlbedoPath = e.drawTextureField(indent+labelW, propY, fieldW, fieldH, "mated.albedo", mat.AlbedoPath)
+	propY += fieldH + 4
+
+	// Load texture if path changed
+	albedoChanged := mat.AlbedoPath != oldAlbedo
+	if albedoChanged && mat.AlbedoPath != "" {
+		mat.Albedo = assets.LoadTexture(mat.AlbedoPath)
+	} else if albedoChanged && mat.AlbedoPath == "" {
+		mat.Albedo = rl.Texture2D{} // Clear texture
 	}
 
 	// Auto-save if changed
-	if mat.Metallic != oldMet || mat.Roughness != oldRough || mat.Emissive != oldEmit {
+	if mat.Metallic != oldMet || mat.Roughness != oldRough || mat.Emissive != oldEmit || albedoChanged {
 		assets.SaveMaterial(e.selectedMaterialPath, mat)
 	}
 }

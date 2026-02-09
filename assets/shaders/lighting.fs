@@ -42,7 +42,7 @@ float calculateShadow(vec3 normal, vec3 lightDirection)
 
     // Slope-scaled bias: surfaces at steep angles to light need more bias
     float NdotL = dot(normal, lightDirection);
-    float bias = max(0.004 * (1.0 - NdotL), 0.0005);
+    float bias = max(0.006 * (1.0 - NdotL), 0.0015);
 
     // PCF: sample a 5x5 kernel around the shadow coordinate
     vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
