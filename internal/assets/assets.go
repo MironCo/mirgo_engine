@@ -14,6 +14,7 @@ type Material struct {
 	Metallic  float32
 	Roughness float32
 	Emissive  float32
+	Albedo    rl.Texture2D // diffuse/albedo texture (if ID > 0, use texture instead of color)
 }
 
 // materialDef is the JSON format for material files
@@ -23,6 +24,7 @@ type materialDef struct {
 	Metallic  float32 `json:"metallic"`
 	Roughness float32 `json:"roughness"`
 	Emissive  float32 `json:"emissive"`
+	Albedo    string  `json:"albedo,omitempty"` // path to albedo texture
 }
 
 var manager *Manager
@@ -136,6 +138,11 @@ func LoadMaterial(path string) *Material {
 		Metallic:  def.Metallic,
 		Roughness: def.Roughness,
 		Emissive:  def.Emissive,
+	}
+
+	// Load albedo texture if specified
+	if def.Albedo != "" {
+		material.Albedo = LoadTexture(def.Albedo)
 	}
 
 	manager.materials[path] = material

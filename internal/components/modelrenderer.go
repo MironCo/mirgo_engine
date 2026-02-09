@@ -99,9 +99,15 @@ func (m *ModelRenderer) Draw() {
 		color = m.Color
 	}
 
-	// Apply color to generated meshes (not file-loaded models which have textures)
+	// Apply material to generated meshes (not file-loaded models which have textures)
 	if m.FilePath == "" {
-		m.Model.Materials.Maps.Color = color
+		// If material has a texture, use it; otherwise use color
+		if m.Material != nil && m.Material.Albedo.ID > 0 {
+			m.Model.Materials.Maps.Texture = m.Material.Albedo
+			m.Model.Materials.Maps.Color = rl.White // tint white so texture shows true color
+		} else {
+			m.Model.Materials.Maps.Color = color
+		}
 	}
 
 	if m.shader.ID > 0 {
