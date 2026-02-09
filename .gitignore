@@ -3,6 +3,7 @@ test3d.exe
 test3d-linux
 mirgo-utils
 utilities/target/
+build/
 
 # Generated scripts (source files are in assets/scripts/)
 internal/scripts/

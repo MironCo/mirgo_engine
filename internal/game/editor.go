@@ -311,8 +311,9 @@ func (e *Editor) Update(deltaTime float32) {
 		}
 	}
 
-	// Gizmo mode hotkeys (only when not holding RMB for camera)
-	if !rl.IsMouseButtonDown(rl.MouseRightButton) {
+	// Gizmo mode hotkeys (only when not holding RMB for camera and not editing text)
+	isEditingText := e.editingName || e.activeInputID != ""
+	if !rl.IsMouseButtonDown(rl.MouseRightButton) && !isEditingText {
 		if rl.IsKeyPressed(rl.KeyW) {
 			e.gizmoMode = GizmoMove
 		}
@@ -403,7 +404,7 @@ func (e *Editor) DrawUI() {
 	// Gizmo mode indicator
 	modeNames := [3]string{"[W] Move", "[E] Rotate", "[R] Scale"}
 	for i, name := range modeNames {
-		x := int32(80 + i*90)
+		x := int32(100 + i*90)
 		color := rl.Gray
 		if GizmoMode(i) == e.gizmoMode {
 			color = rl.Yellow
@@ -414,25 +415,25 @@ func (e *Editor) DrawUI() {
 	if e.Paused {
 		helpText = "| P: Resume | Ctrl+S: Save"
 	}
-	rl.DrawText(helpText, 350, 8, 16, rl.LightGray)
+	rl.DrawText(helpText, 380, 8, 16, rl.LightGray)
 	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-100, 8, 16, rl.LightGray)
 
-	// Scripts changed banner
+	// Scripts changed banner (below top bar)
 	if e.scriptsChanged {
 		bannerText := "Scripts changed - Press Ctrl+R to rebuild"
 		textWidth := rl.MeasureText(bannerText, 16)
 		bannerX := (int32(rl.GetScreenWidth()) - textWidth) / 2
-		rl.DrawRectangle(bannerX-10, 36, textWidth+20, 24, rl.NewColor(80, 60, 0, 230))
-		rl.DrawText(bannerText, bannerX, 40, 16, rl.Yellow)
+		rl.DrawRectangle(bannerX-10, 40, textWidth+20, 24, rl.NewColor(80, 60, 0, 230))
+		rl.DrawText(bannerText, bannerX, 44, 16, rl.Yellow)
 	}
 
-	// Save message flash
+	// Save/build message flash (below top bar)
 	if e.saveMsg != "" && rl.GetTime()-e.saveMsgTime < 2.0 {
 		color := rl.Green
 		if e.saveMsg != "Scene saved!" {
 			color = rl.Red
 		}
-		rl.DrawText(e.saveMsg, int32(rl.GetScreenWidth()/2)-50, 8, 20, color)
+		rl.DrawText(e.saveMsg, int32(rl.GetScreenWidth()/2)-50, 44, 20, color)
 	}
 
 	// Reset field hover tracking for this frame
@@ -1998,6 +1999,12 @@ func (e *Editor) scanAssets() {
 		}
 
 		name := entry.Name()
+
+		// Skip hidden/system files
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+
 		ext := strings.ToLower(filepath.Ext(name))
 		fullPath := filepath.Join(e.currentAssetPath, name)
 

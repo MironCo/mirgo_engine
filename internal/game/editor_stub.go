@@ -16,8 +16,10 @@ type Editor struct {
 
 func NewEditor(_ *world.World) *Editor { return &Editor{} }
 func (e *Editor) Enter(_ rl.Camera3D)  { rl.DisableCursor() }
+func (e *Editor) Pause(_ rl.Camera3D)  {}
 func (e *Editor) Exit()                {}
 func (e *Editor) Update(_ float32)     {}
+func (e *Editor) RestoreState()        {}
 func (e *Editor) GetRaylibCamera() rl.Camera3D {
 	return rl.Camera3D{}
 }
