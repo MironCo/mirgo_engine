@@ -1865,6 +1865,17 @@ func (e *Editor) rebuildAndRelaunch() {
 	// Build to a temp file first to check if it compiles
 	tempExec := execPath + ".new"
 	fmt.Println("Compiling...")
+
+	// Run gen-scripts first to ensure scripts are up to date
+	genCmd := exec.Command("go", "run", "./cmd/gen-scripts")
+	genOutput, genErr := genCmd.CombinedOutput()
+	if genErr != nil {
+		e.saveMsg = "Script generation failed!"
+		e.saveMsgTime = rl.GetTime()
+		fmt.Printf("Script generation error:\n%s\n", string(genOutput))
+		return
+	}
+
 	cmd := exec.Command("go", "build", "-o", tempExec, "./cmd/test3d")
 	output, err := cmd.CombinedOutput()
 	if err != nil {

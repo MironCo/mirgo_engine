@@ -4,5 +4,9 @@ test3d-linux
 mirgo-utils
 utilities/target/
 
+# Generated scripts (source files are in assets/scripts/)
+internal/scripts/
+!internal/scripts/doc.go
+
 # Raylib examples (vendored for reference only)
 raylib-go/examples/

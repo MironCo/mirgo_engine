@@ -85,27 +85,3 @@ func (s *Shooter) Shoot() {
 	sphere.Start()
 	s.GetGameObject().Scene.World.SpawnObject(sphere)
 }
-
-// --- Generated boilerplate below ---
-
-func init() {
-	engine.RegisterScript("Shooter", shooterFactory, shooterSerializer)
-}
-
-func shooterFactory(props map[string]any) engine.Component {
-	script := &Shooter{}
-	if v, ok := props["cooldown"].(float64); ok {
-		script.Cooldown = v
-	}
-	return script
-}
-
-func shooterSerializer(c engine.Component) map[string]any {
-	s, ok := c.(*Shooter)
-	if !ok {
-		return nil
-	}
-	return map[string]any{
-		"cooldown": s.Cooldown,
-	}
-}

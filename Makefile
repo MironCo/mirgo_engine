@@ -1,15 +1,18 @@
 BINARY_NAME=test3d
 CMD_PATH=./cmd/test3d
 
-.PHONY: all build run build-game run-game clean
+.PHONY: all build run build-game run-game clean gen-scripts
 
 all: build
 
-build:
+build: gen-scripts
 	go build -o $(BINARY_NAME) $(CMD_PATH)
 
-run:
+run: gen-scripts
 	go run $(CMD_PATH)
+
+gen-scripts:
+	@go run ./cmd/gen-scripts
 
 build-game:
 	go build -tags game -o $(BINARY_NAME) $(CMD_PATH)

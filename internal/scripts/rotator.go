@@ -18,25 +18,28 @@ func (r *Rotator) Update(deltaTime float32) {
 		g.Transform.Rotation.Y -= 360
 	}
 }
+// test
+
+// --- Generated boilerplate below ---
 
 func init() {
 	engine.RegisterScript("Rotator", rotatorFactory, rotatorSerializer)
 }
 
 func rotatorFactory(props map[string]any) engine.Component {
-	speed := float32(90)
+	script := &Rotator{}
 	if v, ok := props["speed"].(float64); ok {
-		speed = float32(v)
+		script.Speed = float32(v)
 	}
-	return &Rotator{Speed: speed}
+	return script
 }
 
 func rotatorSerializer(c engine.Component) map[string]any {
-	r, ok := c.(*Rotator)
+	s, ok := c.(*Rotator)
 	if !ok {
 		return nil
 	}
 	return map[string]any{
-		"speed": r.Speed,
+		"speed": s.Speed,
 	}
 }
