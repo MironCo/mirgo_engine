@@ -17,34 +17,23 @@ This guide covers everything you need to write custom game logic in Mirgo Engine
 
 ## Overview
 
-Scripts are custom components that implement game logic. They:
+Scripts are custom components that implement game logic. With Mirgo Engine's automatic code generation:
 
-1. Embed `engine.BaseComponent` for standard component functionality
-2. Register themselves with a **factory** (creates from JSON) and **serializer** (saves to JSON)
-3. Implement `Update(deltaTime float32)` for per-frame logic
-4. Live in `internal/scripts/` (one file per script)
+1. **You write**: Clean source files in `assets/scripts/` with just your game logic
+2. **Engine generates**: Factory and serializer functions automatically
+3. **Result**: Full implementation in `internal/scripts/` (git-ignored)
+
+This Unity-like workflow eliminates boilerplate while maintaining Go's type safety
 
 ---
 
 ## Creating Your First Script
 
-### Using the Generator
+### The Unity-like Way
 
-The fastest way to create a script:
+Mirgo Engine uses automatic code generation - you write clean scripts without boilerplate.
 
-```bash
-# Build utils (once)
-cd utilities && cargo build --release && cp target/release/mirgo-utils ../
-
-# Generate a new script
-./mirgo-utils newscript EnemyAI
-```
-
-This creates `internal/scripts/enemy_ai.go` with all boilerplate wired up.
-
-### Manual Creation
-
-Create a new file in `internal/scripts/`:
+Create a new file in `assets/scripts/`:
 
 ```go
 package scripts
@@ -63,29 +52,28 @@ func (e *EnemyAI) Update(deltaTime float32) {
     }
     // Your logic here
 }
-
-func init() {
-    engine.RegisterScript("EnemyAI", enemyAIFactory, enemyAISerializer)
-}
-
-func enemyAIFactory(props map[string]any) engine.Component {
-    speed := float32(5.0)
-    if v, ok := props["speed"].(float64); ok {
-        speed = float32(v)
-    }
-    return &EnemyAI{Speed: speed}
-}
-
-func enemyAISerializer(c engine.Component) map[string]any {
-    e, ok := c.(*EnemyAI)
-    if !ok {
-        return nil
-    }
-    return map[string]any{
-        "speed": e.Speed,
-    }
-}
 ```
+
+That's it! When you run `make build`, `make run`, or press Cmd+R in the editor, the system automatically:
+
+1. Parses your struct using Go's AST parser
+2. Generates factory and serializer functions
+3. Registers the script with the engine
+4. Outputs to `internal/scripts/enemy_ai.go` (git-ignored)
+
+### Using the Script Generator (Optional)
+
+For convenience, you can use `mirgo-utils` to create the initial file:
+
+```bash
+# Build utils (once)
+cd utilities && cargo build --release && cp target/release/mirgo-utils ../
+
+# Generate a new script template
+./mirgo-utils newscript EnemyAI
+```
+
+This creates `assets/scripts/enemy_ai.go` with basic structure
 
 ### Using in a Scene
 
@@ -117,9 +105,9 @@ Add the script to any object in your scene JSON:
 
 ## Script Structure
 
-### Required Parts
+### What You Write (in assets/scripts/)
 
-Every script needs four things:
+Your source scripts need only two things:
 
 #### 1. The Struct (with BaseComponent)
 
@@ -130,9 +118,15 @@ type MyScript struct {
     // Your custom fields
     Speed     float32
     Target    string
+    Health    int
     isActive  bool  // lowercase = private, won't be serialized
 }
 ```
+
+**Field Serialization**:
+- Exported fields (capitalized) are automatically serialized
+- Converted to snake_case JSON names (`Speed` → `"speed"`, `MaxHealth` → `"max_health"`)
+- Private fields (lowercase) are ignored
 
 #### 2. The Update Method
 
@@ -148,25 +142,27 @@ func (m *MyScript) Update(deltaTime float32) {
 }
 ```
 
+### What Gets Generated (in internal/scripts/)
+
+The system automatically generates:
+
 #### 3. The Factory Function
 
-Creates the component from JSON properties:
+Creates the component from JSON properties with proper type conversions:
 
 ```go
 func myScriptFactory(props map[string]any) engine.Component {
-    // Set defaults
-    speed := float32(1.0)
-    target := ""
-
-    // Parse props (JSON numbers come as float64)
+    script := &MyScript{}
     if v, ok := props["speed"].(float64); ok {
-        speed = float32(v)
+        script.Speed = float32(v)  // Converts JSON float64 to Go float32
     }
     if v, ok := props["target"].(string); ok {
-        target = v
+        script.Target = v
     }
-
-    return &MyScript{Speed: speed, Target: target}
+    if v, ok := props["health"].(float64); ok {
+        script.Health = int(v)  // Converts JSON float64 to Go int
+    }
+    return script
 }
 ```
 
@@ -178,11 +174,12 @@ Converts component back to JSON for saving:
 func myScriptSerializer(c engine.Component) map[string]any {
     m, ok := c.(*MyScript)
     if !ok {
-        return nil  // Return nil if wrong type
+        return nil
     }
     return map[string]any{
         "speed":  m.Speed,
         "target": m.Target,
+        "health": m.Health,
     }
 }
 ```
@@ -194,6 +191,14 @@ func init() {
     engine.RegisterScript("MyScript", myScriptFactory, myScriptSerializer)
 }
 ```
+
+### How Generation Works
+
+- **Trigger**: Runs automatically on `make build`, `make run`, or Cmd+R in editor
+- **Parser**: Uses Go's `go/ast` and `go/parser` packages
+- **Caching**: SHA256 hashes in `.hash` files prevent regenerating unchanged scripts
+- **Output**: Source + generated boilerplate in `internal/scripts/` (git-ignored)
+- **Type Conversions**: Handles float32, float64, int, int32, int64, bool, string automatically
 
 ### Optional: Start Method
 

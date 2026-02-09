@@ -250,8 +250,63 @@ This creates a standalone executable with all assets included:
 - **Windows**: `.exe` executable
 - **Linux**: Standard binary
 
+## Writing Your First Script
+
+Mirgo Engine uses a Unity-like workflow for scripts. Create `assets/scripts/bouncer.go`:
+
+```go
+package scripts
+
+import (
+    "math"
+    "test3d/internal/engine"
+    rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+type Bouncer struct {
+    engine.BaseComponent
+    BounceSpeed float32
+}
+
+func (b *Bouncer) Update(deltaTime float32) {
+    g := b.GetGameObject()
+    if g == nil {
+        return
+    }
+
+    // Bounce up and down
+    time := rl.GetTime()
+    g.Transform.Position.Y = 1.0 + float32(math.Sin(time*float64(b.BounceSpeed)))
+}
+```
+
+Add it to an object in your scene:
+
+```json
+{
+  "name": "BouncingCube",
+  "position": [2, 1, 0],
+  "components": [
+    {
+      "type": "ModelRenderer",
+      "mesh": "cube",
+      "meshSize": [1, 1, 1],
+      "color": "Green"
+    },
+    {
+      "type": "Script",
+      "name": "Bouncer",
+      "props": { "bounceSpeed": 2.0 }
+    }
+  ]
+}
+```
+
+Run `make run` and watch your cube bounce! The engine automatically generates all the boilerplate (factory, serializer, registration).
+
 ## Next Steps
 
 - Read the [API Reference](api-reference.md) for all available types and methods
-- Learn to [write custom scripts](scripting.md) for game logic
+- Read the [Scripting Guide](scripting.md) for complete script documentation
 - Explore the example scene in `assets/scenes/main.json`
+- Check out example scripts in `assets/scripts/`
