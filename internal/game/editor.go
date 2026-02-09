@@ -96,9 +96,14 @@ type Editor struct {
 	undoStack []UndoState
 
 	// Asset browser
-	showAssetBrowser   bool
-	assetBrowserScroll int32
-	assetFiles         []AssetEntry
+	showAssetBrowser     bool
+	assetBrowserScroll   int32
+	assetFiles           []AssetEntry
+	currentAssetPath     string           // Current directory being viewed
+	selectedMaterialPath string           // Selected material for editing
+	selectedMaterial     *assets.Material // Loaded material being edited
+	lastClickTime        float64          // For double-click detection
+	lastClickedAsset     string           // Path of last clicked asset
 
 	// Script hot-reload
 	scriptModTimes    map[string]int64 // path -> mod time (unix nano)
@@ -106,11 +111,12 @@ type Editor struct {
 	lastScriptCheck   float64
 }
 
-// AssetEntry represents a model file in the asset browser
+// AssetEntry represents a file or folder in the asset browser
 type AssetEntry struct {
 	Name     string // Display name
-	Path     string // Full path to the model file
+	Path     string // Full path to the file/folder
 	IsFolder bool   // True if this is a folder
+	Type     string // "folder", "model", "material", "texture", "scene", etc.
 }
 
 func NewEditor(w *world.World) *Editor {
@@ -257,7 +263,10 @@ func (e *Editor) Update(deltaTime float32) {
 	if rl.IsKeyPressed(rl.KeyTab) {
 		e.showAssetBrowser = !e.showAssetBrowser
 		if e.showAssetBrowser {
-			e.scanAssetModels()
+			if e.currentAssetPath == "" {
+				e.currentAssetPath = "assets"
+			}
+			e.scanAssets()
 		}
 	}
 
@@ -709,7 +718,10 @@ func (e *Editor) DrawUI() {
 	if abHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		e.showAssetBrowser = !e.showAssetBrowser
 		if e.showAssetBrowser {
-			e.scanAssetModels()
+			if e.currentAssetPath == "" {
+				e.currentAssetPath = "assets"
+			}
+			e.scanAssets()
 		}
 	}
 
@@ -1548,8 +1560,8 @@ func (e *Editor) mouseInPanel() bool {
 	if m.Y <= 32 {
 		return true
 	}
-	// Asset browser: bottom 120px (when visible)
-	if e.showAssetBrowser && m.Y >= screenH-120 && m.X > 200 && m.X < screenW-300 {
+	// Asset browser: bottom 150px (when visible)
+	if e.showAssetBrowser && m.Y >= screenH-150 && m.X > 200 && m.X < screenW-300 {
 		return true
 	}
 	return false
@@ -1596,25 +1608,66 @@ func rayPlaneIntersect(rayOrigin, rayDir, planePoint, planeNormal rl.Vector3) (r
 
 // drawAssetBrowser draws the asset browser panel at the bottom of the screen
 func (e *Editor) drawAssetBrowser() {
-	panelH := int32(120)
+	panelH := int32(150)
 	panelY := int32(rl.GetScreenHeight()) - panelH
 	panelX := int32(200) // Start after hierarchy
 	panelW := int32(rl.GetScreenWidth()) - 200 - 300 // Between hierarchy and inspector
+
+	// Reserve space for material editor on the right when a material is selected
+	contentW := panelW
+	if e.selectedMaterial != nil {
+		contentW = panelW - 180
+	}
 
 	// Background
 	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 240))
 	rl.DrawLine(panelX, panelY, panelX+panelW, panelY, rl.NewColor(60, 60, 60, 255))
 
-	// Header
-	rl.DrawText("Models", panelX+10, panelY+6, 14, rl.Gray)
+	mousePos := rl.GetMousePosition()
+
+	// Header with back button and path
+	headerY := panelY + 4
+
+	// Back button (only show if not at root)
+	backBtnX := panelX + 8
+	backBtnW := int32(24)
+	backBtnH := int32(18)
+	canGoBack := e.currentAssetPath != "assets" && e.currentAssetPath != ""
+
+	if canGoBack {
+		backHovered := mousePos.X >= float32(backBtnX) && mousePos.X <= float32(backBtnX+backBtnW) &&
+			mousePos.Y >= float32(headerY) && mousePos.Y <= float32(headerY+backBtnH)
+
+		backColor := rl.NewColor(50, 50, 60, 200)
+		if backHovered {
+			backColor = rl.NewColor(70, 70, 80, 220)
+		}
+		rl.DrawRectangle(backBtnX, headerY, backBtnW, backBtnH, backColor)
+		rl.DrawText("<", backBtnX+8, headerY+2, 14, rl.LightGray)
+
+		if backHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			// Go up one directory
+			e.currentAssetPath = filepath.Dir(e.currentAssetPath)
+			e.assetBrowserScroll = 0
+			e.selectedMaterial = nil
+			e.selectedMaterialPath = ""
+			e.scanAssets()
+		}
+	}
+
+	// Current path
+	pathX := backBtnX + backBtnW + 8
+	if !canGoBack {
+		pathX = panelX + 10
+	}
+	rl.DrawText(e.currentAssetPath+"/", pathX, headerY+2, 14, rl.Gray)
 
 	// Refresh button
-	refreshBtnX := panelX + panelW - 70
-	refreshBtnY := panelY + 4
+	refreshBtnX := panelX + contentW - 70
+	refreshBtnY := headerY
 	refreshBtnW := int32(60)
 	refreshBtnH := int32(18)
 
-	mousePos := rl.GetMousePosition()
 	refreshHovered := mousePos.X >= float32(refreshBtnX) && mousePos.X <= float32(refreshBtnX+refreshBtnW) &&
 		mousePos.Y >= float32(refreshBtnY) && mousePos.Y <= float32(refreshBtnY+refreshBtnH)
 
@@ -1626,18 +1679,21 @@ func (e *Editor) drawAssetBrowser() {
 	rl.DrawText("Refresh", refreshBtnX+6, refreshBtnY+2, 12, rl.LightGray)
 
 	if refreshHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-		e.scanAssetModels()
+		e.scanAssets()
 	}
 
 	// Asset grid
-	itemW := int32(80)
+	itemW := int32(70)
 	itemH := int32(70)
 	startX := panelX + 10
 	startY := panelY + 28
-	cols := (panelW - 20) / (itemW + 8)
+	cols := (contentW - 20) / (itemW + 6)
+	if cols < 1 {
+		cols = 1
+	}
 
 	// Scroll handling
-	mouseInPanel := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
+	mouseInPanel := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+contentW) &&
 		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+panelH)
 
 	if mouseInPanel && !rl.IsMouseButtonDown(rl.MouseRightButton) {
@@ -1649,14 +1705,14 @@ func (e *Editor) drawAssetBrowser() {
 	}
 
 	// Clip content
-	rl.BeginScissorMode(panelX, panelY+24, panelW, panelH-24)
+	rl.BeginScissorMode(panelX, panelY+24, contentW, panelH-24)
 
 	for i, asset := range e.assetFiles {
 		col := int32(i) % cols
 		row := int32(i) / cols
 
-		x := startX + col*(itemW+8)
-		y := startY + row*(itemH+8) - e.assetBrowserScroll
+		x := startX + col*(itemW+6)
+		y := startY + row*(itemH+6) - e.assetBrowserScroll
 
 		// Skip if off screen
 		if y+itemH < panelY+24 || y > panelY+panelH {
@@ -1667,30 +1723,85 @@ func (e *Editor) drawAssetBrowser() {
 		itemHovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+itemW) &&
 			mousePos.Y >= float32(y) && mousePos.Y <= float32(y+itemH)
 
+		isSelected := asset.Path == e.selectedMaterialPath
+
 		bgColor := rl.NewColor(40, 40, 45, 200)
-		if itemHovered {
-			bgColor = rl.NewColor(60, 70, 60, 220)
+		if isSelected {
+			bgColor = rl.NewColor(60, 80, 100, 220)
+		} else if itemHovered {
+			bgColor = rl.NewColor(55, 60, 55, 220)
 		}
 		rl.DrawRectangle(x, y, itemW, itemH, bgColor)
 
-		// Icon placeholder (cube icon)
+		// Draw icon based on type
 		iconSize := int32(32)
 		iconX := x + (itemW-iconSize)/2
 		iconY := y + 6
-		rl.DrawRectangle(iconX, iconY, iconSize, iconSize, rl.NewColor(80, 80, 90, 200))
-		rl.DrawText("3D", iconX+8, iconY+8, 14, rl.LightGray)
+
+		switch asset.Type {
+		case "folder":
+			// Folder icon (yellow rectangle with tab)
+			rl.DrawRectangle(iconX, iconY+6, iconSize, iconSize-6, rl.NewColor(180, 150, 50, 220))
+			rl.DrawRectangle(iconX, iconY, iconSize/2, 6, rl.NewColor(180, 150, 50, 220))
+		case "material":
+			// Material icon (circle/orb)
+			rl.DrawCircle(iconX+iconSize/2, iconY+iconSize/2, float32(iconSize)/2-2, rl.NewColor(100, 150, 200, 220))
+			rl.DrawCircleLines(iconX+iconSize/2, iconY+iconSize/2, float32(iconSize)/2-2, rl.NewColor(150, 180, 220, 255))
+		case "model":
+			// Model icon (cube)
+			rl.DrawRectangle(iconX+4, iconY+4, iconSize-8, iconSize-8, rl.NewColor(100, 180, 100, 220))
+			rl.DrawText("3D", iconX+8, iconY+10, 12, rl.White)
+		case "texture":
+			// Texture icon (checkerboard)
+			half := iconSize / 2
+			rl.DrawRectangle(iconX, iconY, half, half, rl.NewColor(200, 200, 200, 220))
+			rl.DrawRectangle(iconX+half, iconY+half, half, half, rl.NewColor(200, 200, 200, 220))
+			rl.DrawRectangle(iconX+half, iconY, half, half, rl.NewColor(100, 100, 100, 220))
+			rl.DrawRectangle(iconX, iconY+half, half, half, rl.NewColor(100, 100, 100, 220))
+		default:
+			// Generic file icon
+			rl.DrawRectangle(iconX+4, iconY, iconSize-8, iconSize, rl.NewColor(120, 120, 130, 220))
+			rl.DrawTriangle(
+				rl.NewVector2(float32(iconX+iconSize-4), float32(iconY)),
+				rl.NewVector2(float32(iconX+iconSize-4), float32(iconY+8)),
+				rl.NewVector2(float32(iconX+iconSize-12), float32(iconY)),
+				rl.NewColor(80, 80, 90, 220),
+			)
+		}
 
 		// Name (truncated)
 		name := asset.Name
-		if len(name) > 10 {
-			name = name[:9] + "…"
+		if len(name) > 9 {
+			name = name[:8] + "…"
 		}
-		textW := rl.MeasureText(name, 11)
-		rl.DrawText(name, x+(itemW-textW)/2, y+itemH-18, 11, rl.LightGray)
+		textW := rl.MeasureText(name, 10)
+		rl.DrawText(name, x+(itemW-textW)/2, y+itemH-14, 10, rl.LightGray)
 
-		// Click to spawn
+		// Handle clicks
 		if itemHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-			e.spawnModelFromAsset(asset)
+			now := rl.GetTime()
+			isDoubleClick := (now-e.lastClickTime < 0.3) && (e.lastClickedAsset == asset.Path)
+
+			if asset.IsFolder {
+				if isDoubleClick {
+					// Double-click folder: navigate into it
+					e.currentAssetPath = asset.Path
+					e.assetBrowserScroll = 0
+					e.selectedMaterial = nil
+					e.selectedMaterialPath = ""
+					e.scanAssets()
+				}
+			} else if asset.Type == "material" {
+				// Click material: select for editing
+				e.selectedMaterialPath = asset.Path
+				e.selectedMaterial = assets.LoadMaterial(asset.Path)
+			} else if asset.Type == "model" {
+				// Click model: spawn into scene
+				e.spawnModelFromAsset(asset)
+			}
+
+			e.lastClickTime = now
+			e.lastClickedAsset = asset.Path
 		}
 	}
 
@@ -1698,7 +1809,7 @@ func (e *Editor) drawAssetBrowser() {
 
 	// Clamp scroll
 	rows := (int32(len(e.assetFiles)) + cols - 1) / cols
-	maxScroll := rows*(itemH+8) - (panelH - 28)
+	maxScroll := rows*(itemH+6) - (panelH - 28)
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -1708,7 +1819,98 @@ func (e *Editor) drawAssetBrowser() {
 
 	// Empty state
 	if len(e.assetFiles) == 0 {
-		rl.DrawText("No models found. Drop .gltf files to import.", panelX+20, panelY+50, 14, rl.Gray)
+		rl.DrawText("Empty folder", panelX+20, panelY+60, 14, rl.Gray)
+	}
+
+	// Draw material editor panel on the right
+	if e.selectedMaterial != nil {
+		e.drawMaterialEditor(panelX+contentW, panelY, panelW-contentW, panelH)
+	}
+}
+
+// drawMaterialEditor draws the material properties editor in the asset browser
+func (e *Editor) drawMaterialEditor(x, y, w, h int32) {
+	// Background
+	rl.DrawRectangle(x, y, w, h, rl.NewColor(30, 30, 35, 250))
+	rl.DrawLine(x, y, x, y+h, rl.NewColor(60, 60, 60, 255))
+
+	// Header
+	name := filepath.Base(e.selectedMaterialPath)
+	rl.DrawText(name, x+8, y+6, 12, rl.SkyBlue)
+
+	// Close button
+	closeBtnX := x + w - 20
+	closeBtnY := y + 4
+	closeBtnSize := int32(14)
+	mousePos := rl.GetMousePosition()
+	closeHovered := mousePos.X >= float32(closeBtnX) && mousePos.X <= float32(closeBtnX+closeBtnSize) &&
+		mousePos.Y >= float32(closeBtnY) && mousePos.Y <= float32(closeBtnY+closeBtnSize)
+
+	closeColor := rl.NewColor(80, 50, 50, 200)
+	if closeHovered {
+		closeColor = rl.NewColor(120, 60, 60, 220)
+	}
+	rl.DrawRectangle(closeBtnX, closeBtnY, closeBtnSize, closeBtnSize, closeColor)
+	rl.DrawText("x", closeBtnX+3, closeBtnY, 12, rl.White)
+
+	if closeHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		e.selectedMaterial = nil
+		e.selectedMaterialPath = ""
+		return
+	}
+
+	// Properties
+	propY := y + 24
+	labelW := int32(60)
+	fieldW := w - labelW - 16
+	fieldH := int32(16)
+	indent := x + 8
+
+	mat := e.selectedMaterial
+	oldMet := mat.Metallic
+	oldRough := mat.Roughness
+	oldEmit := mat.Emissive
+
+	// Material name (read-only for now)
+	rl.DrawText("Name:", indent, propY+2, 11, rl.Gray)
+	rl.DrawText(mat.Name, indent+labelW, propY+2, 11, rl.LightGray)
+	propY += fieldH + 4
+
+	// Color (read-only display)
+	rl.DrawText("Color:", indent, propY+2, 11, rl.Gray)
+	colorName := assets.LookupColorName(mat.Color)
+	rl.DrawRectangle(indent+labelW, propY, fieldH, fieldH, mat.Color)
+	rl.DrawText(colorName, indent+labelW+fieldH+4, propY+2, 11, rl.LightGray)
+	propY += fieldH + 4
+
+	// Metallic
+	rl.DrawText("Metallic:", indent, propY+2, 11, rl.Gray)
+	mat.Metallic = e.drawFloatField(indent+labelW, propY, fieldW, fieldH, "mated.met", mat.Metallic)
+	propY += fieldH + 4
+
+	// Roughness
+	rl.DrawText("Rough:", indent, propY+2, 11, rl.Gray)
+	mat.Roughness = e.drawFloatField(indent+labelW, propY, fieldW, fieldH, "mated.rough", mat.Roughness)
+	propY += fieldH + 4
+
+	// Emissive
+	rl.DrawText("Emissive:", indent, propY+2, 11, rl.Gray)
+	mat.Emissive = e.drawFloatField(indent+labelW, propY, fieldW, fieldH, "mated.emit", mat.Emissive)
+	propY += fieldH + 4
+
+	// Albedo texture path (read-only)
+	if mat.AlbedoPath != "" {
+		rl.DrawText("Albedo:", indent, propY+2, 11, rl.Gray)
+		albedoName := filepath.Base(mat.AlbedoPath)
+		if len(albedoName) > 12 {
+			albedoName = albedoName[:11] + "…"
+		}
+		rl.DrawText(albedoName, indent+labelW, propY+2, 11, rl.LightGray)
+	}
+
+	// Auto-save if changed
+	if mat.Metallic != oldMet || mat.Roughness != oldRough || mat.Emissive != oldEmit {
+		assets.SaveMaterial(e.selectedMaterialPath, mat)
 	}
 }
 
@@ -1734,48 +1936,61 @@ func (e *Editor) spawnModelFromAsset(asset AssetEntry) {
 	e.saveMsgTime = rl.GetTime()
 }
 
-// scanAssetModels scans the assets/models folder and populates the asset list
-func (e *Editor) scanAssetModels() {
+// scanAssets scans the current asset directory and populates the asset list
+func (e *Editor) scanAssets() {
 	e.assetFiles = nil
-	modelsDir := "assets/models"
 
-	entries, err := os.ReadDir(modelsDir)
+	entries, err := os.ReadDir(e.currentAssetPath)
 	if err != nil {
 		return
 	}
 
+	// Sort: folders first, then files
 	for _, entry := range entries {
 		if entry.IsDir() {
-			// Look for .gltf or .glb inside the folder
-			subPath := filepath.Join(modelsDir, entry.Name())
-			subEntries, err := os.ReadDir(subPath)
-			if err != nil {
-				continue
-			}
-			for _, sub := range subEntries {
-				if sub.IsDir() {
-					continue
-				}
-				ext := strings.ToLower(filepath.Ext(sub.Name()))
-				if ext == ".gltf" || ext == ".glb" {
-					e.assetFiles = append(e.assetFiles, AssetEntry{
-						Name: entry.Name(),
-						Path: filepath.Join(subPath, sub.Name()),
-					})
-					break // Only add one model per folder
-				}
-			}
-		} else {
-			// Check for loose model files
-			ext := strings.ToLower(filepath.Ext(entry.Name()))
-			if ext == ".gltf" || ext == ".glb" {
-				name := strings.TrimSuffix(entry.Name(), ext)
-				e.assetFiles = append(e.assetFiles, AssetEntry{
-					Name: name,
-					Path: filepath.Join(modelsDir, entry.Name()),
-				})
-			}
+			e.assetFiles = append(e.assetFiles, AssetEntry{
+				Name:     entry.Name(),
+				Path:     filepath.Join(e.currentAssetPath, entry.Name()),
+				IsFolder: true,
+				Type:     "folder",
+			})
 		}
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		ext := strings.ToLower(filepath.Ext(name))
+		fullPath := filepath.Join(e.currentAssetPath, name)
+
+		var assetType string
+		switch ext {
+		case ".json":
+			// Check if in materials folder
+			if strings.Contains(e.currentAssetPath, "materials") {
+				assetType = "material"
+			} else if strings.Contains(e.currentAssetPath, "scenes") {
+				assetType = "scene"
+			} else {
+				assetType = "json"
+			}
+		case ".gltf", ".glb":
+			assetType = "model"
+		case ".png", ".jpg", ".jpeg":
+			assetType = "texture"
+		default:
+			assetType = "file"
+		}
+
+		e.assetFiles = append(e.assetFiles, AssetEntry{
+			Name:     name,
+			Path:     fullPath,
+			IsFolder: false,
+			Type:     assetType,
+		})
 	}
 }
 
