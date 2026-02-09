@@ -85,21 +85,29 @@ func (m *ModelRenderer) Draw() {
 	m.Model.Transform = rl.MatrixMultiply(rl.MatrixMultiply(scaleMatrix, rotMatrix), transMatrix)
 
 	// Set material uniforms - use Material if set, otherwise use inline properties
+	var metallic, roughness, emissive float32
+	var color rl.Color
+	if m.Material != nil {
+		metallic = m.Material.Metallic
+		roughness = m.Material.Roughness
+		emissive = m.Material.Emissive
+		color = m.Material.Color
+	} else {
+		metallic = m.Metallic
+		roughness = m.Roughness
+		emissive = m.Emissive
+		color = m.Color
+	}
+
+	// Apply color to generated meshes (not file-loaded models which have textures)
+	if m.FilePath == "" {
+		m.Model.Materials.Maps.Color = color
+	}
+
 	if m.shader.ID > 0 {
 		metallicLoc := rl.GetShaderLocation(m.shader, "metallic")
 		roughnessLoc := rl.GetShaderLocation(m.shader, "roughness")
 		emissiveLoc := rl.GetShaderLocation(m.shader, "emissive")
-
-		var metallic, roughness, emissive float32
-		if m.Material != nil {
-			metallic = m.Material.Metallic
-			roughness = m.Material.Roughness
-			emissive = m.Material.Emissive
-		} else {
-			metallic = m.Metallic
-			roughness = m.Roughness
-			emissive = m.Emissive
-		}
 
 		rl.SetShaderValue(m.shader, metallicLoc, []float32{metallic}, rl.ShaderUniformFloat)
 		rl.SetShaderValue(m.shader, roughnessLoc, []float32{roughness}, rl.ShaderUniformFloat)
