@@ -18,8 +18,8 @@ import (
 	"test3d/internal/engine"
 	"test3d/internal/world"
 
-	rl "github.com/gen2brain/raylib-go/raylib"
 	gui "github.com/gen2brain/raylib-go/raygui"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type EditorCamera struct {
@@ -88,12 +88,12 @@ type Editor struct {
 	lastScriptCheck float64
 
 	// Drag-and-drop state
-	draggingAsset       bool         // True if dragging an asset from the browser
-	draggedAsset        *AssetEntry  // The asset being dragged
-	draggingHierarchy   bool         // True if dragging an object in hierarchy
+	draggingAsset       bool               // True if dragging an asset from the browser
+	draggedAsset        *AssetEntry        // The asset being dragged
+	draggingHierarchy   bool               // True if dragging an object in hierarchy
 	draggedObject       *engine.GameObject // The object being dragged for reparenting
 	hierarchyDropTarget *engine.GameObject // Target for hierarchy drop (parent candidate)
-	hierarchyDropIndex  int          // Index where to drop (-1 = as child, >= 0 = at position)
+	hierarchyDropIndex  int                // Index where to drop (-1 = as child, >= 0 = at position)
 
 	// Name editing state
 	editingName    bool   // True if editing the object name
@@ -1584,7 +1584,7 @@ func (e *Editor) mouseInPanel() bool {
 func (e *Editor) drawAssetBrowser() {
 	panelH := int32(150)
 	panelY := int32(rl.GetScreenHeight()) - panelH
-	panelX := int32(200) // Start after hierarchy
+	panelX := int32(200)                             // Start after hierarchy
 	panelW := int32(rl.GetScreenWidth()) - 200 - 300 // Between hierarchy and inspector
 
 	// Reserve space for material editor on the right when a material is selected
