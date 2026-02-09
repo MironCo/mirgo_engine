@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"test3d/internal/assets"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 
@@ -36,8 +37,9 @@ type modelRendererDef struct {
 	Mesh      string    `json:"mesh,omitempty"`
 	MeshSize  []float32 `json:"meshSize,omitempty"`
 	Model     string    `json:"model,omitempty"`
-	Color     string    `json:"color"`
-	Metallic  float32   `json:"metallic,omitempty"`
+	Material  string    `json:"material,omitempty"` // path to material JSON file
+	Color     string    `json:"color,omitempty"`    // inline color (used if no material)
+	Metallic  float32   `json:"metallic,omitempty"` // inline (used if no material)
 	Roughness float32   `json:"roughness,omitempty"`
 	Emissive  float32   `json:"emissive,omitempty"`
 }
@@ -255,12 +257,17 @@ func (w *World) loadModelRenderer(g *engine.GameObject, raw json.RawMessage) {
 		renderer.MeshSize = def.MeshSize
 	}
 
-	// Apply material properties
-	renderer.Metallic = def.Metallic
-	if def.Roughness > 0 {
-		renderer.Roughness = def.Roughness
+	// Load material from file if specified, otherwise use inline properties
+	if def.Material != "" {
+		renderer.Material = assets.LoadMaterial(def.Material)
+		renderer.MaterialPath = def.Material
+	} else {
+		renderer.Metallic = def.Metallic
+		if def.Roughness > 0 {
+			renderer.Roughness = def.Roughness
+		}
+		renderer.Emissive = def.Emissive
 	}
-	renderer.Emissive = def.Emissive
 
 	renderer.SetShader(w.Renderer.Shader)
 	g.AddComponent(renderer)
@@ -430,17 +437,22 @@ func serializeComponent(c engine.Component) json.RawMessage {
 	switch comp := c.(type) {
 	case *components.ModelRenderer:
 		d := modelRendererDef{
-			Type:      "ModelRenderer",
-			Color:     lookupColorName(comp.Color),
-			Metallic:  comp.Metallic,
-			Roughness: comp.Roughness,
-			Emissive:  comp.Emissive,
+			Type: "ModelRenderer",
 		}
 		if comp.FilePath != "" {
 			d.Model = comp.FilePath
 		} else {
 			d.Mesh = comp.MeshType
 			d.MeshSize = comp.MeshSize
+		}
+		// Save material path if set, otherwise save inline properties
+		if comp.MaterialPath != "" {
+			d.Material = comp.MaterialPath
+		} else {
+			d.Color = lookupColorName(comp.Color)
+			d.Metallic = comp.Metallic
+			d.Roughness = comp.Roughness
+			d.Emissive = comp.Emissive
 		}
 		def = d
 

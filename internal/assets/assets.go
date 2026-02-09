@@ -1,20 +1,88 @@
 package assets
 
 import (
+	"encoding/json"
+	"os"
+
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+// Material defines surface properties for rendering
+type Material struct {
+	Name       string
+	Color      rl.Color
+	Metallic   float32
+	Roughness  float32
+	Emissive   float32
+	Albedo     rl.Texture2D // diffuse/albedo texture (if ID > 0, use texture instead of color)
+	AlbedoPath string       // path to albedo texture (for saving)
+}
+
+// materialDef is the JSON format for material files
+type materialDef struct {
+	Name      string  `json:"name"`
+	Color     string  `json:"color"`
+	Metallic  float32 `json:"metallic"`
+	Roughness float32 `json:"roughness"`
+	Emissive  float32 `json:"emissive"`
+	Albedo    string  `json:"albedo,omitempty"` // path to albedo texture
+}
 
 var manager *Manager
 
 type Manager struct {
-	models   map[string]rl.Model
-	textures map[string]rl.Texture2D
+	models    map[string]rl.Model
+	textures  map[string]rl.Texture2D
+	materials map[string]*Material
+}
+
+// Color name mapping for materials
+var colorByName = map[string]rl.Color{
+	"Red":       rl.Red,
+	"Blue":      rl.Blue,
+	"Green":     rl.Green,
+	"Purple":    rl.Purple,
+	"Orange":    rl.Orange,
+	"Yellow":    rl.Yellow,
+	"Gold":      rl.Gold,
+	"White":     rl.White,
+	"Gray":      rl.Gray,
+	"LightGray": rl.LightGray,
+	"DarkGray":  rl.DarkGray,
+	"Black":     rl.Black,
+	"Pink":      rl.Pink,
+	"Maroon":    rl.Maroon,
+	"Brown":     rl.Brown,
+	"Beige":     rl.Beige,
+	"SkyBlue":   rl.SkyBlue,
+	"DarkBlue":  rl.DarkBlue,
+	"Lime":      rl.Lime,
+	"DarkGreen": rl.DarkGreen,
+}
+
+// LookupColor returns a raylib color from a name string
+func LookupColor(name string) rl.Color {
+	if c, ok := colorByName[name]; ok {
+		return c
+	}
+	return rl.White
+}
+
+// LookupColorName returns the name of a color, or "White" if not found
+func LookupColorName(c rl.Color) string {
+	for name, col := range colorByName {
+		if col.R == c.R && col.G == c.G && col.B == c.B && col.A == c.A {
+			return name
+		}
+	}
+	return "White"
 }
 
 func Init() {
 	manager = &Manager{
-		models:   make(map[string]rl.Model),
-		textures: make(map[string]rl.Texture2D),
+		models:    make(map[string]rl.Model),
+		textures:  make(map[string]rl.Texture2D),
+		materials: make(map[string]*Material),
 	}
 }
 
@@ -46,6 +114,72 @@ func LoadTexture(path string) rl.Texture2D {
 	return texture
 }
 
+// LoadMaterial loads a material from a JSON file, caching it for reuse
+func LoadMaterial(path string) *Material {
+	if manager == nil {
+		Init()
+	}
+
+	if material, exists := manager.materials[path]; exists {
+		return material
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// Return default material on error
+		return &Material{
+			Name:      "default",
+			Color:     rl.White,
+			Roughness: 0.5,
+		}
+	}
+
+	var def materialDef
+	if err := json.Unmarshal(data, &def); err != nil {
+		return &Material{
+			Name:      "default",
+			Color:     rl.White,
+			Roughness: 0.5,
+		}
+	}
+
+	material := &Material{
+		Name:      def.Name,
+		Color:     LookupColor(def.Color),
+		Metallic:  def.Metallic,
+		Roughness: def.Roughness,
+		Emissive:  def.Emissive,
+	}
+
+	// Load albedo texture if specified
+	if def.Albedo != "" {
+		material.Albedo = LoadTexture(def.Albedo)
+		material.AlbedoPath = def.Albedo
+	}
+
+	manager.materials[path] = material
+	return material
+}
+
+// SaveMaterial saves a material back to its JSON file
+func SaveMaterial(path string, mat *Material) error {
+	def := materialDef{
+		Name:      mat.Name,
+		Color:     LookupColorName(mat.Color),
+		Metallic:  mat.Metallic,
+		Roughness: mat.Roughness,
+		Emissive:  mat.Emissive,
+		Albedo:    mat.AlbedoPath,
+	}
+
+	data, err := json.MarshalIndent(def, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
 func Unload() {
 	if manager == nil {
 		return
@@ -61,4 +195,5 @@ func Unload() {
 
 	manager.models = make(map[string]rl.Model)
 	manager.textures = make(map[string]rl.Texture2D)
+	manager.materials = make(map[string]*Material)
 }
