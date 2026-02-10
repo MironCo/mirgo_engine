@@ -17,6 +17,7 @@ type ComponentType struct {
 }
 
 // editorComponentTypes lists all component types available in the Add Component menu.
+// Note: FPSController is now a script, added via the Scripts section.
 var editorComponentTypes = []ComponentType{
 	{"ModelRenderer", createModelRenderer},
 	{"BoxCollider", createBoxCollider},
@@ -25,7 +26,6 @@ var editorComponentTypes = []ComponentType{
 	{"DirectionalLight", createDirectionalLight},
 	{"PointLight", createPointLight},
 	{"Camera", createCamera},
-	{"FPSController", createFPSController},
 }
 
 func createModelRenderer(w *world.World, g *engine.GameObject) engine.Component {
@@ -64,8 +64,4 @@ func createPointLight(w *world.World, g *engine.GameObject) engine.Component {
 
 func createCamera(w *world.World, g *engine.GameObject) engine.Component {
 	return components.NewCamera()
-}
-
-func createFPSController(w *world.World, g *engine.GameObject) engine.Component {
-	return components.NewFPSController()
 }

@@ -7,6 +7,23 @@ type Component interface {
 	GetGameObject() *GameObject
 }
 
+// LookProvider is implemented by components that control camera look direction.
+// Used by Camera and other components that need to follow a look direction.
+type LookProvider interface {
+	GetLookDirection() (x, y, z float32)
+	GetEyeHeight() float32
+}
+
+// PlayerController is implemented by components that handle player movement.
+// Used by collision systems to sync velocity and grounded state.
+type PlayerController interface {
+	LookProvider
+	GetVelocity() (x, y, z float32)
+	SetVelocityY(vy float32)
+	Grounded() bool
+	SetGrounded(grounded bool)
+}
+
 // BaseComponent provides default implementation for Component interface
 type BaseComponent struct {
 	gameObject *GameObject

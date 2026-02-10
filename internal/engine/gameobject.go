@@ -99,6 +99,18 @@ func GetComponent[T Component](g *GameObject) T {
 	return zero
 }
 
+// FindComponent finds a component that implements the given interface type.
+// Unlike GetComponent which requires an exact type, this works with interfaces.
+func FindComponent[T any](g *GameObject) T {
+	var zero T
+	for _, c := range g.components {
+		if typed, ok := c.(T); ok {
+			return typed
+		}
+	}
+	return zero
+}
+
 func (g *GameObject) Start() {
 	if g.started {
 		return

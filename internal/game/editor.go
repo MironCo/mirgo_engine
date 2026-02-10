@@ -1787,6 +1787,11 @@ func (e *Editor) addScript(scriptName string) {
 	if newComp != nil {
 		e.Selected.AddComponent(newComp)
 
+		// Auto-attach PlayerCollision for any PlayerController script
+		if _, ok := newComp.(engine.PlayerController); ok {
+			e.Selected.AddComponent(&world.PlayerCollision{})
+		}
+
 		// Re-register with physics world to update categorization
 		e.updatePhysicsRegistration(e.Selected)
 

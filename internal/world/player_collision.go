@@ -18,34 +18,38 @@ func (p *PlayerCollision) Update(deltaTime float32) {
 		return
 	}
 
-	fps := engine.GetComponent[*components.FPSController](g)
+	player := engine.FindComponent[engine.PlayerController](g)
 	collider := engine.GetComponent[*components.BoxCollider](g)
 	rb := engine.GetComponent[*components.Rigidbody](g)
 
-	if fps == nil || collider == nil {
+	if player == nil || collider == nil {
 		return
 	}
 
-	// Sync FPSController velocity to rigidbody for physics pushing
+	eyeHeight := player.GetEyeHeight()
+	_, vy, _ := player.GetVelocity()
+
+	// Sync PlayerController velocity to rigidbody for physics pushing
 	if rb != nil {
-		rb.Velocity = fps.Velocity
+		vx, vy, vz := player.GetVelocity()
+		rb.Velocity = rl.Vector3{X: vx, Y: vy, Z: vz}
 	}
 
 	// Ground check - floor is at Y=0
 	floorY := float32(0.0)
-	feetY := g.Transform.Position.Y - fps.EyeHeight
+	feetY := g.Transform.Position.Y - eyeHeight
 	if feetY <= floorY {
-		g.Transform.Position.Y = floorY + fps.EyeHeight
-		fps.Velocity.Y = 0
-		fps.Grounded = true
+		g.Transform.Position.Y = floorY + eyeHeight
+		player.SetVelocityY(0)
+		player.SetGrounded(true)
 	} else {
-		fps.Grounded = false
+		player.SetGrounded(false)
 	}
 
 	// Collision with world objects - use OBB for rotated box support
 	playerCenter := rl.Vector3{
 		X: g.Transform.Position.X,
-		Y: g.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
+		Y: g.Transform.Position.Y - eyeHeight + collider.Size.Y/2,
 		Z: g.Transform.Position.Z,
 	}
 	playerOBB := physics.NewAABBasOBB(playerCenter, collider.Size)
@@ -68,18 +72,18 @@ func (p *PlayerCollision) Update(deltaTime float32) {
 			g.Transform.Position = rl.Vector3Add(g.Transform.Position, pushOut)
 
 			if pushOut.Y > 0 {
-				fps.Velocity.Y = 0
-				fps.Grounded = true
+				player.SetVelocityY(0)
+				player.SetGrounded(true)
 			}
-			if pushOut.Y < 0 && fps.Velocity.Y > 0 {
-				fps.Velocity.Y = 0
+			if pushOut.Y < 0 && vy > 0 {
+				player.SetVelocityY(0)
 			}
 
 			// Update OBB for subsequent checks
 			playerOBB = physics.NewAABBasOBB(
 				rl.Vector3{
 					X: g.Transform.Position.X,
-					Y: g.Transform.Position.Y - fps.EyeHeight + collider.Size.Y/2,
+					Y: g.Transform.Position.Y - eyeHeight + collider.Size.Y/2,
 					Z: g.Transform.Position.Z,
 				},
 				collider.Size,

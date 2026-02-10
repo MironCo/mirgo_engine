@@ -90,6 +90,9 @@ type fpsControllerDef struct {
 	LookSpeed    float32 `json:"lookSpeed,omitempty"`
 	JumpStrength float32 `json:"jumpStrength,omitempty"`
 	EyeHeight    float32 `json:"eyeHeight,omitempty"`
+	Gravity      float32 `json:"gravity,omitempty"`
+	Yaw          float32 `json:"yaw,omitempty"`
+	Pitch        float32 `json:"pitch,omitempty"`
 }
 
 // --- Color mapping ---
@@ -197,7 +200,8 @@ func (w *World) loadObject(objDef ObjectDef, parent *engine.GameObject) {
 		case "Camera":
 			w.loadCamera(g, raw)
 		case "FPSController":
-			loadFPSController(g, raw)
+			// FPSController is now a script - convert old format to script props
+			loadFPSControllerAsScript(g, raw)
 			// Auto-attach PlayerCollision for FPS characters
 			g.AddComponent(&PlayerCollision{})
 		case "Script":
@@ -361,25 +365,37 @@ func (w *World) loadCamera(g *engine.GameObject, raw json.RawMessage) {
 	g.AddComponent(cam)
 }
 
-func loadFPSController(g *engine.GameObject, raw json.RawMessage) {
+func loadFPSControllerAsScript(g *engine.GameObject, raw json.RawMessage) {
 	var def fpsControllerDef
 	if err := json.Unmarshal(raw, &def); err != nil {
 		return
 	}
-	fps := components.NewFPSController()
+	// Convert to script props format
+	props := map[string]any{}
 	if def.MoveSpeed > 0 {
-		fps.MoveSpeed = def.MoveSpeed
+		props["move_speed"] = float64(def.MoveSpeed)
 	}
 	if def.LookSpeed > 0 {
-		fps.LookSpeed = def.LookSpeed
+		props["look_speed"] = float64(def.LookSpeed)
 	}
 	if def.JumpStrength > 0 {
-		fps.JumpStrength = def.JumpStrength
+		props["jump_strength"] = float64(def.JumpStrength)
 	}
 	if def.EyeHeight > 0 {
-		fps.EyeHeight = def.EyeHeight
+		props["eye_height"] = float64(def.EyeHeight)
 	}
-	g.AddComponent(fps)
+	if def.Gravity > 0 {
+		props["gravity"] = float64(def.Gravity)
+	}
+	if def.Yaw != 0 {
+		props["yaw"] = float64(def.Yaw)
+	}
+	if def.Pitch != 0 {
+		props["pitch"] = float64(def.Pitch)
+	}
+	if comp := engine.CreateScript("FPSController", props); comp != nil {
+		g.AddComponent(comp)
+	}
 }
 
 // --- Duplicating ---
@@ -443,7 +459,7 @@ func (w *World) loadObjectAndReturn(objDef ObjectDef, parent *engine.GameObject)
 		case "Camera":
 			w.loadCamera(g, raw)
 		case "FPSController":
-			loadFPSController(g, raw)
+			loadFPSControllerAsScript(g, raw)
 			g.AddComponent(&PlayerCollision{})
 		case "Script":
 			loadScript(g, raw)
@@ -580,15 +596,6 @@ func serializeComponent(c engine.Component) json.RawMessage {
 			Near:   comp.Near,
 			Far:    comp.Far,
 			IsMain: comp.IsMain,
-		}
-
-	case *components.FPSController:
-		def = fpsControllerDef{
-			Type:         "FPSController",
-			MoveSpeed:    comp.MoveSpeed,
-			LookSpeed:    comp.LookSpeed,
-			JumpStrength: comp.JumpStrength,
-			EyeHeight:    comp.EyeHeight,
 		}
 
 	default:

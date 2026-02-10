@@ -33,14 +33,18 @@ func (c *Camera) GetRaylibCamera() rl.Camera3D {
 
 	// Get eye position (feet + eye height)
 	eyePos := g.WorldPosition()
-	fps := engine.GetComponent[*FPSController](g)
-	if fps != nil {
-		eyePos.Y += fps.EyeHeight
+
+	// Look for any LookProvider component (FPSController, etc.)
+	lookProvider := engine.FindComponent[engine.LookProvider](g)
+
+	if lookProvider != nil {
+		eyePos.Y += lookProvider.GetEyeHeight()
 	}
 
 	var target rl.Vector3
-	if fps != nil {
-		lookDir := fps.GetLookDirection()
+	if lookProvider != nil {
+		x, y, z := lookProvider.GetLookDirection()
+		lookDir := rl.Vector3{X: x, Y: y, Z: z}
 		target = rl.Vector3Add(eyePos, lookDir)
 	} else {
 		// Default: look forward along Z

@@ -28,14 +28,15 @@ func (s *Shooter) Update(deltaTime float32) {
 
 func (s *Shooter) DeleteTarget() {
 	g := s.GetGameObject()
-	fps := engine.GetComponent[*components.FPSController](g)
-	if fps == nil {
+	look := engine.FindComponent[engine.LookProvider](g)
+	if look == nil {
 		return
 	}
 
 	origin := g.Transform.Position
-	origin.Y += fps.EyeHeight
-	direction := fps.GetLookDirection()
+	origin.Y += look.GetEyeHeight()
+	dx, dy, dz := look.GetLookDirection()
+	direction := rl.Vector3{X: dx, Y: dy, Z: dz}
 
 	hit, ok := s.GetGameObject().Scene.World.Raycast(origin, direction, 100.0)
 	if !ok {
@@ -51,16 +52,17 @@ func (s *Shooter) DeleteTarget() {
 
 func (s *Shooter) Shoot() {
 	g := s.GetGameObject()
-	fps := engine.GetComponent[*components.FPSController](g)
-	if fps == nil {
+	look := engine.FindComponent[engine.LookProvider](g)
+	if look == nil {
 		return
 	}
 
 	s.shotCounter++
 
 	eyePos := g.Transform.Position
-	eyePos.Y += fps.EyeHeight
-	lookDir := fps.GetLookDirection()
+	eyePos.Y += look.GetEyeHeight()
+	dx, dy, dz := look.GetLookDirection()
+	lookDir := rl.Vector3{X: dx, Y: dy, Z: dz}
 	spawnPos := rl.Vector3Add(eyePos, rl.Vector3Scale(lookDir, 3))
 
 	radius := float32(0.5)

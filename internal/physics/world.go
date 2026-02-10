@@ -200,6 +200,13 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 			p.resolveStaticCollision(obj, static)
 		}
 	}
+
+	// 5. Kinematic vs Static collision (player vs walls/static objects)
+	for _, kinematic := range p.Kinematics {
+		for _, static := range p.Statics {
+			p.resolveKinematicStaticCollision(kinematic, static)
+		}
+	}
 }
 
 func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
@@ -559,4 +566,25 @@ func (p *PhysicsWorld) resolveKinematicCollision(kinematic, obj *engine.GameObje
 		impulse := rl.Vector3Scale(normal, kinVelAlongNormal*1.5)
 		rbObj.Velocity = rl.Vector3Subtract(rbObj.Velocity, impulse)
 	}
+}
+
+// resolveKinematicStaticCollision handles kinematic objects (player) colliding with static objects (walls)
+func (p *PhysicsWorld) resolveKinematicStaticCollision(kinematic, static *engine.GameObject) {
+	colKin := engine.GetComponent[*components.BoxCollider](kinematic)
+	colStatic := engine.GetComponent[*components.BoxCollider](static)
+
+	if colKin == nil || colStatic == nil {
+		return
+	}
+
+	obbKin := NewOBBFromBox(colKin.GetCenter(), colKin.Size, kinematic.WorldRotation(), kinematic.WorldScale())
+	obbStatic := NewOBBFromBox(colStatic.GetCenter(), colStatic.Size, static.WorldRotation(), static.WorldScale())
+
+	pushOut := obbKin.ResolveOBB(obbStatic)
+	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {
+		return
+	}
+
+	// Push kinematic out of static (static doesn't move)
+	kinematic.Transform.Position = rl.Vector3Add(kinematic.Transform.Position, pushOut)
 }
