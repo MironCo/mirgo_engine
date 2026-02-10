@@ -24,6 +24,13 @@ type PlayerController interface {
 	SetGrounded(grounded bool)
 }
 
+// CollisionHandler is implemented by components that want to receive collision callbacks.
+// Scripts can implement these methods to react to collisions.
+type CollisionHandler interface {
+	OnCollisionEnter(other *GameObject)
+	OnCollisionExit(other *GameObject)
+}
+
 // BaseComponent provides default implementation for Component interface
 type BaseComponent struct {
 	gameObject *GameObject

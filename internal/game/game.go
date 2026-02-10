@@ -103,8 +103,12 @@ func (g *Game) Update() {
 		g.DebugMode = !g.DebugMode
 	}
 
-	// P (no modifier) to pause/unpause - preserves scene state
-	if rl.IsKeyPressed(rl.KeyP) && !rl.IsKeyDown(rl.KeyLeftSuper) && !rl.IsKeyDown(rl.KeyRightSuper) && !rl.IsKeyDown(rl.KeyLeftControl) && !rl.IsKeyDown(rl.KeyRightControl) {
+	// Check for modifier keys
+	cmdOrCtrl := rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)
+	shift := rl.IsKeyDown(rl.KeyLeftShift) || rl.IsKeyDown(rl.KeyRightShift)
+
+	// Cmd/Ctrl+Shift+P to pause/unpause (preserves scene state)
+	if rl.IsKeyPressed(rl.KeyP) && cmdOrCtrl && shift {
 		if g.editor.Active {
 			// Resume game from pause
 			g.editor.Exit()
@@ -115,10 +119,8 @@ func (g *Game) Update() {
 				g.editor.Pause(cam.GetRaylibCamera())
 			}
 		}
-	}
-
-	// Cmd/Ctrl+P to toggle play mode (resets scene when entering editor)
-	if rl.IsKeyPressed(rl.KeyP) && (rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)) {
+	} else if rl.IsKeyPressed(rl.KeyP) && cmdOrCtrl && !shift {
+		// Cmd/Ctrl+P to toggle play mode (resets scene when entering editor)
 		if g.editor.Active {
 			// Enter game mode
 			g.editor.Exit()

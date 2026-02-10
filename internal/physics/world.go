@@ -44,21 +44,41 @@ func posToCell(pos rl.Vector3) CellKey {
 	}
 }
 
+// CollisionPair represents two objects that are colliding
+type CollisionPair struct {
+	A, B *engine.GameObject
+}
+
+// makePair creates a consistent collision pair (smaller pointer first)
+func makePair(a, b *engine.GameObject) CollisionPair {
+	ptrA, ptrB := uintptr(unsafe.Pointer(a)), uintptr(unsafe.Pointer(b))
+	if ptrA > ptrB {
+		return CollisionPair{A: b, B: a}
+	}
+	return CollisionPair{A: a, B: b}
+}
+
 type PhysicsWorld struct {
 	Gravity    rl.Vector3
 	Objects    []*engine.GameObject // dynamic rigidbodies
 	Kinematics []*engine.GameObject // kinematic rigidbodies (player, moving platforms)
 	Statics    []*engine.GameObject // no rigidbody (walls, floor)
 	grid       map[CellKey][]*engine.GameObject
+
+	// Collision tracking for callbacks
+	activeCollisions map[CollisionPair]bool // collisions from last frame
+	currentCollisions map[CollisionPair]bool // collisions this frame
 }
 
 func NewPhysicsWorld() *PhysicsWorld {
 	return &PhysicsWorld{
-		Gravity:    rl.Vector3{X: 0, Y: -20.0, Z: 0},
-		Objects:    make([]*engine.GameObject, 0),
-		Kinematics: make([]*engine.GameObject, 0),
-		Statics:    make([]*engine.GameObject, 0),
-		grid:       make(map[CellKey][]*engine.GameObject),
+		Gravity:           rl.Vector3{X: 0, Y: -20.0, Z: 0},
+		Objects:           make([]*engine.GameObject, 0),
+		Kinematics:        make([]*engine.GameObject, 0),
+		Statics:           make([]*engine.GameObject, 0),
+		grid:              make(map[CellKey][]*engine.GameObject),
+		activeCollisions:  make(map[CollisionPair]bool),
+		currentCollisions: make(map[CollisionPair]bool),
 	}
 }
 
@@ -129,6 +149,9 @@ func (p *PhysicsWorld) RemoveObject(g *engine.GameObject) {
 }
 
 func (p *PhysicsWorld) Update(deltaTime float32) {
+	// Reset current frame collisions
+	p.currentCollisions = make(map[CollisionPair]bool)
+
 	// 1. Apply gravity and integrate velocity
 	for _, obj := range p.Objects {
 		rb := engine.GetComponent[*components.Rigidbody](obj)
@@ -207,6 +230,57 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 			p.resolveKinematicStaticCollision(kinematic, static)
 		}
 	}
+
+	// 6. Dispatch collision callbacks
+	p.dispatchCollisionCallbacks()
+}
+
+// recordCollision marks a collision pair as active this frame
+func (p *PhysicsWorld) recordCollision(a, b *engine.GameObject) {
+	pair := makePair(a, b)
+	p.currentCollisions[pair] = true
+}
+
+// dispatchCollisionCallbacks sends OnCollisionEnter/Exit to handlers
+func (p *PhysicsWorld) dispatchCollisionCallbacks() {
+	// Find new collisions (enter)
+	for pair := range p.currentCollisions {
+		if !p.activeCollisions[pair] {
+			// New collision - call OnCollisionEnter
+			p.notifyCollisionEnter(pair.A, pair.B)
+			p.notifyCollisionEnter(pair.B, pair.A)
+		}
+	}
+
+	// Find ended collisions (exit)
+	for pair := range p.activeCollisions {
+		if !p.currentCollisions[pair] {
+			// Collision ended - call OnCollisionExit
+			p.notifyCollisionExit(pair.A, pair.B)
+			p.notifyCollisionExit(pair.B, pair.A)
+		}
+	}
+
+	// Swap buffers
+	p.activeCollisions = p.currentCollisions
+}
+
+// notifyCollisionEnter calls OnCollisionEnter on all handlers in obj
+func (p *PhysicsWorld) notifyCollisionEnter(obj, other *engine.GameObject) {
+	for _, comp := range obj.Components() {
+		if handler, ok := comp.(engine.CollisionHandler); ok {
+			handler.OnCollisionEnter(other)
+		}
+	}
+}
+
+// notifyCollisionExit calls OnCollisionExit on all handlers in obj
+func (p *PhysicsWorld) notifyCollisionExit(obj, other *engine.GameObject) {
+	for _, comp := range obj.Components() {
+		if handler, ok := comp.(engine.CollisionHandler); ok {
+			handler.OnCollisionExit(other)
+		}
+	}
 }
 
 func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
@@ -251,6 +325,9 @@ func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
 	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {
 		return
 	}
+
+	// Record collision for callbacks
+	p.recordCollision(a, b)
 
 	// Split the push based on mass ratio
 	totalMass := rbA.Mass + rbB.Mass
@@ -313,6 +390,9 @@ func (p *PhysicsWorld) resolveSphereVsSphere(a, b *engine.GameObject, rbA, rbB *
 		return
 	}
 
+	// Record collision for callbacks
+	p.recordCollision(a, b)
+
 	// Collision normal
 	normal := rl.Vector3Scale(diff, 1/dist)
 	penetration := minDist - dist
@@ -370,6 +450,9 @@ func (p *PhysicsWorld) resolveSphereVsBox(sphereObj, boxObj *engine.GameObject, 
 	if dist >= sphere.Radius || dist < 0.0001 {
 		return
 	}
+
+	// Record collision for callbacks
+	p.recordCollision(sphereObj, boxObj)
 
 	// Normal points from box to sphere
 	normal := rl.Vector3Scale(diff, 1/dist)
@@ -448,6 +531,9 @@ func (p *PhysicsWorld) resolveStaticCollision(obj, static *engine.GameObject) {
 		return
 	}
 
+	// Record collision for callbacks
+	p.recordCollision(obj, static)
+
 	// Push fully out (static doesn't move)
 	obj.Transform.Position = rl.Vector3Add(obj.Transform.Position, pushOut)
 
@@ -499,6 +585,9 @@ func (p *PhysicsWorld) resolveSphereVsStaticBox(obj, static *engine.GameObject, 
 		return
 	}
 
+	// Record collision for callbacks
+	p.recordCollision(obj, static)
+
 	// Normal points from box to sphere
 	normal := rl.Vector3Scale(diff, 1/dist)
 	penetration := sphere.Radius - dist
@@ -549,6 +638,9 @@ func (p *PhysicsWorld) resolveKinematicCollision(kinematic, obj *engine.GameObje
 		return
 	}
 
+	// Record collision for callbacks
+	p.recordCollision(kinematic, obj)
+
 	// Push the dynamic object fully out (kinematic doesn't move)
 	obj.Transform.Position = rl.Vector3Subtract(obj.Transform.Position, pushOut)
 
@@ -584,6 +676,9 @@ func (p *PhysicsWorld) resolveKinematicStaticCollision(kinematic, static *engine
 	if pushOut.X == 0 && pushOut.Y == 0 && pushOut.Z == 0 {
 		return
 	}
+
+	// Record collision for callbacks
+	p.recordCollision(kinematic, static)
 
 	// Push kinematic out of static (static doesn't move)
 	kinematic.Transform.Position = rl.Vector3Add(kinematic.Transform.Position, pushOut)

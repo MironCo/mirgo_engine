@@ -102,6 +102,10 @@ type Editor struct {
 	editingName    bool   // True if editing the object name
 	nameEditBuffer string // Current text in name edit field
 
+	// Tags editing state
+	editingTags    bool   // True if editing tags
+	tagsEditBuffer string // Current text in tags edit field
+
 	// Panel sizing
 	hierarchyWidth  int32 // Width of hierarchy panel (default 210)
 	inspectorWidth  int32 // Width of inspector panel (default 310)
@@ -396,7 +400,7 @@ func (e *Editor) Update(deltaTime float32) {
 	}
 
 	// Gizmo mode hotkeys (only when not holding RMB for camera and not editing text)
-	isEditingText := e.editingName || e.activeInputID != ""
+	isEditingText := e.editingName || e.editingTags || e.activeInputID != ""
 	if !rl.IsMouseButtonDown(rl.MouseRightButton) && !isEditingText {
 		if rl.IsKeyPressed(rl.KeyW) {
 			e.gizmoMode = GizmoMove
@@ -1100,18 +1104,80 @@ func (e *Editor) drawInspector() {
 	}
 	y += nameFieldH + 4
 
-	// Tags
-	if tags := e.Selected.Tags; len(tags) > 0 {
-		tagStr := ""
-		for i, t := range tags {
-			if i > 0 {
-				tagStr += ", "
-			}
-			tagStr += t
-		}
-		drawTextEx(editorFont, "Tags: "+tagStr, panelX+12, y, 16, colorTextMuted)
-		y += 22
+	// Tags (editable)
+	drawTextEx(editorFont, "Tags", panelX+12, y, 14, colorTextMuted)
+	y += 18
+
+	tagsFieldW := panelW - 20
+	tagsFieldH := int32(22)
+	tagsFieldX := panelX + 10
+	tagsFieldY := y
+
+	tagsHovered := mousePos.X >= float32(tagsFieldX) && mousePos.X <= float32(tagsFieldX+tagsFieldW) &&
+		mousePos.Y >= float32(tagsFieldY) && mousePos.Y <= float32(tagsFieldY+tagsFieldH)
+
+	// Background for tags field
+	tagsBgColor := colorBgElement
+	if e.editingTags {
+		tagsBgColor = colorBgActive
+	} else if tagsHovered {
+		tagsBgColor = colorBgHover
 	}
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(tagsFieldX), Y: float32(tagsFieldY), Width: float32(tagsFieldW), Height: float32(tagsFieldH)}, 0.2, 6, tagsBgColor)
+	if e.editingTags {
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(tagsFieldX), Y: float32(tagsFieldY), Width: float32(tagsFieldW), Height: float32(tagsFieldH)}, 0.2, 6, 1, colorAccent)
+	}
+
+	if e.editingTags {
+		// Draw editing text with cursor
+		drawTextEx(editorFont, e.tagsEditBuffer+"_", tagsFieldX+6, tagsFieldY+4, 14, colorTextPrimary)
+
+		// Handle typing
+		for {
+			key := rl.GetCharPressed()
+			if key == 0 {
+				break
+			}
+			e.tagsEditBuffer += string(rune(key))
+		}
+
+		// Backspace
+		if rl.IsKeyPressed(rl.KeyBackspace) && len(e.tagsEditBuffer) > 0 {
+			e.tagsEditBuffer = e.tagsEditBuffer[:len(e.tagsEditBuffer)-1]
+		}
+
+		// Enter to confirm
+		if rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) {
+			e.applyTagsFromBuffer()
+		}
+
+		// Escape to cancel
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			e.editingTags = false
+			e.tagsEditBuffer = ""
+		}
+
+		// Click outside to confirm
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) && !tagsHovered {
+			e.applyTagsFromBuffer()
+		}
+	} else {
+		// Display tags
+		tagStr := strings.Join(e.Selected.Tags, ", ")
+		if tagStr == "" {
+			tagStr = "(none)"
+			drawTextEx(editorFont, tagStr, tagsFieldX+6, tagsFieldY+4, 14, colorTextMuted)
+		} else {
+			drawTextEx(editorFont, tagStr, tagsFieldX+6, tagsFieldY+4, 14, colorTextSecondary)
+		}
+
+		// Click to edit
+		if tagsHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			e.editingTags = true
+			e.tagsEditBuffer = strings.Join(e.Selected.Tags, ", ")
+		}
+	}
+	y += tagsFieldH + 6
 
 	// Separator
 	rl.DrawLine(panelX+12, y+2, panelX+panelW-12, y+2, rl.NewColor(40, 40, 55, 255))
@@ -2012,6 +2078,29 @@ func colorName(c rl.Color) string {
 	default:
 		return fmt.Sprintf("#%02x%02x%02x", c.R, c.G, c.B)
 	}
+}
+
+// applyTagsFromBuffer parses the tags edit buffer and applies it to the selected object.
+func (e *Editor) applyTagsFromBuffer() {
+	if e.Selected == nil {
+		e.editingTags = false
+		e.tagsEditBuffer = ""
+		return
+	}
+
+	// Parse comma-separated tags
+	parts := strings.Split(e.tagsEditBuffer, ",")
+	tags := make([]string, 0, len(parts))
+	for _, p := range parts {
+		tag := strings.TrimSpace(p)
+		if tag != "" {
+			tags = append(tags, tag)
+		}
+	}
+
+	e.Selected.Tags = tags
+	e.editingTags = false
+	e.tagsEditBuffer = ""
 }
 
 // deleteSelectedObject removes the currently selected object from the scene.

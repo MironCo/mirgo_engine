@@ -4,16 +4,16 @@
   "windowX": 0,
   "windowY": 65,
   "cameraPosition": {
-    "X": -17.879728,
-    "Y": 6.4202757,
-    "Z": -4.7377815
+    "X": -10.230561,
+    "Y": 4.2489867,
+    "Z": 9.73599
   },
-  "cameraYaw": -0.12671494,
-  "cameraPitch": -14.63709,
+  "cameraYaw": -24.79471,
+  "cameraPitch": -2.1050704,
   "cameraMoveSpeed": 10,
   "scenePath": "assets/scenes/main.json",
   "assetBrowserOpen": true,
-  "assetBrowserPath": "assets",
+  "assetBrowserPath": "assets/materials",
   "hierarchyWidth": 210,
   "inspectorWidth": 282
 }
