@@ -244,7 +244,7 @@ See complete examples in the documentation:
 
 ## License
 
-[Your License Here]
+[MIT License](LICENSE)
 
 ## Credits
 
