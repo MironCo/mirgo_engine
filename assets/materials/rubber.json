@@ -1,7 +1,7 @@
 {
   "name": "Rubber",
   "color": "Yellow",
-  "metallic": 0.13277344,
+  "metallic": 0.49015626,
   "roughness": 0.3647656,
   "emissive": 0,
   "albedo": "assets/models/rubber_duck_toy_1k.gltf/textures/rubber_duck_toy_diff_1k.jpg"
