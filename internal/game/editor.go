@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"test3d/internal/assets"
+	"test3d/internal/audio"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 	"test3d/internal/world"
@@ -128,6 +129,7 @@ func (e *Editor) Enter(currentCam rl.Camera3D) {
 	e.Active = true
 	e.Paused = false
 	rl.EnableCursor()
+	audio.SetPlayMode(false)
 
 	// Reload scene from disk to undo all play mode changes
 	e.world.ResetScene()
@@ -152,6 +154,7 @@ func (e *Editor) Pause(currentCam rl.Camera3D) {
 	e.Active = true
 	e.Paused = true
 	rl.EnableCursor()
+	audio.SetPlayMode(false)
 
 	// Don't reset scene - preserve current state
 	e.Selected = nil
@@ -182,6 +185,7 @@ func (e *Editor) Exit() {
 	e.dragging = false
 	e.hoveredAxis = -1
 	rl.DisableCursor()
+	audio.SetPlayMode(true)
 }
 
 func (e *Editor) Update(deltaTime float32) {

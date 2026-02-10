@@ -4,12 +4,12 @@
   "windowX": 0,
   "windowY": 65,
   "cameraPosition": {
-    "X": 1.4761002,
-    "Y": 5.928732,
-    "Z": -9.888941
+    "X": -4.812415,
+    "Y": 4.0590625,
+    "Z": 4.8356133
   },
-  "cameraYaw": 57.378357,
-  "cameraPitch": -28.132433,
+  "cameraYaw": -11.780634,
+  "cameraPitch": -15.277727,
   "cameraMoveSpeed": 10.2,
   "scenePath": "assets/scenes/main.json",
   "assetBrowserOpen": true,

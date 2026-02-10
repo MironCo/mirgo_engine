@@ -3,10 +3,11 @@ package world
 import (
 	"log"
 	"test3d/internal/assets"
+	"test3d/internal/audio"
 	"test3d/internal/components"
-	_ "test3d/internal/scripts"
 	"test3d/internal/engine"
 	"test3d/internal/physics"
+	_ "test3d/internal/scripts"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -34,6 +35,7 @@ func New() *World {
 
 func (w *World) Initialize() {
 	assets.Init()
+	audio.Init()
 	w.Renderer.Initialize(FloorSize)
 
 	// Load scene objects from JSON
@@ -72,6 +74,7 @@ func (w *World) ResetScene() {
 func (w *World) Update(deltaTime float32) {
 	w.PhysicsWorld.Update(deltaTime)
 	w.Scene.Update(deltaTime)
+	audio.Update()
 }
 
 // SpawnObject adds a GameObject to both the scene and physics world.
@@ -139,6 +142,7 @@ func (w *World) EditorRaycast(origin, direction rl.Vector3, maxDistance float32)
 func (w *World) Unload() {
 	w.Renderer.Unload(w.Scene.GameObjects)
 	assets.Unload()
+	audio.Close()
 }
 
 func (w *World) GetShader() rl.Shader {
