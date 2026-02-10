@@ -28,11 +28,30 @@ func New() *Game {
 }
 
 func (g *Game) Run(restoreEditor bool) {
+	// Load editor preferences before creating window
+	prefs := LoadEditorPrefs()
+
 	rl.SetConfigFlags(rl.FlagWindowHighdpi | rl.FlagWindowResizable)
-	rl.InitWindow(1280, 720, "Mirgo Engine")
-	defer rl.CloseWindow()
+
+	// Use saved window size or default
+	windowW, windowH := 1280, 720
+	if prefs != nil && prefs.WindowWidth > 0 && prefs.WindowHeight > 0 {
+		windowW = prefs.WindowWidth
+		windowH = prefs.WindowHeight
+	}
+	rl.InitWindow(int32(windowW), int32(windowH), "Mirgo Engine")
+
+	// Restore window position if we have valid prefs
+	if prefs != nil && (prefs.WindowX > 0 || prefs.WindowY > 0) {
+		rl.SetWindowPosition(prefs.WindowX, prefs.WindowY)
+	}
 
 	rl.SetTargetFPS(120)
+
+	// Load the scene from prefs if available
+	if prefs != nil && prefs.ScenePath != "" {
+		world.ScenePath = prefs.ScenePath
+	}
 
 	// Initialize world after OpenGL context is created
 	g.World.Initialize()
@@ -55,6 +74,11 @@ func (g *Game) Run(restoreEditor bool) {
 		})
 	}
 
+	// Apply editor preferences (camera position, panel sizes, etc.)
+	if prefs != nil && !restoreEditor {
+		g.editor.ApplyPrefs(prefs)
+	}
+
 	// Restore editor state if relaunching after hot-reload
 	if restoreEditor {
 		g.editor.RestoreState()
@@ -64,6 +88,10 @@ func (g *Game) Run(restoreEditor bool) {
 		g.Update()
 		g.Draw()
 	}
+
+	// Save editor preferences before closing
+	g.editor.SavePrefs()
+	rl.CloseWindow()
 }
 
 func (g *Game) Update() {
@@ -75,8 +103,12 @@ func (g *Game) Update() {
 		g.DebugMode = !g.DebugMode
 	}
 
-	// P (no modifier) to pause/unpause - preserves scene state
-	if rl.IsKeyPressed(rl.KeyP) && !rl.IsKeyDown(rl.KeyLeftSuper) && !rl.IsKeyDown(rl.KeyRightSuper) && !rl.IsKeyDown(rl.KeyLeftControl) && !rl.IsKeyDown(rl.KeyRightControl) {
+	// Check for modifier keys
+	cmdOrCtrl := rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)
+	shift := rl.IsKeyDown(rl.KeyLeftShift) || rl.IsKeyDown(rl.KeyRightShift)
+
+	// Cmd/Ctrl+Shift+P to pause/unpause (preserves scene state)
+	if rl.IsKeyPressed(rl.KeyP) && cmdOrCtrl && shift {
 		if g.editor.Active {
 			// Resume game from pause
 			g.editor.Exit()
@@ -87,10 +119,8 @@ func (g *Game) Update() {
 				g.editor.Pause(cam.GetRaylibCamera())
 			}
 		}
-	}
-
-	// Cmd/Ctrl+P to toggle play mode (resets scene when entering editor)
-	if rl.IsKeyPressed(rl.KeyP) && (rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)) {
+	} else if rl.IsKeyPressed(rl.KeyP) && cmdOrCtrl && !shift {
+		// Cmd/Ctrl+P to toggle play mode (resets scene when entering editor)
 		if g.editor.Active {
 			// Enter game mode
 			g.editor.Exit()

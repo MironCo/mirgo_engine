@@ -102,6 +102,10 @@ type Editor struct {
 	editingName    bool   // True if editing the object name
 	nameEditBuffer string // Current text in name edit field
 
+	// Tags editing state
+	editingTags    bool   // True if editing tags
+	tagsEditBuffer string // Current text in tags edit field
+
 	// Panel sizing
 	hierarchyWidth  int32 // Width of hierarchy panel (default 210)
 	inspectorWidth  int32 // Width of inspector panel (default 310)
@@ -396,7 +400,7 @@ func (e *Editor) Update(deltaTime float32) {
 	}
 
 	// Gizmo mode hotkeys (only when not holding RMB for camera and not editing text)
-	isEditingText := e.editingName || e.activeInputID != ""
+	isEditingText := e.editingName || e.editingTags || e.activeInputID != ""
 	if !rl.IsMouseButtonDown(rl.MouseRightButton) && !isEditingText {
 		if rl.IsKeyPressed(rl.KeyW) {
 			e.gizmoMode = GizmoMove
@@ -1100,18 +1104,80 @@ func (e *Editor) drawInspector() {
 	}
 	y += nameFieldH + 4
 
-	// Tags
-	if tags := e.Selected.Tags; len(tags) > 0 {
-		tagStr := ""
-		for i, t := range tags {
-			if i > 0 {
-				tagStr += ", "
-			}
-			tagStr += t
-		}
-		drawTextEx(editorFont, "Tags: "+tagStr, panelX+12, y, 16, colorTextMuted)
-		y += 22
+	// Tags (editable)
+	drawTextEx(editorFont, "Tags", panelX+12, y, 14, colorTextMuted)
+	y += 18
+
+	tagsFieldW := panelW - 20
+	tagsFieldH := int32(22)
+	tagsFieldX := panelX + 10
+	tagsFieldY := y
+
+	tagsHovered := mousePos.X >= float32(tagsFieldX) && mousePos.X <= float32(tagsFieldX+tagsFieldW) &&
+		mousePos.Y >= float32(tagsFieldY) && mousePos.Y <= float32(tagsFieldY+tagsFieldH)
+
+	// Background for tags field
+	tagsBgColor := colorBgElement
+	if e.editingTags {
+		tagsBgColor = colorBgActive
+	} else if tagsHovered {
+		tagsBgColor = colorBgHover
 	}
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(tagsFieldX), Y: float32(tagsFieldY), Width: float32(tagsFieldW), Height: float32(tagsFieldH)}, 0.2, 6, tagsBgColor)
+	if e.editingTags {
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(tagsFieldX), Y: float32(tagsFieldY), Width: float32(tagsFieldW), Height: float32(tagsFieldH)}, 0.2, 6, 1, colorAccent)
+	}
+
+	if e.editingTags {
+		// Draw editing text with cursor
+		drawTextEx(editorFont, e.tagsEditBuffer+"_", tagsFieldX+6, tagsFieldY+4, 14, colorTextPrimary)
+
+		// Handle typing
+		for {
+			key := rl.GetCharPressed()
+			if key == 0 {
+				break
+			}
+			e.tagsEditBuffer += string(rune(key))
+		}
+
+		// Backspace
+		if rl.IsKeyPressed(rl.KeyBackspace) && len(e.tagsEditBuffer) > 0 {
+			e.tagsEditBuffer = e.tagsEditBuffer[:len(e.tagsEditBuffer)-1]
+		}
+
+		// Enter to confirm
+		if rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) {
+			e.applyTagsFromBuffer()
+		}
+
+		// Escape to cancel
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			e.editingTags = false
+			e.tagsEditBuffer = ""
+		}
+
+		// Click outside to confirm
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) && !tagsHovered {
+			e.applyTagsFromBuffer()
+		}
+	} else {
+		// Display tags
+		tagStr := strings.Join(e.Selected.Tags, ", ")
+		if tagStr == "" {
+			tagStr = "(none)"
+			drawTextEx(editorFont, tagStr, tagsFieldX+6, tagsFieldY+4, 14, colorTextMuted)
+		} else {
+			drawTextEx(editorFont, tagStr, tagsFieldX+6, tagsFieldY+4, 14, colorTextSecondary)
+		}
+
+		// Click to edit
+		if tagsHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			e.editingTags = true
+			e.tagsEditBuffer = strings.Join(e.Selected.Tags, ", ")
+		}
+	}
+	y += tagsFieldH + 6
 
 	// Separator
 	rl.DrawLine(panelX+12, y+2, panelX+panelW-12, y+2, rl.NewColor(40, 40, 55, 255))
@@ -2014,6 +2080,29 @@ func colorName(c rl.Color) string {
 	}
 }
 
+// applyTagsFromBuffer parses the tags edit buffer and applies it to the selected object.
+func (e *Editor) applyTagsFromBuffer() {
+	if e.Selected == nil {
+		e.editingTags = false
+		e.tagsEditBuffer = ""
+		return
+	}
+
+	// Parse comma-separated tags
+	parts := strings.Split(e.tagsEditBuffer, ",")
+	tags := make([]string, 0, len(parts))
+	for _, p := range parts {
+		tag := strings.TrimSpace(p)
+		if tag != "" {
+			tags = append(tags, tag)
+		}
+	}
+
+	e.Selected.Tags = tags
+	e.editingTags = false
+	e.tagsEditBuffer = ""
+}
+
 // deleteSelectedObject removes the currently selected object from the scene.
 func (e *Editor) deleteSelectedObject() {
 	if e.Selected == nil {
@@ -2262,6 +2351,29 @@ func (e *Editor) drawAssetBrowser() {
 			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + half + 2), Y: float32(iconY + half + 2), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(220, 220, 220, 255))
 			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + half + 2), Y: float32(iconY + 4), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(120, 120, 130, 255))
 			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + 4), Y: float32(iconY + half + 2), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(120, 120, 130, 255))
+		case "scene":
+			// Scene icon - clapperboard style
+			sceneColor := rl.NewColor(100, 180, 255, 255)    // Light blue
+			sceneDark := rl.NewColor(60, 120, 200, 255)      // Darker blue
+			sceneStripe := rl.NewColor(40, 80, 160, 255)     // Stripe color
+			// Clapperboard top (angled stripes part)
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY), Width: float32(iconSize), Height: 14}, 0.3, 4, sceneDark)
+			// Diagonal stripes on top
+			for i := int32(0); i < 5; i++ {
+				stripeX := iconX + i*9
+				rl.DrawRectangle(stripeX, iconY+2, 4, 10, sceneStripe)
+			}
+			// Main body
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY + 12), Width: float32(iconSize), Height: float32(iconSize - 12)}, 0.15, 4, sceneColor)
+			// Play triangle in center
+			centerX := float32(iconX + iconSize/2)
+			centerY := float32(iconY + 12 + (iconSize-12)/2)
+			rl.DrawTriangle(
+				rl.NewVector2(centerX-6, centerY-8),
+				rl.NewVector2(centerX-6, centerY+8),
+				rl.NewVector2(centerX+8, centerY),
+				rl.White,
+			)
 		default:
 			// Generic file icon - document style
 			docColor := rl.NewColor(140, 140, 160, 255)
@@ -2312,6 +2424,11 @@ func (e *Editor) drawAssetBrowser() {
 			} else if asset.Type == "model" {
 				// Click model: spawn into scene
 				e.spawnModelFromAsset(asset)
+			} else if asset.Type == "scene" {
+				if isDoubleClick {
+					// Double-click scene: open it
+					e.openScene(asset.Path)
+				}
 			}
 
 			e.lastClickTime = now
@@ -2512,6 +2629,56 @@ func (e *Editor) spawnModelFromAsset(asset AssetEntry) {
 	e.Selected = obj
 
 	e.saveMsg = fmt.Sprintf("Spawned %s", asset.Name)
+	e.saveMsgTime = rl.GetTime()
+}
+
+// openScene saves the current scene and loads a new one
+func (e *Editor) openScene(scenePath string) {
+	// Don't reload if it's the same scene
+	if scenePath == world.ScenePath {
+		e.saveMsg = "Already editing this scene"
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Save current scene first
+	if err := e.world.SaveScene(world.ScenePath); err != nil {
+		e.saveMsg = fmt.Sprintf("Save failed: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Unload all models from current scene
+	for _, g := range e.world.Scene.GameObjects {
+		if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+			renderer.Unload()
+		}
+	}
+
+	// Clear scene and physics
+	e.world.Scene.GameObjects = e.world.Scene.GameObjects[:0]
+	e.world.PhysicsWorld.Objects = e.world.PhysicsWorld.Objects[:0]
+	e.world.PhysicsWorld.Statics = e.world.PhysicsWorld.Statics[:0]
+	e.world.PhysicsWorld.Kinematics = e.world.PhysicsWorld.Kinematics[:0]
+
+	// Update the scene path
+	world.ScenePath = scenePath
+
+	// Load the new scene
+	if err := e.world.LoadScene(scenePath); err != nil {
+		e.saveMsg = fmt.Sprintf("Failed to load scene: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Start all GameObjects in the new scene
+	e.world.Scene.Start()
+
+	// Clear selection and undo stack
+	e.Selected = nil
+	e.undoStack = e.undoStack[:0]
+
+	e.saveMsg = fmt.Sprintf("Opened %s", filepath.Base(scenePath))
 	e.saveMsgTime = rl.GetTime()
 }
 
@@ -2787,5 +2954,96 @@ func (e *Editor) rebuildAndRelaunch() {
 	if err != nil {
 		fmt.Printf("Failed to exec: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// EditorPrefs holds persistent editor preferences saved between sessions
+type EditorPrefs struct {
+	WindowWidth     int        `json:"windowWidth"`
+	WindowHeight    int        `json:"windowHeight"`
+	WindowX         int        `json:"windowX"`
+	WindowY         int        `json:"windowY"`
+	CameraPosition  rl.Vector3 `json:"cameraPosition"`
+	CameraYaw       float32    `json:"cameraYaw"`
+	CameraPitch     float32    `json:"cameraPitch"`
+	CameraMoveSpeed float32    `json:"cameraMoveSpeed"`
+	ScenePath       string     `json:"scenePath"`
+	AssetBrowserOpen bool      `json:"assetBrowserOpen"`
+	AssetBrowserPath string    `json:"assetBrowserPath"`
+	HierarchyWidth   int32     `json:"hierarchyWidth"`
+	InspectorWidth   int32     `json:"inspectorWidth"`
+}
+
+const editorPrefsFile = ".editor_prefs.json"
+
+// LoadEditorPrefs loads editor preferences from disk
+func LoadEditorPrefs() *EditorPrefs {
+	data, err := os.ReadFile(editorPrefsFile)
+	if err != nil {
+		return nil
+	}
+
+	var prefs EditorPrefs
+	if err := json.Unmarshal(data, &prefs); err != nil {
+		fmt.Printf("Failed to parse editor prefs: %v\n", err)
+		return nil
+	}
+
+	return &prefs
+}
+
+// SavePrefs saves the current editor state to disk
+func (e *Editor) SavePrefs() {
+	prefs := EditorPrefs{
+		WindowWidth:      rl.GetScreenWidth(),
+		WindowHeight:     rl.GetScreenHeight(),
+		WindowX:          int(rl.GetWindowPosition().X),
+		WindowY:          int(rl.GetWindowPosition().Y),
+		CameraPosition:   e.camera.Position,
+		CameraYaw:        e.camera.Yaw,
+		CameraPitch:      e.camera.Pitch,
+		CameraMoveSpeed:  e.camera.MoveSpeed,
+		ScenePath:        world.ScenePath,
+		AssetBrowserOpen: e.showAssetBrowser,
+		AssetBrowserPath: e.currentAssetPath,
+		HierarchyWidth:   e.hierarchyWidth,
+		InspectorWidth:   e.inspectorWidth,
+	}
+
+	data, err := json.MarshalIndent(prefs, "", "  ")
+	if err != nil {
+		fmt.Printf("Failed to marshal editor prefs: %v\n", err)
+		return
+	}
+
+	if err := os.WriteFile(editorPrefsFile, data, 0644); err != nil {
+		fmt.Printf("Failed to save editor prefs: %v\n", err)
+	}
+}
+
+// ApplyPrefs applies loaded preferences to the editor
+func (e *Editor) ApplyPrefs(prefs *EditorPrefs) {
+	if prefs == nil {
+		return
+	}
+
+	e.camera.Position = prefs.CameraPosition
+	e.camera.Yaw = prefs.CameraYaw
+	e.camera.Pitch = prefs.CameraPitch
+	if prefs.CameraMoveSpeed > 0 {
+		e.camera.MoveSpeed = prefs.CameraMoveSpeed
+	}
+	if prefs.HierarchyWidth > 0 {
+		e.hierarchyWidth = prefs.HierarchyWidth
+	}
+	if prefs.InspectorWidth > 0 {
+		e.inspectorWidth = prefs.InspectorWidth
+	}
+	e.showAssetBrowser = prefs.AssetBrowserOpen
+	if prefs.AssetBrowserPath != "" {
+		e.currentAssetPath = prefs.AssetBrowserPath
+		if e.showAssetBrowser {
+			e.scanAssets()
+		}
 	}
 }
