@@ -89,7 +89,7 @@ func (s *Shooter) Shoot() {
 // --- Generated boilerplate below ---
 
 func init() {
-	engine.RegisterScript("Shooter", shooterFactory, shooterSerializer)
+	engine.RegisterScriptWithApplier("Shooter", shooterFactory, shooterSerializer, shooterApplier)
 }
 
 func shooterFactory(props map[string]any) engine.Component {
@@ -108,4 +108,19 @@ func shooterSerializer(c engine.Component) map[string]any {
 	return map[string]any{
 		"cooldown": s.Cooldown,
 	}
+}
+
+func shooterApplier(c engine.Component, propName string, value any) bool {
+	s, ok := c.(*Shooter)
+	if !ok {
+		return false
+	}
+	switch propName {
+	case "cooldown":
+		if v, ok := value.(float64); ok {
+			s.Cooldown = v
+			return true
+		}
+	}
+	return false
 }

@@ -23,7 +23,7 @@ func (r *Rotator) Update(deltaTime float32) {
 // --- Generated boilerplate below ---
 
 func init() {
-	engine.RegisterScript("Rotator", rotatorFactory, rotatorSerializer)
+	engine.RegisterScriptWithApplier("Rotator", rotatorFactory, rotatorSerializer, rotatorApplier)
 }
 
 func rotatorFactory(props map[string]any) engine.Component {
@@ -42,4 +42,19 @@ func rotatorSerializer(c engine.Component) map[string]any {
 	return map[string]any{
 		"speed": s.Speed,
 	}
+}
+
+func rotatorApplier(c engine.Component, propName string, value any) bool {
+	s, ok := c.(*Rotator)
+	if !ok {
+		return false
+	}
+	switch propName {
+	case "speed":
+		if v, ok := value.(float64); ok {
+			s.Speed = float32(v)
+			return true
+		}
+	}
+	return false
 }

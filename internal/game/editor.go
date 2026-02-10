@@ -55,6 +55,7 @@ type Editor struct {
 	// Inspector panel
 	inspectorScroll      int32
 	showAddComponentMenu bool
+	addComponentScroll   int32 // Scroll offset for add component menu
 
 	// Float field editing state
 	activeInputID     string  // e.g., "pos.x", "rot.y", "mass"
@@ -1046,6 +1047,9 @@ func (e *Editor) drawInspector() {
 	clickedAddButton := false
 	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		e.showAddComponentMenu = !e.showAddComponentMenu
+		if e.showAddComponentMenu {
+			e.addComponentScroll = 0 // Reset scroll when opening menu
+		}
 		clickedAddButton = true
 	}
 
@@ -1327,7 +1331,7 @@ func (e *Editor) drawComponentEntry(panelX, y, panelW int32, index int, c engine
 		xBtnColor = rl.NewColor(180, 60, 60, 230)
 	}
 	rl.DrawRectangleRounded(rl.Rectangle{X: float32(xBtnX), Y: float32(xBtnY), Width: float32(xBtnSize), Height: float32(xBtnSize)}, 0.3, 4, xBtnColor)
-	drawTextEx(editorFontBold, "×", xBtnX+4, xBtnY+1, 16, colorTextPrimary)
+	drawTextEx(editorFontBold, "x", xBtnX+5, xBtnY+2, 14, colorTextPrimary)
 
 	shouldRemove := xHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton)
 	y += headerH + 4
@@ -1526,10 +1530,70 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		// For scripts and unknown components, try to get script name
 		if name, props, ok := engine.SerializeScript(c); ok {
 			drawTextEx(editorFont, fmt.Sprintf("Script: %s", name), indent, y, 15, colorAccentLight)
-			y += 18
-			for k, v := range props {
-				drawTextEx(editorFont, fmt.Sprintf("  %s: %v", k, v), indent, y, 14, colorTextMuted)
-				y += 16
+			y += 20
+
+			// Sort property keys for consistent display
+			keys := make([]string, 0, len(props))
+			for k := range props {
+				keys = append(keys, k)
+			}
+			for i := 0; i < len(keys)-1; i++ {
+				for j := i + 1; j < len(keys); j++ {
+					if keys[i] > keys[j] {
+						keys[i], keys[j] = keys[j], keys[i]
+					}
+				}
+			}
+
+			// Draw editable fields for each property
+			for _, k := range keys {
+				v := props[k]
+				fieldID := fmt.Sprintf("script%d.%s", compIdx, k)
+
+				switch val := v.(type) {
+				case float32:
+					drawTextEx(editorFont, k, indent, y+4, 14, colorTextMuted)
+					newVal := e.drawFloatField(indent+labelW, y, fieldW, fieldH, fieldID, val)
+					if newVal != val {
+						engine.ApplyScriptProperty(c, k, float64(newVal))
+					}
+					y += fieldH + 4
+
+				case float64:
+					drawTextEx(editorFont, k, indent, y+4, 14, colorTextMuted)
+					newVal := e.drawFloatField(indent+labelW, y, fieldW, fieldH, fieldID, float32(val))
+					if float64(newVal) != val {
+						engine.ApplyScriptProperty(c, k, float64(newVal))
+					}
+					y += fieldH + 4
+
+				case int:
+					drawTextEx(editorFont, k, indent, y+4, 14, colorTextMuted)
+					newVal := e.drawFloatField(indent+labelW, y, fieldW, fieldH, fieldID, float32(val))
+					if int(newVal) != val {
+						engine.ApplyScriptProperty(c, k, float64(newVal))
+					}
+					y += fieldH + 4
+
+				case bool:
+					drawTextEx(editorFont, k, indent, y+4, 14, colorTextMuted)
+					checkBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+					newVal := gui.CheckBox(checkBounds, "", val)
+					if newVal != val {
+						engine.ApplyScriptProperty(c, k, newVal)
+					}
+					y += fieldH + 4
+
+				case string:
+					drawTextEx(editorFont, k, indent, y+4, 14, colorTextMuted)
+					drawTextEx(editorFont, val, indent+labelW, y+4, 14, colorTextSecondary)
+					y += fieldH + 4
+
+				default:
+					// Display non-editable types as text
+					drawTextEx(editorFont, fmt.Sprintf("%s: %v", k, v), indent, y, 14, colorTextMuted)
+					y += 16
+				}
 			}
 			y += 4
 		} else {
@@ -1544,21 +1608,69 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 // justOpened prevents the menu from closing on the same frame it was opened.
 func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 	itemH := int32(26)
-	menuH := int32(len(editorComponentTypes)) * itemH
+	maxVisibleItems := int32(12) // Max items visible before scrolling
 
-	// Draw menu background - rounded with border
-	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, colorBgPanel)
-	rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, 1, colorBorder)
+	// Get registered scripts
+	scripts := engine.GetRegisteredScripts()
+
+	// Total items: built-in components + separator + scripts
+	totalItems := int32(len(editorComponentTypes))
+	if len(scripts) > 0 {
+		totalItems += 1 + int32(len(scripts)) // +1 for separator
+	}
+
+	contentH := totalItems * itemH
+	menuH := contentH
+	needsScroll := totalItems > maxVisibleItems
+	if needsScroll {
+		menuH = maxVisibleItems * itemH
+	}
 
 	mousePos := rl.GetMousePosition()
 	mouseInMenu := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
 		mousePos.Y >= float32(y) && mousePos.Y <= float32(y+menuH)
 
-	for i, compType := range editorComponentTypes {
-		itemY := y + int32(i)*itemH
+	// Handle scroll wheel when hovering menu
+	if mouseInMenu {
+		wheel := rl.GetMouseWheelMove()
+		if wheel != 0 {
+			e.addComponentScroll -= int32(wheel * 26 * 2) // Scroll 2 items per wheel tick
+			// Clamp scroll
+			maxScroll := contentH - menuH
+			if maxScroll < 0 {
+				maxScroll = 0
+			}
+			if e.addComponentScroll < 0 {
+				e.addComponentScroll = 0
+			}
+			if e.addComponentScroll > maxScroll {
+				e.addComponentScroll = maxScroll
+			}
+		}
+	}
+
+	// Draw menu background - rounded with border
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, colorBgPanel)
+	rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, 1, colorBorder)
+
+	// Begin scissor mode to clip items outside menu area
+	rl.BeginScissorMode(x, y, w, menuH)
+
+	itemIndex := int32(0)
+
+	// Built-in components
+	for _, compType := range editorComponentTypes {
+		itemY := y + itemIndex*itemH - e.addComponentScroll
+
+		// Skip if completely outside visible area
+		if itemY+itemH < y || itemY > y+menuH {
+			itemIndex++
+			continue
+		}
 
 		hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
-			mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH)
+			mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH) &&
+			mousePos.Y >= float32(y) && mousePos.Y < float32(y+menuH)
 
 		if hovered {
 			rl.DrawRectangle(x+2, itemY, w-4, itemH, colorAccent)
@@ -1574,6 +1686,69 @@ func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 			e.addComponent(compType.Name)
 			e.showAddComponentMenu = false
 		}
+		itemIndex++
+	}
+
+	// Scripts section
+	if len(scripts) > 0 {
+		// Separator with "Scripts" label
+		sepY := y + itemIndex*itemH - e.addComponentScroll
+		if sepY+itemH >= y && sepY <= y+menuH {
+			rl.DrawRectangle(x+10, sepY+itemH/2, w-20, 1, colorBorder)
+			drawTextEx(editorFont, "Scripts", x+12, sepY+5, 14, colorTextMuted)
+		}
+		itemIndex++
+
+		// Script items
+		for _, scriptName := range scripts {
+			itemY := y + itemIndex*itemH - e.addComponentScroll
+
+			// Skip if completely outside visible area
+			if itemY+itemH < y || itemY > y+menuH {
+				itemIndex++
+				continue
+			}
+
+			hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
+				mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH) &&
+				mousePos.Y >= float32(y) && mousePos.Y < float32(y+menuH)
+
+			if hovered {
+				rl.DrawRectangle(x+2, itemY, w-4, itemH, colorAccent)
+			}
+
+			txtColor := colorAccentLight // Scripts in accent color to differentiate
+			if hovered {
+				txtColor = colorTextPrimary
+			}
+			drawTextEx(editorFont, scriptName, x+12, itemY+5, 16, txtColor)
+
+			if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+				e.addScript(scriptName)
+				e.showAddComponentMenu = false
+			}
+			itemIndex++
+		}
+	}
+
+	rl.EndScissorMode()
+
+	// Draw scroll indicator if needed
+	if needsScroll {
+		scrollBarW := int32(4)
+		scrollBarX := x + w - scrollBarW - 4
+		scrollTrackH := menuH - 8
+		maxScroll := contentH - menuH
+		scrollThumbH := int32(float32(scrollTrackH) * float32(menuH) / float32(contentH))
+		if scrollThumbH < 20 {
+			scrollThumbH = 20
+		}
+		scrollThumbY := y + 4 + int32(float32(scrollTrackH-scrollThumbH)*float32(e.addComponentScroll)/float32(maxScroll))
+
+		// Draw scroll track
+		rl.DrawRectangleRounded(rl.Rectangle{X: float32(scrollBarX), Y: float32(y + 4), Width: float32(scrollBarW), Height: float32(scrollTrackH)}, 0.5, 4, colorBgDark)
+		// Draw scroll thumb
+		rl.DrawRectangleRounded(rl.Rectangle{X: float32(scrollBarX), Y: float32(scrollThumbY), Width: float32(scrollBarW), Height: float32(scrollThumbH)}, 0.5, 4, colorAccent)
 	}
 
 	// Close menu if clicking outside (but not on the frame we just opened it)
@@ -1600,6 +1775,23 @@ func (e *Editor) addComponent(typeName string) {
 			e.saveMsgTime = rl.GetTime()
 			return
 		}
+	}
+}
+
+func (e *Editor) addScript(scriptName string) {
+	if e.Selected == nil {
+		return
+	}
+
+	newComp := engine.CreateScript(scriptName, map[string]any{})
+	if newComp != nil {
+		e.Selected.AddComponent(newComp)
+
+		// Re-register with physics world to update categorization
+		e.updatePhysicsRegistration(e.Selected)
+
+		e.saveMsg = fmt.Sprintf("Added %s", scriptName)
+		e.saveMsgTime = rl.GetTime()
 	}
 }
 
@@ -2041,7 +2233,7 @@ func (e *Editor) drawMaterialEditor(x, y, w, h int32) {
 		closeColor = rl.NewColor(180, 60, 60, 230)
 	}
 	rl.DrawRectangleRounded(rl.Rectangle{X: float32(closeBtnX), Y: float32(closeBtnY), Width: float32(closeBtnSize), Height: float32(closeBtnSize)}, 0.3, 4, closeColor)
-	drawTextEx(editorFontBold, "×", closeBtnX+3, closeBtnY, 14, colorTextPrimary)
+	drawTextEx(editorFontBold, "x", closeBtnX+4, closeBtnY+1, 12, colorTextPrimary)
 
 	if closeHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		e.selectedMaterial = nil

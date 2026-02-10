@@ -218,8 +218,8 @@ func generateScriptFile(script *ScriptInfo, sourceContent []byte, outputPath str
 	nameLower := toSnakeCase(script.Name)
 
 	f.WriteString("\n// --- Generated boilerplate below ---\n\n")
-	f.WriteString(fmt.Sprintf("func init() {\n\tengine.RegisterScript(\"%s\", %sFactory, %sSerializer)\n}\n\n",
-		script.Name, nameLower, nameLower))
+	f.WriteString(fmt.Sprintf("func init() {\n\tengine.RegisterScriptWithApplier(\"%s\", %sFactory, %sSerializer, %sApplier)\n}\n\n",
+		script.Name, nameLower, nameLower, nameLower))
 
 	// Factory function
 	f.WriteString(fmt.Sprintf("func %sFactory(props map[string]any) engine.Component {\n", nameLower))
@@ -242,7 +242,21 @@ func generateScriptFile(script *ScriptInfo, sourceContent []byte, outputPath str
 		f.WriteString(fmt.Sprintf("\t\t\"%s\": s.%s,\n", field.JSONName, field.Name))
 	}
 
-	f.WriteString("\t}\n}\n")
+	f.WriteString("\t}\n}\n\n")
+
+	// Applier function for live property editing
+	f.WriteString(fmt.Sprintf("func %sApplier(c engine.Component, propName string, value any) bool {\n", nameLower))
+	f.WriteString(fmt.Sprintf("\ts, ok := c.(*%s)\n\tif !ok {\n\t\treturn false\n\t}\n", script.Name))
+	f.WriteString("\tswitch propName {\n")
+
+	for _, field := range script.Fields {
+		goType, conversion := getTypeConversion(field.Type)
+		f.WriteString(fmt.Sprintf("\tcase \"%s\":\n", field.JSONName))
+		f.WriteString(fmt.Sprintf("\t\tif v, ok := value.(%s); ok {\n", goType))
+		f.WriteString(fmt.Sprintf("\t\t\ts.%s = %s\n\t\t\treturn true\n\t\t}\n", field.Name, fmt.Sprintf(conversion, "v")))
+	}
+
+	f.WriteString("\t}\n\treturn false\n}\n")
 
 	// Write hash to separate file for caching
 	h := sha256.New()
