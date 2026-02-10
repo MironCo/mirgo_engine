@@ -98,6 +98,13 @@ type Editor struct {
 	// Name editing state
 	editingName    bool   // True if editing the object name
 	nameEditBuffer string // Current text in name edit field
+
+	// Panel sizing
+	hierarchyWidth  int32 // Width of hierarchy panel (default 210)
+	inspectorWidth  int32 // Width of inspector panel (default 310)
+	resizingPanel   int   // 0=none, 1=hierarchy, 2=inspector
+	resizeStartX    float32
+	resizeStartW    int32
 }
 
 // AssetEntry represents a file or folder in the asset browser
@@ -114,8 +121,10 @@ func NewEditor(w *world.World) *Editor {
 		camera: EditorCamera{
 			MoveSpeed: 10.0,
 		},
-		hoveredAxis: -1,
-		undoStack:   make([]UndoState, 0, maxUndoStack),
+		hoveredAxis:    -1,
+		undoStack:      make([]UndoState, 0, maxUndoStack),
+		hierarchyWidth: 210,
+		inspectorWidth: 310,
 	}
 }
 
@@ -165,41 +174,95 @@ func (e *Editor) Pause(currentCam rl.Camera3D) {
 	initRayguiStyle()
 }
 
-// editorFont holds the custom font for the editor UI (zero value = use default)
-var editorFont rl.Font
-var editorFontLoaded bool
+// Editor fonts - Outfit for UI, JetBrains Mono for values
+var editorFont rl.Font      // Outfit Regular - main UI font
+var editorFontBold rl.Font  // Outfit Bold - headers
+var editorFontMono rl.Font  // JetBrains Mono - numeric values
+var editorFontsLoaded bool
 
-// initRayguiStyle sets up a dark theme for raygui widgets
+// Theme colors - Indigo/purple dark theme matching the website
+var (
+	// Base backgrounds (dark with slight blue tint)
+	colorBgDark    = rl.NewColor(10, 10, 15, 255)   // Darkest - nav bg
+	colorBgPanel   = rl.NewColor(18, 18, 24, 245)   // Panel backgrounds
+	colorBgElement = rl.NewColor(28, 28, 38, 255)   // Input fields, buttons
+	colorBgHover   = rl.NewColor(38, 38, 52, 255)   // Hover state
+	colorBgActive  = rl.NewColor(48, 48, 65, 255)   // Active/pressed state
+
+	// Accent colors - indigo/purple gradient
+	colorAccent       = rl.NewColor(108, 99, 255, 255)  // Primary indigo #6c63ff
+	colorAccentLight  = rl.NewColor(167, 139, 250, 255) // Light purple #a78bfa
+	colorAccentHover  = rl.NewColor(130, 120, 255, 255) // Hover indigo
+	colorAccentActive = rl.NewColor(90, 80, 220, 255)   // Pressed indigo
+
+	// Text colors
+	colorTextPrimary   = rl.NewColor(255, 255, 255, 255) // White
+	colorTextSecondary = rl.NewColor(200, 200, 208, 255) // Light gray #c8c8d0
+	colorTextMuted     = rl.NewColor(119, 119, 119, 255) // Muted #777
+
+	// Borders
+	colorBorder      = rl.NewColor(255, 255, 255, 13)  // rgba(255,255,255,0.05)
+	colorBorderHover = rl.NewColor(108, 99, 255, 100)  // Indigo border on hover
+
+	// Selection highlight (indigo tinted)
+	colorSelection = rl.NewColor(108, 99, 255, 60) // Indigo with transparency
+)
+
+// initRayguiStyle sets up the modern indigo dark theme
 func initRayguiStyle() {
-	// Load a nicer font if available (only once)
-	if !editorFontLoaded {
-		editorFontLoaded = true
-		if _, err := os.Stat("assets/fonts/editor.ttf"); err == nil {
-			editorFont = rl.LoadFontEx("assets/fonts/editor.ttf", 16, nil)
+	// Load fonts at high resolution for smooth scaling
+	if !editorFontsLoaded {
+		editorFontsLoaded = true
+
+		// Load Outfit Regular for main UI (high res for smooth scaling)
+		editorFont = rl.LoadFontEx("assets/fonts/Outfit-Regular.ttf", 48, nil)
+		if editorFont.Texture.ID > 0 {
+			rl.SetTextureFilter(editorFont.Texture, rl.FilterBilinear)
 			gui.SetFont(editorFont)
+			log.Println("Loaded Outfit-Regular font")
+		} else {
+			log.Println("Failed to load Outfit-Regular font")
+		}
+
+		// Load Outfit Bold for headers
+		editorFontBold = rl.LoadFontEx("assets/fonts/Outfit-Bold.ttf", 48, nil)
+		if editorFontBold.Texture.ID > 0 {
+			rl.SetTextureFilter(editorFontBold.Texture, rl.FilterBilinear)
+			log.Println("Loaded Outfit-Bold font")
+		} else {
+			log.Println("Failed to load Outfit-Bold font")
+		}
+
+		// Load JetBrains Mono for numeric values
+		editorFontMono = rl.LoadFontEx("assets/fonts/JetBrainsMono-Regular.ttf", 48, nil)
+		if editorFontMono.Texture.ID > 0 {
+			rl.SetTextureFilter(editorFontMono.Texture, rl.FilterBilinear)
+			log.Println("Loaded JetBrainsMono font")
+		} else {
+			log.Println("Failed to load JetBrainsMono font")
 		}
 	}
 
-	// Background colors
-	gui.SetStyle(gui.DEFAULT, gui.BACKGROUND_COLOR, gui.NewColorPropertyValue(rl.NewColor(30, 30, 35, 255)))
-	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(45, 45, 50, 255)))
-	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_FOCUSED, gui.NewColorPropertyValue(rl.NewColor(60, 60, 70, 255)))
-	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_PRESSED, gui.NewColorPropertyValue(rl.NewColor(70, 80, 90, 255)))
+	// Background colors - dark with blue tint
+	gui.SetStyle(gui.DEFAULT, gui.BACKGROUND_COLOR, gui.NewColorPropertyValue(colorBgDark))
+	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_NORMAL, gui.NewColorPropertyValue(colorBgElement))
+	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_FOCUSED, gui.NewColorPropertyValue(colorBgHover))
+	gui.SetStyle(gui.DEFAULT, gui.BASE_COLOR_PRESSED, gui.NewColorPropertyValue(colorAccent))
 
 	// Text colors
-	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(200, 200, 200, 255)))
-	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_FOCUSED, gui.NewColorPropertyValue(rl.White))
-	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_PRESSED, gui.NewColorPropertyValue(rl.Yellow))
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_NORMAL, gui.NewColorPropertyValue(colorTextSecondary))
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_FOCUSED, gui.NewColorPropertyValue(colorTextPrimary))
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_COLOR_PRESSED, gui.NewColorPropertyValue(colorTextPrimary))
 
-	// Border colors
-	gui.SetStyle(gui.DEFAULT, gui.BORDER_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(80, 80, 90, 255)))
-	gui.SetStyle(gui.DEFAULT, gui.BORDER_COLOR_FOCUSED, gui.NewColorPropertyValue(rl.NewColor(100, 100, 120, 255)))
+	// Border colors - subtle with indigo on focus
+	gui.SetStyle(gui.DEFAULT, gui.BORDER_COLOR_NORMAL, gui.NewColorPropertyValue(rl.NewColor(50, 50, 65, 255)))
+	gui.SetStyle(gui.DEFAULT, gui.BORDER_COLOR_FOCUSED, gui.NewColorPropertyValue(colorAccent))
 
 	// Line color (for separators)
-	gui.SetStyle(gui.DEFAULT, gui.LINE_COLOR, gui.NewColorPropertyValue(rl.NewColor(60, 60, 60, 255)))
+	gui.SetStyle(gui.DEFAULT, gui.LINE_COLOR, gui.NewColorPropertyValue(rl.NewColor(40, 40, 55, 255)))
 
 	// Text size
-	gui.SetStyle(gui.DEFAULT, gui.TEXT_SIZE, 14)
+	gui.SetStyle(gui.DEFAULT, gui.TEXT_SIZE, 15)
 }
 
 func (e *Editor) Exit() {
@@ -305,9 +368,9 @@ func (e *Editor) Update(deltaTime float32) {
 		}
 	}
 
-	// Scroll wheel adjusts fly speed
+	// Scroll wheel + Shift adjusts fly speed
 	scroll := rl.GetMouseWheelMove()
-	if scroll != 0 {
+	if scroll != 0 && (rl.IsKeyDown(rl.KeyLeftShift) || rl.IsKeyDown(rl.KeyRightShift)) {
 		e.camera.MoveSpeed += scroll * 2.0
 		if e.camera.MoveSpeed < 1.0 {
 			e.camera.MoveSpeed = 1.0
@@ -398,48 +461,62 @@ func (e *Editor) GetRaylibCamera() rl.Camera3D {
 	}
 }
 
+// drawTextEx draws text using the specified font scaled to the requested size
+func drawTextEx(font rl.Font, text string, x, y int32, size float32, color rl.Color) {
+	if font.Texture.ID > 0 {
+		rl.DrawTextEx(font, text, rl.Vector2{X: float32(x), Y: float32(y)}, size, 0, color)
+	} else {
+		rl.DrawText(text, x, y, int32(size), color)
+	}
+}
+
 // DrawUI draws the editor overlay: top bar, hierarchy panel (left), inspector panel (right).
 func (e *Editor) DrawUI() {
-	// Top bar
-	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), 32, rl.NewColor(20, 20, 20, 220))
+	// Top bar - dark with subtle border
+	rl.DrawRectangle(0, 0, int32(rl.GetScreenWidth()), 36, colorBgDark)
+	rl.DrawRectangle(0, 35, int32(rl.GetScreenWidth()), 1, colorBorder)
+
+	// Mode indicator with accent color
 	if e.Paused {
-		rl.DrawText("PAUSED", 10, 6, 20, rl.Orange)
+		drawTextEx(editorFontBold, "PAUSED", 12, 7, 22, rl.Orange)
 	} else {
-		rl.DrawText("EDITOR", 10, 6, 20, rl.Yellow)
+		drawTextEx(editorFontBold, "EDITOR", 12, 7, 22, colorAccent)
 	}
+
 	// Gizmo mode indicator
 	modeNames := [3]string{"[W] Move", "[E] Rotate", "[R] Scale"}
 	for i, name := range modeNames {
-		x := int32(100 + i*90)
-		color := rl.Gray
+		x := int32(115 + i*100)
+		color := colorTextMuted
 		if GizmoMode(i) == e.gizmoMode {
-			color = rl.Yellow
+			color = colorAccentLight
 		}
-		rl.DrawText(name, x, 8, 16, color)
+		drawTextEx(editorFont, name, x, 9, 18, color)
 	}
-	helpText := "| Ctrl+S: Save | Ctrl+B: Build | Ctrl+Z: Undo"
+	helpText := "Ctrl+S: Save  |  Ctrl+B: Build  |  Ctrl+Z: Undo"
 	if e.Paused {
-		helpText = "| P: Resume | Ctrl+S: Save"
+		helpText = "P: Resume  |  Ctrl+S: Save"
 	}
-	rl.DrawText(helpText, 380, 8, 16, rl.LightGray)
-	rl.DrawText(fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-100, 8, 16, rl.LightGray)
+	drawTextEx(editorFont, helpText, 430, 9, 18, colorTextMuted)
+	drawTextEx(editorFontMono, fmt.Sprintf("Speed: %.0f", e.camera.MoveSpeed), int32(rl.GetScreenWidth())-130, 9, 18, colorTextMuted)
 
-	// Scripts changed banner (below top bar)
+	// Scripts changed banner (below top bar) - indigo themed
 	if e.scriptsChanged {
 		bannerText := "Scripts changed - Press Ctrl+R to rebuild"
-		textWidth := rl.MeasureText(bannerText, 16)
+		textWidth := rl.MeasureText(bannerText, 14)
 		bannerX := (int32(rl.GetScreenWidth()) - textWidth) / 2
-		rl.DrawRectangle(bannerX-10, 40, textWidth+20, 24, rl.NewColor(80, 60, 0, 230))
-		rl.DrawText(bannerText, bannerX, 44, 16, rl.Yellow)
+		rl.DrawRectangle(bannerX-12, 42, textWidth+24, 26, rl.NewColor(108, 99, 255, 40))
+		rl.DrawRectangleLines(bannerX-12, 42, textWidth+24, 26, colorAccent)
+		drawTextEx(editorFont, bannerText, bannerX, 47, 14, colorAccentLight)
 	}
 
 	// Save/build message flash (below top bar)
 	if e.saveMsg != "" && rl.GetTime()-e.saveMsgTime < 2.0 {
-		color := rl.Green
+		color := rl.NewColor(100, 220, 100, 255) // Soft green
 		if e.saveMsg != "Scene saved!" {
-			color = rl.Red
+			color = rl.NewColor(255, 120, 120, 255) // Soft red
 		}
-		rl.DrawText(e.saveMsg, int32(rl.GetScreenWidth()/2)-50, 44, 20, color)
+		drawTextEx(editorFontBold, e.saveMsg, int32(rl.GetScreenWidth()/2)-50, 47, 16, color)
 	}
 
 	// Reset field hover tracking for this frame
@@ -448,24 +525,27 @@ func (e *Editor) DrawUI() {
 	e.drawHierarchy()
 	e.drawInspector()
 
-	// Asset browser toggle button in top bar
-	abBtnX := int32(rl.GetScreenWidth()) - 200
-	abBtnW := int32(90)
-	abBtnH := int32(22)
-	abBtnY := int32(5)
+	// Asset browser toggle button in top bar - pill shaped (positioned left of speed)
+	abBtnW := int32(95)
+	abBtnX := int32(rl.GetScreenWidth()) - 240
+	abBtnH := int32(24)
+	abBtnY := int32(6)
 
 	mousePos := rl.GetMousePosition()
 	abHovered := mousePos.X >= float32(abBtnX) && mousePos.X <= float32(abBtnX+abBtnW) &&
 		mousePos.Y >= float32(abBtnY) && mousePos.Y <= float32(abBtnY+abBtnH)
 
-	abBtnColor := rl.NewColor(50, 50, 60, 200)
+	abBtnColor := colorBgElement
+	textColor := colorTextSecondary
 	if e.showAssetBrowser {
-		abBtnColor = rl.NewColor(60, 80, 60, 220)
+		abBtnColor = colorAccent
+		textColor = colorTextPrimary
 	} else if abHovered {
-		abBtnColor = rl.NewColor(70, 70, 80, 220)
+		abBtnColor = colorBgHover
+		textColor = colorTextPrimary
 	}
-	rl.DrawRectangle(abBtnX, abBtnY, abBtnW, abBtnH, abBtnColor)
-	rl.DrawText("Assets [Tab]", abBtnX+6, abBtnY+4, 14, rl.LightGray)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(abBtnX), Y: float32(abBtnY), Width: float32(abBtnW), Height: float32(abBtnH)}, 0.5, 8, abBtnColor)
+	drawTextEx(editorFont, "Assets [Tab]", abBtnX+10, abBtnY+4, 16, textColor)
 
 	if abHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		e.showAssetBrowser = !e.showAssetBrowser
@@ -481,15 +561,15 @@ func (e *Editor) DrawUI() {
 		e.drawAssetBrowser()
 	}
 
-	// Draw material drag indicator
+	// Draw material drag indicator - indigo themed
 	if e.draggingAsset && e.draggedAsset != nil {
 		mousePos := rl.GetMousePosition()
-		rl.DrawRectangle(int32(mousePos.X)+12, int32(mousePos.Y)-10, 80, 20, rl.NewColor(40, 60, 80, 220))
+		rl.DrawRectangleRounded(rl.Rectangle{X: mousePos.X + 12, Y: mousePos.Y - 10, Width: 85, Height: 22}, 0.3, 6, colorAccent)
 		name := e.draggedAsset.Name
 		if len(name) > 12 {
 			name = name[:11] + "…"
 		}
-		rl.DrawText(name, int32(mousePos.X)+16, int32(mousePos.Y)-6, 12, rl.SkyBlue)
+		drawTextEx(editorFont, name, int32(mousePos.X)+18, int32(mousePos.Y)-6, 14, colorTextPrimary)
 
 		// Handle drop on mouse release
 		if rl.IsMouseButtonReleased(rl.MouseLeftButton) {
@@ -497,42 +577,126 @@ func (e *Editor) DrawUI() {
 		}
 	}
 
-	// Set cursor based on field hover state
-	if e.fieldHoveredAny || e.fieldDragging {
+	// Handle panel resize
+	e.handlePanelResize()
+
+	// Set cursor based on state
+	if e.resizingPanel > 0 || e.isOverPanelEdge() {
+		rl.SetMouseCursor(rl.MouseCursorResizeEW)
+	} else if e.fieldHoveredAny || e.fieldDragging {
 		rl.SetMouseCursor(rl.MouseCursorResizeEW)
 	} else {
 		rl.SetMouseCursor(rl.MouseCursorDefault)
 	}
 }
 
+// isOverPanelEdge checks if mouse is over a resizable panel edge
+func (e *Editor) isOverPanelEdge() bool {
+	mousePos := rl.GetMousePosition()
+	screenH := float32(rl.GetScreenHeight())
+	screenW := float32(rl.GetScreenWidth())
+
+	// Hierarchy right edge (4px hit zone)
+	hierEdge := float32(e.hierarchyWidth)
+	if mousePos.X >= hierEdge-2 && mousePos.X <= hierEdge+2 && mousePos.Y > 36 && mousePos.Y < screenH {
+		return true
+	}
+
+	// Inspector left edge
+	inspEdge := screenW - float32(e.inspectorWidth)
+	if mousePos.X >= inspEdge-2 && mousePos.X <= inspEdge+2 && mousePos.Y > 36 && mousePos.Y < screenH {
+		return true
+	}
+
+	return false
+}
+
+// handlePanelResize handles drag-to-resize for panels
+func (e *Editor) handlePanelResize() {
+	mousePos := rl.GetMousePosition()
+	screenW := int32(rl.GetScreenWidth())
+	screenH := float32(rl.GetScreenHeight())
+
+	// Start resize on mouse down
+	if rl.IsMouseButtonPressed(rl.MouseLeftButton) && e.resizingPanel == 0 {
+		hierEdge := float32(e.hierarchyWidth)
+		inspEdge := float32(screenW) - float32(e.inspectorWidth)
+
+		if mousePos.X >= hierEdge-2 && mousePos.X <= hierEdge+2 && mousePos.Y > 36 && mousePos.Y < screenH {
+			e.resizingPanel = 1
+			e.resizeStartX = mousePos.X
+			e.resizeStartW = e.hierarchyWidth
+		} else if mousePos.X >= inspEdge-2 && mousePos.X <= inspEdge+2 && mousePos.Y > 36 && mousePos.Y < screenH {
+			e.resizingPanel = 2
+			e.resizeStartX = mousePos.X
+			e.resizeStartW = e.inspectorWidth
+		}
+	}
+
+	// Update while dragging
+	if e.resizingPanel > 0 && rl.IsMouseButtonDown(rl.MouseLeftButton) {
+		delta := int32(mousePos.X - e.resizeStartX)
+
+		if e.resizingPanel == 1 {
+			// Hierarchy - drag right edge
+			newW := e.resizeStartW + delta
+			if newW < 150 {
+				newW = 150
+			} else if newW > 400 {
+				newW = 400
+			}
+			e.hierarchyWidth = newW
+		} else if e.resizingPanel == 2 {
+			// Inspector - drag left edge (inverted)
+			newW := e.resizeStartW - delta
+			if newW < 250 {
+				newW = 250
+			} else if newW > 500 {
+				newW = 500
+			}
+			e.inspectorWidth = newW
+		}
+	}
+
+	// End resize
+	if rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+		e.resizingPanel = 0
+	}
+}
+
 // drawHierarchy draws the scene hierarchy panel on the left.
 func (e *Editor) drawHierarchy() {
 	panelX := int32(0)
-	panelY := int32(32)
-	panelW := int32(200)
+	panelY := int32(36)
+	panelW := e.hierarchyWidth
 	panelH := int32(rl.GetScreenHeight()) - panelY
 
-	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 230))
-	rl.DrawLine(panelX+panelW, panelY, panelX+panelW, panelY+panelH, rl.NewColor(60, 60, 60, 255))
+	// Panel background with subtle border
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, colorBgPanel)
+	// Resize handle - slightly thicker border on right edge
+	rl.DrawRectangle(panelX+panelW-2, panelY, 2, panelH, colorBorder)
 
-	rl.DrawText("Hierarchy", panelX+8, panelY+6, 16, rl.Gray)
+	// Header
+	drawTextEx(editorFontBold, "Hierarchy", panelX+12, panelY+8, 18, colorTextSecondary)
 
-	// "New Object" button
-	btnX := panelX + panelW - 55
-	btnY := panelY + 4
-	btnW := int32(50)
-	btnH := int32(18)
+	// "New Object" button - rounded pill
+	btnX := panelX + panelW - 62
+	btnY := panelY + 6
+	btnW := int32(54)
+	btnH := int32(22)
 
 	mousePos := rl.GetMousePosition()
 	btnHovered := mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
 		mousePos.Y >= float32(btnY) && mousePos.Y <= float32(btnY+btnH)
 
-	btnColor := rl.NewColor(50, 70, 50, 200)
+	btnColor := colorBgElement
+	textColor := colorTextSecondary
 	if btnHovered {
-		btnColor = rl.NewColor(70, 100, 70, 220)
+		btnColor = colorAccent
+		textColor = colorTextPrimary
 	}
-	rl.DrawRectangle(btnX, btnY, btnW, btnH, btnColor)
-	rl.DrawText("+ New", btnX+6, btnY+2, 14, rl.LightGray)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(btnX), Y: float32(btnY), Width: float32(btnW), Height: float32(btnH)}, 0.5, 6, btnColor)
+	drawTextEx(editorFont, "+ New", btnX+8, btnY+3, 16, textColor)
 
 	clickedNewButton := false
 	if btnHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
@@ -584,13 +748,15 @@ func (e *Editor) drawHierarchy() {
 		isDragTarget := e.draggingHierarchy && hovered && e.draggedObject != g && !e.isDescendantOf(g, e.draggedObject)
 
 		if isDragTarget {
-			// Highlight as drop target
-			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(50, 80, 120, 200))
+			// Highlight as drop target - indigo
+			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(108, 99, 255, 60))
 			e.hierarchyDropTarget = g
 		} else if selected {
-			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(80, 80, 20, 180))
+			// Selected - indigo tint
+			rl.DrawRectangle(panelX, itemY, panelW, itemH, colorSelection)
+			rl.DrawRectangle(panelX, itemY, 3, itemH, colorAccent) // Left accent bar
 		} else if hovered {
-			rl.DrawRectangle(panelX, itemY, panelW, itemH, rl.NewColor(50, 50, 50, 150))
+			rl.DrawRectangle(panelX, itemY, panelW, itemH, colorBgHover)
 		}
 
 		// Start drag on mouse down (if not already dragging)
@@ -609,14 +775,14 @@ func (e *Editor) drawHierarchy() {
 		}
 		indent := int32(12) + depth*16
 
-		textColor := rl.LightGray
+		txtColor := colorTextSecondary
 		if selected {
-			textColor = rl.Yellow
+			txtColor = colorAccentLight
 		}
 		if e.draggingHierarchy && e.draggedObject == g {
-			textColor = rl.SkyBlue // Indicate dragged item
+			txtColor = colorAccent // Indicate dragged item
 		}
-		rl.DrawText(g.Name, panelX+indent, itemY+4, 14, textColor)
+		drawTextEx(editorFont, g.Name, panelX+indent, itemY+3, 16, txtColor)
 	}
 
 	rl.EndScissorMode()
@@ -626,14 +792,14 @@ func (e *Editor) drawHierarchy() {
 		unparentY := panelY + panelH - itemH - 4
 		unparentHovered := mouseInPanel && mousePos.Y >= float32(unparentY) && mousePos.Y <= float32(panelY+panelH)
 
-		bgColor := rl.NewColor(60, 40, 40, 200)
+		bgColor := rl.NewColor(80, 50, 50, 180)
 		if unparentHovered {
-			bgColor = rl.NewColor(100, 60, 60, 220)
+			bgColor = rl.NewColor(180, 80, 80, 200)
 			e.hierarchyDropTarget = nil // nil means unparent
 			e.hierarchyDropIndex = -2   // special value for unparent
 		}
 		rl.DrawRectangle(panelX, unparentY, panelW, itemH, bgColor)
-		rl.DrawText("-- Unparent --", panelX+50, unparentY+4, 14, rl.LightGray)
+		drawTextEx(editorFont, "— Unparent —", panelX+55, unparentY+3, 16, colorTextSecondary)
 	}
 
 	// Handle drop on mouse release
@@ -655,7 +821,7 @@ func (e *Editor) drawHierarchy() {
 
 	// Draw drag indicator if dragging
 	if e.draggingHierarchy && e.draggedObject != nil {
-		rl.DrawText(e.draggedObject.Name, int32(mousePos.X)+10, int32(mousePos.Y)-8, 12, rl.SkyBlue)
+		drawTextEx(editorFont, e.draggedObject.Name, int32(mousePos.X)+10, int32(mousePos.Y)-8, 14, colorAccentLight)
 	}
 }
 
@@ -711,13 +877,15 @@ func (e *Editor) drawInspector() {
 		return
 	}
 
-	panelW := int32(300)
+	panelW := e.inspectorWidth
 	panelX := int32(rl.GetScreenWidth()) - panelW
-	panelY := int32(32)
+	panelY := int32(36)
 	panelH := int32(rl.GetScreenHeight()) - panelY
 
-	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 230))
-	rl.DrawLine(panelX, panelY, panelX, panelY+panelH, rl.NewColor(60, 60, 60, 255))
+	// Panel background with subtle border
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, colorBgPanel)
+	// Resize handle - slightly thicker border on left edge
+	rl.DrawRectangle(panelX, panelY, 2, panelH, colorBorder)
 
 	// Check for scroll input when mouse is in inspector
 	mousePos := rl.GetMousePosition()
@@ -746,19 +914,21 @@ func (e *Editor) drawInspector() {
 	nameHovered := mousePos.X >= float32(nameFieldX) && mousePos.X <= float32(nameFieldX+nameFieldW) &&
 		mousePos.Y >= float32(nameFieldY) && mousePos.Y <= float32(nameFieldY+nameFieldH)
 
-	// Background for name field
-	nameBgColor := rl.NewColor(40, 40, 45, 255)
+	// Background for name field - rounded
+	nameBgColor := colorBgElement
 	if e.editingName {
-		nameBgColor = rl.NewColor(50, 50, 60, 255)
+		nameBgColor = colorBgActive
 	} else if nameHovered {
-		nameBgColor = rl.NewColor(45, 45, 50, 255)
+		nameBgColor = colorBgHover
 	}
-	rl.DrawRectangle(nameFieldX, nameFieldY, nameFieldW, nameFieldH, nameBgColor)
-	rl.DrawRectangleLines(nameFieldX, nameFieldY, nameFieldW, nameFieldH, rl.NewColor(70, 70, 80, 255))
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(nameFieldX), Y: float32(nameFieldY), Width: float32(nameFieldW), Height: float32(nameFieldH)}, 0.2, 6, nameBgColor)
+	if e.editingName {
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(nameFieldX), Y: float32(nameFieldY), Width: float32(nameFieldW), Height: float32(nameFieldH)}, 0.2, 6, 1, colorAccent)
+	}
 
 	if e.editingName {
 		// Draw editing text with cursor
-		rl.DrawText(e.nameEditBuffer+"_", nameFieldX+6, nameFieldY+4, 16, rl.White)
+		drawTextEx(editorFont, e.nameEditBuffer+"_", nameFieldX+8, nameFieldY+4, 18, colorTextPrimary)
 
 		// Handle typing
 		for {
@@ -798,8 +968,8 @@ func (e *Editor) drawInspector() {
 			e.nameEditBuffer = ""
 		}
 	} else {
-		// Display name
-		rl.DrawText(e.Selected.Name, nameFieldX+6, nameFieldY+4, 16, rl.Yellow)
+		// Display name with accent color
+		drawTextEx(editorFontBold, e.Selected.Name, nameFieldX+8, nameFieldY+4, 18, colorAccentLight)
 
 		// Click to edit
 		if nameHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
@@ -818,24 +988,24 @@ func (e *Editor) drawInspector() {
 			}
 			tagStr += t
 		}
-		rl.DrawText("Tags: "+tagStr, panelX+10, y, 14, rl.Gray)
-		y += 20
+		drawTextEx(editorFont, "Tags: "+tagStr, panelX+12, y, 16, colorTextMuted)
+		y += 22
 	}
 
 	// Separator
-	rl.DrawLine(panelX+10, y+2, panelX+panelW-10, y+2, rl.NewColor(60, 60, 60, 255))
+	rl.DrawLine(panelX+12, y+2, panelX+panelW-12, y+2, rl.NewColor(40, 40, 55, 255))
 	y += 10
 
 	// Transform section
 	y = e.drawTransformSection(panelX, y, panelW)
 
 	// Separator
-	rl.DrawLine(panelX+10, y+2, panelX+panelW-10, y+2, rl.NewColor(60, 60, 60, 255))
+	rl.DrawLine(panelX+12, y+2, panelX+panelW-12, y+2, rl.NewColor(40, 40, 55, 255))
 	y += 10
 
 	// Components section header
-	rl.DrawText("Components", panelX+10, y, 16, rl.Gray)
-	y += 22
+	drawTextEx(editorFontBold, "Components", panelX+12, y, 18, colorTextSecondary)
+	y += 26
 
 	// Draw each component with properties and remove button
 	comps := e.Selected.Components()
@@ -853,23 +1023,25 @@ func (e *Editor) drawInspector() {
 		e.removeComponentAtIndex(removeIdx)
 	}
 
-	// Add Component button
+	// Add Component button - rounded with accent on hover
 	y += 10
 	btnW := panelW - 40
-	btnH := int32(24)
+	btnH := int32(26)
 	btnX := panelX + 20
 	btnY := y
 
 	hovered := mouseInPanel && mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
 		mousePos.Y >= float32(btnY+e.inspectorScroll) && mousePos.Y <= float32(btnY+btnH+e.inspectorScroll)
 
-	btnColor := rl.NewColor(50, 70, 50, 220)
+	btnColor := colorBgElement
+	txtColor := colorTextSecondary
 	if hovered {
-		btnColor = rl.NewColor(70, 100, 70, 220)
+		btnColor = colorAccent
+		txtColor = colorTextPrimary
 	}
-	rl.DrawRectangle(btnX, btnY, btnW, btnH, btnColor)
-	textW := rl.MeasureText("+ Add Component", 14)
-	rl.DrawText("+ Add Component", btnX+(btnW-textW)/2, btnY+5, 14, rl.LightGray)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(btnX), Y: float32(btnY), Width: float32(btnW), Height: float32(btnH)}, 0.3, 6, btnColor)
+	textW := rl.MeasureText("+ Add Component", 16)
+	drawTextEx(editorFont, "+ Add Component", btnX+(btnW-textW)/2, btnY+5, 16, txtColor)
 
 	clickedAddButton := false
 	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
@@ -897,16 +1069,16 @@ func (e *Editor) drawInspector() {
 
 // drawTransformSection draws the transform properties and returns the new Y position.
 func (e *Editor) drawTransformSection(panelX, y, panelW int32) int32 {
-	rl.DrawText("Transform", panelX+10, y, 16, rl.Gray)
-	y += 22
+	drawTextEx(editorFontBold, "Transform", panelX+12, y, 18, colorTextSecondary)
+	y += 28
 
-	labelW := int32(35)
-	fieldW := (panelW - 30 - labelW) / 3
-	fieldH := int32(20)
-	startX := panelX + 10 + labelW
+	labelW := int32(45)
+	fieldW := (panelW - 38 - labelW) / 3
+	fieldH := int32(24)
+	startX := panelX + 12 + labelW
 
 	// Position
-	rl.DrawText("Pos", panelX+12, y+2, 14, rl.LightGray)
+	drawTextEx(editorFont, "Pos", panelX+14, y+4, 16, colorTextMuted)
 	e.Selected.Transform.Position.X = e.drawFloatField(startX, y, fieldW, fieldH, "pos.x", e.Selected.Transform.Position.X)
 	e.Selected.Transform.Position.Y = e.drawFloatField(startX+fieldW+2, y, fieldW, fieldH, "pos.y", e.Selected.Transform.Position.Y)
 	e.Selected.Transform.Position.Z = e.drawFloatField(startX+2*(fieldW+2), y, fieldW, fieldH, "pos.z", e.Selected.Transform.Position.Z)
@@ -914,19 +1086,19 @@ func (e *Editor) drawTransformSection(panelX, y, panelW int32) int32 {
 
 	if e.Selected.Parent != nil {
 		wPos := e.Selected.WorldPosition()
-		rl.DrawText(fmt.Sprintf("World %.1f, %.1f, %.1f", wPos.X, wPos.Y, wPos.Z), panelX+14, y, 11, rl.Gray)
-		y += 14
+		drawTextEx(editorFontMono, fmt.Sprintf("World %.1f, %.1f, %.1f", wPos.X, wPos.Y, wPos.Z), panelX+16, y, 14, colorTextMuted)
+		y += 18
 	}
 
 	// Rotation
-	rl.DrawText("Rot", panelX+12, y+2, 14, rl.LightGray)
+	drawTextEx(editorFont, "Rot", panelX+14, y+4, 16, colorTextMuted)
 	e.Selected.Transform.Rotation.X = e.drawFloatField(startX, y, fieldW, fieldH, "rot.x", e.Selected.Transform.Rotation.X)
 	e.Selected.Transform.Rotation.Y = e.drawFloatField(startX+fieldW+2, y, fieldW, fieldH, "rot.y", e.Selected.Transform.Rotation.Y)
 	e.Selected.Transform.Rotation.Z = e.drawFloatField(startX+2*(fieldW+2), y, fieldW, fieldH, "rot.z", e.Selected.Transform.Rotation.Z)
 	y += fieldH + 4
 
 	// Scale
-	rl.DrawText("Scale", panelX+12, y+2, 14, rl.LightGray)
+	drawTextEx(editorFont, "Scale", panelX+14, y+4, 16, colorTextMuted)
 	e.Selected.Transform.Scale.X = e.drawFloatField(startX, y, fieldW, fieldH, "scale.x", e.Selected.Transform.Scale.X)
 	e.Selected.Transform.Scale.Y = e.drawFloatField(startX+fieldW+2, y, fieldW, fieldH, "scale.y", e.Selected.Transform.Scale.Y)
 	e.Selected.Transform.Scale.Z = e.drawFloatField(startX+2*(fieldW+2), y, fieldW, fieldH, "scale.z", e.Selected.Transform.Scale.Z)
@@ -949,15 +1121,17 @@ func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) floa
 		e.fieldHoveredAny = true
 	}
 
-	// Background color
-	bgColor := rl.NewColor(45, 45, 50, 255)
+	// Background color - indigo themed
+	bgColor := colorBgElement
 	if editMode {
-		bgColor = rl.NewColor(60, 60, 70, 255)
+		bgColor = colorBgActive
 	} else if hovered || isDragging {
-		bgColor = rl.NewColor(55, 55, 60, 255)
+		bgColor = colorBgHover
 	}
-	rl.DrawRectangle(x, y, w, h, bgColor)
-	rl.DrawRectangleLines(x, y, w, h, rl.NewColor(80, 80, 90, 255))
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, bgColor)
+	if editMode {
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, 1, colorAccent)
+	}
 
 	// Handle drag-to-scrub (when not in edit mode)
 	if !editMode {
@@ -996,7 +1170,7 @@ func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) floa
 	// Text display/editing
 	if editMode {
 		// Draw text input
-		rl.DrawText(e.inputTextValue+"_", x+4, y+3, 14, rl.White)
+		drawTextEx(editorFontMono, e.inputTextValue+"_", x+6, y+5, 15, colorTextPrimary)
 
 		// Handle typing
 		for {
@@ -1034,9 +1208,9 @@ func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) floa
 			e.inputTextValue = ""
 		}
 	} else {
-		// Display current value
+		// Display current value - monospace for numbers
 		text := strconv.FormatFloat(float64(value), 'f', 2, 32)
-		rl.DrawText(text, x+4, y+3, 14, rl.LightGray)
+		drawTextEx(editorFontMono, text, x+6, y+5, 15, colorTextSecondary)
 	}
 
 	return value
@@ -1050,15 +1224,17 @@ func (e *Editor) drawTextureField(x, y, w, h int32, id string, value string) str
 
 	editMode := e.activeInputID == id
 
-	// Background color
-	bgColor := rl.NewColor(45, 45, 50, 255)
+	// Background color - indigo themed
+	bgColor := colorBgElement
 	if editMode {
-		bgColor = rl.NewColor(60, 60, 70, 255)
+		bgColor = colorBgActive
 	} else if hovered {
-		bgColor = rl.NewColor(55, 55, 60, 255)
+		bgColor = colorBgHover
 	}
-	rl.DrawRectangle(x, y, w, h, bgColor)
-	rl.DrawRectangleLines(x, y, w, h, rl.NewColor(80, 80, 90, 255))
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, bgColor)
+	if editMode {
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, 1, colorAccent)
+	}
 
 	// Click to edit
 	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !editMode {
@@ -1073,7 +1249,7 @@ func (e *Editor) drawTextureField(x, y, w, h int32, id string, value string) str
 		if len(displayText) > 14 {
 			displayText = "…" + displayText[len(displayText)-13:]
 		}
-		rl.DrawText(displayText+"_", x+4, y+3, 11, rl.White)
+		drawTextEx(editorFontMono, displayText+"_", x+6, y+4, 14, colorTextPrimary)
 
 		// Handle typing
 		for {
@@ -1113,11 +1289,11 @@ func (e *Editor) drawTextureField(x, y, w, h int32, id string, value string) str
 		if len(displayText) > 15 {
 			displayText = displayText[:14] + "…"
 		}
-		textColor := rl.LightGray
+		txtColor := colorTextSecondary
 		if value == "" {
-			textColor = rl.Gray
+			txtColor = colorTextMuted
 		}
-		rl.DrawText(displayText, x+4, y+3, 11, textColor)
+		drawTextEx(editorFontMono, displayText, x+6, y+4, 14, txtColor)
 	}
 
 	return value
@@ -1129,16 +1305,16 @@ func (e *Editor) drawComponentEntry(panelX, y, panelW int32, index int, c engine
 	typeName := reflect.TypeOf(c).Elem().Name()
 
 	// Component header with X button
-	headerH := int32(20)
-	xBtnSize := int32(16)
-	xBtnX := panelX + panelW - 30
-	xBtnY := y + 2
+	headerH := int32(24)
+	xBtnSize := int32(18)
+	xBtnX := panelX + panelW - 32
+	xBtnY := y + 3
 
-	// Draw header background
-	rl.DrawRectangle(panelX+10, y, panelW-20, headerH, rl.NewColor(40, 40, 45, 200))
-	rl.DrawText(typeName, panelX+14, y+3, 14, rl.LightGray)
+	// Draw header background - rounded
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(panelX + 10), Y: float32(y), Width: float32(panelW - 20), Height: float32(headerH)}, 0.15, 4, colorBgElement)
+	drawTextEx(editorFontBold, typeName, panelX+16, y+4, 16, colorTextSecondary)
 
-	// Draw X button
+	// Draw X button - rounded
 	mousePos := rl.GetMousePosition()
 	// Adjust for scroll when checking hover
 	adjustedY := float32(xBtnY + e.inspectorScroll)
@@ -1148,13 +1324,13 @@ func (e *Editor) drawComponentEntry(panelX, y, panelW int32, index int, c engine
 
 	xBtnColor := rl.NewColor(100, 50, 50, 200)
 	if xHovered {
-		xBtnColor = rl.NewColor(150, 60, 60, 220)
+		xBtnColor = rl.NewColor(180, 60, 60, 230)
 	}
-	rl.DrawRectangle(xBtnX, xBtnY, xBtnSize, xBtnSize, xBtnColor)
-	rl.DrawText("X", xBtnX+4, xBtnY+2, 12, rl.White)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(xBtnX), Y: float32(xBtnY), Width: float32(xBtnSize), Height: float32(xBtnSize)}, 0.3, 4, xBtnColor)
+	drawTextEx(editorFontBold, "×", xBtnX+4, xBtnY+1, 16, colorTextPrimary)
 
 	shouldRemove := xHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton)
-	y += headerH + 2
+	y += headerH + 4
 
 	// Draw component-specific properties
 	y = e.drawComponentProperties(panelX, y, c, index)
@@ -1164,26 +1340,25 @@ func (e *Editor) drawComponentEntry(panelX, y, panelW int32, index int, c engine
 
 // drawComponentProperties draws editable properties for each component type.
 func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, compIdx int) int32 {
-	propColor := rl.NewColor(180, 180, 180, 255)
-	indent := panelX + 14
-	labelW := int32(70)
-	fieldW := int32(70)
-	fieldH := int32(18)
+	indent := panelX + 16
+	labelW := int32(80)
+	fieldW := int32(75)
+	fieldH := int32(22)
 
 	switch comp := c.(type) {
 	case *components.ModelRenderer:
 		if comp.FilePath != "" {
-			rl.DrawText(fmt.Sprintf("Model: %s", filepath.Base(comp.FilePath)), indent, y, 12, propColor)
-			y += 16
+			drawTextEx(editorFont, fmt.Sprintf("Model: %s", filepath.Base(comp.FilePath)), indent, y, 15, colorTextMuted)
+			y += 20
 		} else {
-			rl.DrawText(fmt.Sprintf("Mesh: %s", comp.MeshType), indent, y, 12, propColor)
-			y += 16
+			drawTextEx(editorFont, fmt.Sprintf("Mesh: %s", comp.MeshType), indent, y, 15, colorTextMuted)
+			y += 20
 		}
 
 		// Material asset reference
 		if comp.MaterialPath != "" {
-			rl.DrawText(fmt.Sprintf("Material: %s", filepath.Base(comp.MaterialPath)), indent, y, 12, rl.SkyBlue)
-			y += 16
+			drawTextEx(editorFont, fmt.Sprintf("Material: %s", filepath.Base(comp.MaterialPath)), indent, y, 15, colorAccentLight)
+			y += 20
 			// Editable material properties (saves to material file)
 			if comp.Material != nil {
 				id := fmt.Sprintf("mat%d", compIdx)
@@ -1191,15 +1366,15 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 				oldRough := comp.Material.Roughness
 				oldEmit := comp.Material.Emissive
 
-				rl.DrawText("Metallic", indent, y+2, 12, propColor)
+				drawTextEx(editorFont, "Metallic", indent, y+4, 15, colorTextMuted)
 				comp.Material.Metallic = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".met", comp.Material.Metallic)
 				y += fieldH + 2
 
-				rl.DrawText("Roughness", indent, y+2, 12, propColor)
+				drawTextEx(editorFont, "Roughness", indent, y+4, 15, colorTextMuted)
 				comp.Material.Roughness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".rough", comp.Material.Roughness)
 				y += fieldH + 2
 
-				rl.DrawText("Emissive", indent, y+2, 12, propColor)
+				drawTextEx(editorFont, "Emissive", indent, y+4, 15, colorTextMuted)
 				comp.Material.Emissive = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".emit", comp.Material.Emissive)
 				y += fieldH + 4
 
@@ -1210,43 +1385,43 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 			}
 		} else if comp.FilePath != "" {
 			// GLTF model using built-in materials
-			rl.DrawText("Material: Built-in", indent, y, 12, rl.Gray)
-			y += 16
+			drawTextEx(editorFont, "Material: Built-in", indent, y, 15, colorTextMuted)
+			y += 20
 		} else {
 			// Generated mesh - inline material properties (editable)
 			// Color dropdown would go here - for now just display
-			rl.DrawText(fmt.Sprintf("Color: %s", colorName(comp.Color)), indent, y, 12, propColor)
-			y += 18
+			drawTextEx(editorFont, fmt.Sprintf("Color: %s", colorName(comp.Color)), indent, y, 15, colorTextMuted)
+			y += 22
 
 			id := fmt.Sprintf("mr%d", compIdx)
-			rl.DrawText("Metallic", indent, y+2, 12, propColor)
+			drawTextEx(editorFont, "Metallic", indent, y+4, 15, colorTextMuted)
 			comp.Metallic = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".met", comp.Metallic)
 			y += fieldH + 2
 
-			rl.DrawText("Roughness", indent, y+2, 12, propColor)
+			drawTextEx(editorFont, "Roughness", indent, y+4, 15, colorTextMuted)
 			comp.Roughness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".rough", comp.Roughness)
 			y += fieldH + 2
 
-			rl.DrawText("Emissive", indent, y+2, 12, propColor)
+			drawTextEx(editorFont, "Emissive", indent, y+4, 15, colorTextMuted)
 			comp.Emissive = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".emit", comp.Emissive)
 			y += fieldH + 4
 		}
 
 		// Flip Normals button for GLTF models
 		if comp.FilePath != "" {
-			btnW := int32(90)
-			btnH := int32(18)
+			btnW := int32(100)
+			btnH := int32(22)
 			btnX := indent
 			btnY := y
 			mousePos := rl.GetMousePosition()
 			btnHovered := mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
 				mousePos.Y >= float32(btnY) && mousePos.Y <= float32(btnY+btnH)
-			btnColor := rl.NewColor(60, 60, 70, 200)
+			btnColor := colorBgElement
 			if btnHovered {
-				btnColor = rl.NewColor(80, 80, 90, 220)
+				btnColor = colorBgHover
 			}
-			rl.DrawRectangle(btnX, btnY, btnW, btnH, btnColor)
-			rl.DrawText("Flip Normals", btnX+6, btnY+3, 11, rl.LightGray)
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(btnX), Y: float32(btnY), Width: float32(btnW), Height: float32(btnH)}, 0.3, 4, btnColor)
+			drawTextEx(editorFont, "Flip Normals", btnX+8, btnY+4, 14, colorTextSecondary)
 
 			if btnHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 				cmd := exec.Command("./mirgo-utils", "flipnormals", comp.FilePath)
@@ -1261,7 +1436,7 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 
 	case *components.BoxCollider:
 		// Size
-		rl.DrawText("Size", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Size", indent, y+4, 15, colorTextMuted)
 		id := fmt.Sprintf("box%d.size", compIdx)
 		comp.Size.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".x", comp.Size.X)
 		comp.Size.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".y", comp.Size.Y)
@@ -1269,7 +1444,7 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		y += fieldH + 4
 
 		// Offset
-		rl.DrawText("Offset", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Offset", indent, y+4, 15, colorTextMuted)
 		id = fmt.Sprintf("box%d.off", compIdx)
 		comp.Offset.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".x", comp.Offset.X)
 		comp.Offset.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".y", comp.Offset.Y)
@@ -1277,24 +1452,24 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		y += fieldH + 6
 
 	case *components.SphereCollider:
-		rl.DrawText("Radius", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Radius", indent, y+4, 15, colorTextMuted)
 		id := fmt.Sprintf("sphere%d.rad", compIdx)
 		comp.Radius = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id, comp.Radius)
 		y += fieldH + 6
 
 	case *components.Rigidbody:
 		// Mass
-		rl.DrawText("Mass", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Mass", indent, y+4, 15, colorTextMuted)
 		comp.Mass = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("rb%d.mass", compIdx), comp.Mass)
 		y += fieldH + 2
 
 		// Bounciness
-		rl.DrawText("Bounce", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Bounce", indent, y+4, 15, colorTextMuted)
 		comp.Bounciness = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("rb%d.bounce", compIdx), comp.Bounciness)
 		y += fieldH + 2
 
 		// Friction
-		rl.DrawText("Friction", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Friction", indent, y+4, 15, colorTextMuted)
 		comp.Friction = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("rb%d.friction", compIdx), comp.Friction)
 		y += fieldH + 4
 
@@ -1302,13 +1477,13 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		gravityBounds := rl.Rectangle{X: float32(indent), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
 		comp.UseGravity = gui.CheckBox(gravityBounds, "Gravity", comp.UseGravity)
 
-		kinematicBounds := rl.Rectangle{X: float32(indent + 100), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		kinematicBounds := rl.Rectangle{X: float32(indent + 110), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
 		comp.IsKinematic = gui.CheckBox(kinematicBounds, "Kinematic", comp.IsKinematic)
 		y += fieldH + 6
 
 	case *components.DirectionalLight:
 		// Direction
-		rl.DrawText("Dir", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Dir", indent, y+4, 15, colorTextMuted)
 		id := fmt.Sprintf("light%d.dir", compIdx)
 		comp.Direction.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".x", comp.Direction.X)
 		comp.Direction.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".y", comp.Direction.Y)
@@ -1316,7 +1491,7 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		y += fieldH + 4
 
 		// Intensity slider
-		rl.DrawText("Intensity", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Intensity", indent, y+4, 15, colorTextMuted)
 		sliderBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
 		comp.Intensity = gui.Slider(sliderBounds, "", fmt.Sprintf("%.1f", comp.Intensity), comp.Intensity, 0, 2)
 		y += fieldH + 6
@@ -1325,7 +1500,7 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		id := fmt.Sprintf("pointlight%d", compIdx)
 
 		// Color picker (simplified - show RGB sliders)
-		rl.DrawText("Color", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Color", indent, y+4, 15, colorTextMuted)
 		colorPreview := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
 		rl.DrawRectangleRec(colorPreview, comp.Color)
 		rl.DrawRectangleLinesEx(colorPreview, 1, rl.Gray)
@@ -1336,13 +1511,13 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		y += fieldH + 4
 
 		// Intensity slider
-		rl.DrawText("Intensity", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Intensity", indent, y+4, 15, colorTextMuted)
 		intensityBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
 		comp.Intensity = gui.Slider(intensityBounds, "", fmt.Sprintf("%.1f", comp.Intensity), comp.Intensity, 0, 5)
 		y += fieldH + 4
 
 		// Radius slider
-		rl.DrawText("Radius", indent, y+2, 12, propColor)
+		drawTextEx(editorFont, "Radius", indent, y+4, 15, colorTextMuted)
 		radiusBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
 		comp.Radius = gui.Slider(radiusBounds, "", fmt.Sprintf("%.1f", comp.Radius), comp.Radius, 1, 50)
 		y += fieldH + 6
@@ -1350,11 +1525,11 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 	default:
 		// For scripts and unknown components, try to get script name
 		if name, props, ok := engine.SerializeScript(c); ok {
-			rl.DrawText(fmt.Sprintf("Script: %s", name), indent, y, 12, propColor)
-			y += 14
+			drawTextEx(editorFont, fmt.Sprintf("Script: %s", name), indent, y, 15, colorAccentLight)
+			y += 18
 			for k, v := range props {
-				rl.DrawText(fmt.Sprintf("  %s: %v", k, v), indent, y, 11, rl.Gray)
-				y += 12
+				drawTextEx(editorFont, fmt.Sprintf("  %s: %v", k, v), indent, y, 14, colorTextMuted)
+				y += 16
 			}
 			y += 4
 		} else {
@@ -1368,12 +1543,12 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 // drawAddComponentMenu draws the dropdown menu for adding components.
 // justOpened prevents the menu from closing on the same frame it was opened.
 func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
-	itemH := int32(22)
+	itemH := int32(26)
 	menuH := int32(len(editorComponentTypes)) * itemH
 
-	// Draw menu background
-	rl.DrawRectangle(x, y, w, menuH, rl.NewColor(35, 35, 40, 250))
-	rl.DrawRectangleLines(x, y, w, menuH, rl.NewColor(80, 80, 80, 255))
+	// Draw menu background - rounded with border
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, colorBgPanel)
+	rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, 1, colorBorder)
 
 	mousePos := rl.GetMousePosition()
 	mouseInMenu := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
@@ -1386,10 +1561,14 @@ func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 			mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH)
 
 		if hovered {
-			rl.DrawRectangle(x, itemY, w, itemH, rl.NewColor(60, 80, 60, 200))
+			rl.DrawRectangle(x+2, itemY, w-4, itemH, colorAccent)
 		}
 
-		rl.DrawText(compType.Name, x+10, itemY+4, 14, rl.LightGray)
+		txtColor := colorTextSecondary
+		if hovered {
+			txtColor = colorTextPrimary
+		}
+		drawTextEx(editorFont, compType.Name, x+12, itemY+5, 16, txtColor)
 
 		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 			e.addComponent(compType.Name)
@@ -1561,20 +1740,23 @@ func (e *Editor) mouseInPanel() bool {
 	m := rl.GetMousePosition()
 	screenW := float32(rl.GetScreenWidth())
 	screenH := float32(rl.GetScreenHeight())
-	// Hierarchy: left 200px
-	if m.X <= 200 && m.Y >= 32 && m.Y <= screenH {
+	hierW := float32(e.hierarchyWidth)
+	inspW := float32(e.inspectorWidth)
+
+	// Hierarchy panel
+	if m.X <= hierW && m.Y >= 36 && m.Y <= screenH {
 		return true
 	}
-	// Inspector: right 300px
-	if m.X >= screenW-300 && m.Y >= 32 && m.Y <= screenH {
+	// Inspector panel
+	if m.X >= screenW-inspW && m.Y >= 36 && m.Y <= screenH {
 		return true
 	}
 	// Top bar
-	if m.Y <= 32 {
+	if m.Y <= 36 {
 		return true
 	}
 	// Asset browser: bottom 150px (when visible)
-	if e.showAssetBrowser && m.Y >= screenH-150 && m.X > 200 && m.X < screenW-300 {
+	if e.showAssetBrowser && m.Y >= screenH-150 && m.X > hierW && m.X < screenW-inspW {
 		return true
 	}
 	return false
@@ -1584,8 +1766,8 @@ func (e *Editor) mouseInPanel() bool {
 func (e *Editor) drawAssetBrowser() {
 	panelH := int32(150)
 	panelY := int32(rl.GetScreenHeight()) - panelH
-	panelX := int32(200)                             // Start after hierarchy
-	panelW := int32(rl.GetScreenWidth()) - 200 - 300 // Between hierarchy and inspector
+	panelX := e.hierarchyWidth                                            // Start after hierarchy
+	panelW := int32(rl.GetScreenWidth()) - e.hierarchyWidth - e.inspectorWidth // Between hierarchy and inspector
 
 	// Reserve space for material editor on the right when a material is selected
 	contentW := panelW
@@ -1593,31 +1775,31 @@ func (e *Editor) drawAssetBrowser() {
 		contentW = panelW - 180
 	}
 
-	// Background
-	rl.DrawRectangle(panelX, panelY, panelW, panelH, rl.NewColor(25, 25, 30, 240))
-	rl.DrawLine(panelX, panelY, panelX+panelW, panelY, rl.NewColor(60, 60, 60, 255))
+	// Background with border
+	rl.DrawRectangle(panelX, panelY, panelW, panelH, colorBgPanel)
+	rl.DrawRectangle(panelX, panelY, panelW, 1, colorBorder)
 
 	mousePos := rl.GetMousePosition()
 
 	// Header with back button and path
-	headerY := panelY + 4
+	headerY := panelY + 6
 
 	// Back button (only show if not at root)
-	backBtnX := panelX + 8
-	backBtnW := int32(24)
-	backBtnH := int32(18)
+	backBtnX := panelX + 10
+	backBtnW := int32(26)
+	backBtnH := int32(20)
 	canGoBack := e.currentAssetPath != "assets" && e.currentAssetPath != ""
 
 	if canGoBack {
 		backHovered := mousePos.X >= float32(backBtnX) && mousePos.X <= float32(backBtnX+backBtnW) &&
 			mousePos.Y >= float32(headerY) && mousePos.Y <= float32(headerY+backBtnH)
 
-		backColor := rl.NewColor(50, 50, 60, 200)
+		backColor := colorBgElement
 		if backHovered {
-			backColor = rl.NewColor(70, 70, 80, 220)
+			backColor = colorAccent
 		}
-		rl.DrawRectangle(backBtnX, headerY, backBtnW, backBtnH, backColor)
-		rl.DrawText("<", backBtnX+8, headerY+2, 14, rl.LightGray)
+		rl.DrawRectangleRounded(rl.Rectangle{X: float32(backBtnX), Y: float32(headerY), Width: float32(backBtnW), Height: float32(backBtnH)}, 0.3, 4, backColor)
+		drawTextEx(editorFontBold, "<", backBtnX+8, headerY+3, 16, colorTextPrimary)
 
 		if backHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 			// Go up one directory
@@ -1630,38 +1812,38 @@ func (e *Editor) drawAssetBrowser() {
 	}
 
 	// Current path
-	pathX := backBtnX + backBtnW + 8
+	pathX := backBtnX + backBtnW + 10
 	if !canGoBack {
-		pathX = panelX + 10
+		pathX = panelX + 12
 	}
-	rl.DrawText(e.currentAssetPath+"/", pathX, headerY+2, 14, rl.Gray)
+	drawTextEx(editorFont, e.currentAssetPath+"/", pathX, headerY+3, 15, colorTextMuted)
 
 	// Refresh button
-	refreshBtnX := panelX + contentW - 70
+	refreshBtnX := panelX + contentW - 75
 	refreshBtnY := headerY
-	refreshBtnW := int32(60)
-	refreshBtnH := int32(18)
+	refreshBtnW := int32(65)
+	refreshBtnH := int32(20)
 
 	refreshHovered := mousePos.X >= float32(refreshBtnX) && mousePos.X <= float32(refreshBtnX+refreshBtnW) &&
 		mousePos.Y >= float32(refreshBtnY) && mousePos.Y <= float32(refreshBtnY+refreshBtnH)
 
-	refreshColor := rl.NewColor(50, 50, 60, 200)
+	refreshColor := colorBgElement
 	if refreshHovered {
-		refreshColor = rl.NewColor(70, 70, 80, 220)
+		refreshColor = colorAccent
 	}
-	rl.DrawRectangle(refreshBtnX, refreshBtnY, refreshBtnW, refreshBtnH, refreshColor)
-	rl.DrawText("Refresh", refreshBtnX+6, refreshBtnY+2, 12, rl.LightGray)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(refreshBtnX), Y: float32(refreshBtnY), Width: float32(refreshBtnW), Height: float32(refreshBtnH)}, 0.3, 4, refreshColor)
+	drawTextEx(editorFont, "Refresh", refreshBtnX+10, refreshBtnY+3, 14, colorTextSecondary)
 
 	if refreshHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		e.scanAssets()
 	}
 
-	// Asset grid
-	itemW := int32(70)
-	itemH := int32(70)
+	// Asset grid - larger items for better icons
+	itemW := int32(80)
+	itemH := int32(85)
 	startX := panelX + 10
-	startY := panelY + 28
-	cols := (contentW - 20) / (itemW + 6)
+	startY := panelY + 30
+	cols := (contentW - 20) / (itemW + 8)
 	if cols < 1 {
 		cols = 1
 	}
@@ -1685,71 +1867,102 @@ func (e *Editor) drawAssetBrowser() {
 		col := int32(i) % cols
 		row := int32(i) / cols
 
-		x := startX + col*(itemW+6)
-		y := startY + row*(itemH+6) - e.assetBrowserScroll
+		x := startX + col*(itemW+8)
+		y := startY + row*(itemH+8) - e.assetBrowserScroll
 
 		// Skip if off screen
 		if y+itemH < panelY+24 || y > panelY+panelH {
 			continue
 		}
 
-		// Item background
+		// Item background - rounded
 		itemHovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+itemW) &&
 			mousePos.Y >= float32(y) && mousePos.Y <= float32(y+itemH)
 
 		isSelected := asset.Path == e.selectedMaterialPath
 
-		bgColor := rl.NewColor(40, 40, 45, 200)
+		bgColor := colorBgElement
 		if isSelected {
-			bgColor = rl.NewColor(60, 80, 100, 220)
+			bgColor = colorAccent
 		} else if itemHovered {
-			bgColor = rl.NewColor(55, 60, 55, 220)
+			bgColor = colorBgHover
 		}
-		rl.DrawRectangle(x, y, itemW, itemH, bgColor)
+		rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(itemW), Height: float32(itemH)}, 0.15, 4, bgColor)
 
-		// Draw icon based on type
-		iconSize := int32(32)
+		// Draw icon based on type - larger, smoother icons
+		iconSize := int32(42)
 		iconX := x + (itemW-iconSize)/2
-		iconY := y + 6
+		iconY := y + 8
 
 		switch asset.Type {
 		case "folder":
-			// Folder icon (yellow rectangle with tab)
-			rl.DrawRectangle(iconX, iconY+6, iconSize, iconSize-6, rl.NewColor(180, 150, 50, 220))
-			rl.DrawRectangle(iconX, iconY, iconSize/2, 6, rl.NewColor(180, 150, 50, 220))
+			// Folder icon - rounded with tab
+			folderColor := rl.NewColor(220, 180, 80, 255)
+			folderDark := rl.NewColor(180, 140, 50, 255)
+			// Tab
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY), Width: float32(iconSize/2 + 4), Height: 8}, 0.4, 4, folderColor)
+			// Body
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY + 6), Width: float32(iconSize), Height: float32(iconSize - 10)}, 0.2, 4, folderColor)
+			// Shadow line
+			rl.DrawRectangle(iconX+2, iconY+10, iconSize-4, 2, folderDark)
 		case "material":
-			// Material icon (circle/orb)
-			rl.DrawCircle(iconX+iconSize/2, iconY+iconSize/2, float32(iconSize)/2-2, rl.NewColor(100, 150, 200, 220))
-			rl.DrawCircleLines(iconX+iconSize/2, iconY+iconSize/2, float32(iconSize)/2-2, rl.NewColor(150, 180, 220, 255))
+			// Material icon - gradient sphere effect
+			centerX := iconX + iconSize/2
+			centerY := iconY + iconSize/2
+			radius := float32(iconSize) / 2 - 2
+			// Outer ring
+			rl.DrawCircle(centerX, centerY, radius, colorAccent)
+			// Inner highlight
+			rl.DrawCircle(centerX-4, centerY-4, radius*0.6, colorAccentLight)
+			// Shine dot
+			rl.DrawCircle(centerX-6, centerY-6, 4, rl.NewColor(255, 255, 255, 180))
 		case "model":
-			// Model icon (cube)
-			rl.DrawRectangle(iconX+4, iconY+4, iconSize-8, iconSize-8, rl.NewColor(100, 180, 100, 220))
-			rl.DrawText("3D", iconX+8, iconY+10, 12, rl.White)
+			// Model icon - 3D cube with depth
+			cubeColor := rl.NewColor(120, 200, 140, 255)
+			cubeDark := rl.NewColor(80, 160, 100, 255)
+			cubeLight := rl.NewColor(160, 230, 180, 255)
+			// Main face
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + 6), Y: float32(iconY + 6), Width: float32(iconSize - 12), Height: float32(iconSize - 12)}, 0.15, 4, cubeColor)
+			// Top edge highlight
+			rl.DrawRectangle(iconX+6, iconY+6, iconSize-12, 4, cubeLight)
+			// Right edge shadow
+			rl.DrawRectangle(iconX+iconSize-10, iconY+10, 4, iconSize-16, cubeDark)
+			// "3D" text
+			drawTextEx(editorFontBold, "3D", iconX+14, iconY+14, 16, rl.White)
 		case "texture":
-			// Texture icon (checkerboard)
+			// Texture icon - rounded checkerboard
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY), Width: float32(iconSize), Height: float32(iconSize)}, 0.15, 4, rl.NewColor(60, 60, 70, 255))
 			half := iconSize / 2
-			rl.DrawRectangle(iconX, iconY, half, half, rl.NewColor(200, 200, 200, 220))
-			rl.DrawRectangle(iconX+half, iconY+half, half, half, rl.NewColor(200, 200, 200, 220))
-			rl.DrawRectangle(iconX+half, iconY, half, half, rl.NewColor(100, 100, 100, 220))
-			rl.DrawRectangle(iconX, iconY+half, half, half, rl.NewColor(100, 100, 100, 220))
+			// Checkerboard pattern inside
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + 4), Y: float32(iconY + 4), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(220, 220, 220, 255))
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + half + 2), Y: float32(iconY + half + 2), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(220, 220, 220, 255))
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + half + 2), Y: float32(iconY + 4), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(120, 120, 130, 255))
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + 4), Y: float32(iconY + half + 2), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(120, 120, 130, 255))
 		default:
-			// Generic file icon
-			rl.DrawRectangle(iconX+4, iconY, iconSize-8, iconSize, rl.NewColor(120, 120, 130, 220))
+			// Generic file icon - document style
+			docColor := rl.NewColor(140, 140, 160, 255)
+			// Main body
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + 6), Y: float32(iconY), Width: float32(iconSize - 12), Height: float32(iconSize)}, 0.15, 4, docColor)
+			// Corner fold
 			rl.DrawTriangle(
-				rl.NewVector2(float32(iconX+iconSize-4), float32(iconY)),
-				rl.NewVector2(float32(iconX+iconSize-4), float32(iconY+8)),
-				rl.NewVector2(float32(iconX+iconSize-12), float32(iconY)),
-				rl.NewColor(80, 80, 90, 220),
+				rl.NewVector2(float32(iconX+iconSize-6), float32(iconY)),
+				rl.NewVector2(float32(iconX+iconSize-6), float32(iconY+10)),
+				rl.NewVector2(float32(iconX+iconSize-16), float32(iconY)),
+				rl.NewColor(100, 100, 120, 255),
 			)
+			// Lines to represent text
+			rl.DrawRectangle(iconX+12, iconY+16, iconSize-24, 3, rl.NewColor(100, 100, 120, 255))
+			rl.DrawRectangle(iconX+12, iconY+22, iconSize-28, 3, rl.NewColor(100, 100, 120, 255))
+			rl.DrawRectangle(iconX+12, iconY+28, iconSize-24, 3, rl.NewColor(100, 100, 120, 255))
 		}
 
-		// Name (truncated)
+		// Name (truncated) - centered below icon
 		name := asset.Name
-		if len(name) > 9 {
-			name = name[:8] + "…"
+		if len(name) > 10 {
+			name = name[:9] + "…"
 		}
-		textW := rl.MeasureText(name, 10)
-		rl.DrawText(name, x+(itemW-textW)/2, y+itemH-14, 10, rl.LightGray)
+		textW := rl.MeasureText(name, 13)
+		drawTextEx(editorFont, name, x+(itemW-textW)/2, y+itemH-18, 13, colorTextSecondary)
 
 		// Handle clicks
 		if itemHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !e.draggingAsset {
@@ -1786,7 +1999,7 @@ func (e *Editor) drawAssetBrowser() {
 
 	// Clamp scroll
 	rows := (int32(len(e.assetFiles)) + cols - 1) / cols
-	maxScroll := rows*(itemH+6) - (panelH - 28)
+	maxScroll := rows*(itemH+8) - (panelH - 30)
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -1796,7 +2009,7 @@ func (e *Editor) drawAssetBrowser() {
 
 	// Empty state
 	if len(e.assetFiles) == 0 {
-		rl.DrawText("Empty folder", panelX+20, panelY+60, 14, rl.Gray)
+		drawTextEx(editorFont, "Empty folder", panelX+20, panelY+60, 16, colorTextMuted)
 	}
 
 	// Draw material editor panel on the right
@@ -1807,28 +2020,28 @@ func (e *Editor) drawAssetBrowser() {
 
 // drawMaterialEditor draws the material properties editor in the asset browser
 func (e *Editor) drawMaterialEditor(x, y, w, h int32) {
-	// Background
-	rl.DrawRectangle(x, y, w, h, rl.NewColor(30, 30, 35, 250))
-	rl.DrawLine(x, y, x, y+h, rl.NewColor(60, 60, 60, 255))
+	// Background with border
+	rl.DrawRectangle(x, y, w, h, colorBgPanel)
+	rl.DrawRectangle(x, y, 1, h, colorBorder)
 
 	// Header
 	name := filepath.Base(e.selectedMaterialPath)
-	rl.DrawText(name, x+8, y+6, 12, rl.SkyBlue)
+	drawTextEx(editorFontBold, name, x+10, y+6, 14, colorAccentLight)
 
-	// Close button
-	closeBtnX := x + w - 20
-	closeBtnY := y + 4
-	closeBtnSize := int32(14)
+	// Close button - rounded
+	closeBtnX := x + w - 22
+	closeBtnY := y + 5
+	closeBtnSize := int32(16)
 	mousePos := rl.GetMousePosition()
 	closeHovered := mousePos.X >= float32(closeBtnX) && mousePos.X <= float32(closeBtnX+closeBtnSize) &&
 		mousePos.Y >= float32(closeBtnY) && mousePos.Y <= float32(closeBtnY+closeBtnSize)
 
 	closeColor := rl.NewColor(80, 50, 50, 200)
 	if closeHovered {
-		closeColor = rl.NewColor(120, 60, 60, 220)
+		closeColor = rl.NewColor(180, 60, 60, 230)
 	}
-	rl.DrawRectangle(closeBtnX, closeBtnY, closeBtnSize, closeBtnSize, closeColor)
-	rl.DrawText("x", closeBtnX+3, closeBtnY, 12, rl.White)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(closeBtnX), Y: float32(closeBtnY), Width: float32(closeBtnSize), Height: float32(closeBtnSize)}, 0.3, 4, closeColor)
+	drawTextEx(editorFontBold, "×", closeBtnX+3, closeBtnY, 14, colorTextPrimary)
 
 	if closeHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		e.selectedMaterial = nil
@@ -1837,11 +2050,11 @@ func (e *Editor) drawMaterialEditor(x, y, w, h int32) {
 	}
 
 	// Properties
-	propY := y + 24
-	labelW := int32(60)
-	fieldW := w - labelW - 16
-	fieldH := int32(16)
-	indent := x + 8
+	propY := y + 26
+	labelW := int32(65)
+	fieldW := w - labelW - 18
+	fieldH := int32(18)
+	indent := x + 10
 
 	mat := e.selectedMaterial
 	oldMet := mat.Metallic
@@ -1849,34 +2062,34 @@ func (e *Editor) drawMaterialEditor(x, y, w, h int32) {
 	oldEmit := mat.Emissive
 
 	// Material name (read-only for now)
-	rl.DrawText("Name:", indent, propY+2, 11, rl.Gray)
-	rl.DrawText(mat.Name, indent+labelW, propY+2, 11, rl.LightGray)
+	drawTextEx(editorFont, "Name:", indent, propY+2, 13, colorTextMuted)
+	drawTextEx(editorFont, mat.Name, indent+labelW, propY+2, 13, colorTextSecondary)
 	propY += fieldH + 4
 
 	// Color (read-only display)
-	rl.DrawText("Color:", indent, propY+2, 11, rl.Gray)
+	drawTextEx(editorFont, "Color:", indent, propY+2, 13, colorTextMuted)
 	colorName := assets.LookupColorName(mat.Color)
-	rl.DrawRectangle(indent+labelW, propY, fieldH, fieldH, mat.Color)
-	rl.DrawText(colorName, indent+labelW+fieldH+4, propY+2, 11, rl.LightGray)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(indent + labelW), Y: float32(propY), Width: float32(fieldH), Height: float32(fieldH)}, 0.2, 4, mat.Color)
+	drawTextEx(editorFont, colorName, indent+labelW+fieldH+6, propY+2, 13, colorTextSecondary)
 	propY += fieldH + 4
 
 	// Metallic
-	rl.DrawText("Metallic:", indent, propY+2, 11, rl.Gray)
+	drawTextEx(editorFont, "Metallic:", indent, propY+3, 13, colorTextMuted)
 	mat.Metallic = e.drawFloatField(indent+labelW, propY, fieldW, fieldH, "mated.met", mat.Metallic)
 	propY += fieldH + 4
 
 	// Roughness
-	rl.DrawText("Rough:", indent, propY+2, 11, rl.Gray)
+	drawTextEx(editorFont, "Rough:", indent, propY+3, 13, colorTextMuted)
 	mat.Roughness = e.drawFloatField(indent+labelW, propY, fieldW, fieldH, "mated.rough", mat.Roughness)
 	propY += fieldH + 4
 
 	// Emissive
-	rl.DrawText("Emissive:", indent, propY+2, 11, rl.Gray)
+	drawTextEx(editorFont, "Emissive:", indent, propY+3, 13, colorTextMuted)
 	mat.Emissive = e.drawFloatField(indent+labelW, propY, fieldW, fieldH, "mated.emit", mat.Emissive)
 	propY += fieldH + 4
 
 	// Albedo texture path (editable)
-	rl.DrawText("Albedo:", indent, propY+2, 11, rl.Gray)
+	drawTextEx(editorFont, "Albedo:", indent, propY+3, 13, colorTextMuted)
 	oldAlbedo := mat.AlbedoPath
 	mat.AlbedoPath = e.drawTextureField(indent+labelW, propY, fieldW, fieldH, "mated.albedo", mat.AlbedoPath)
 	propY += fieldH + 4
