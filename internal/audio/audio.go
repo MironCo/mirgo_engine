@@ -314,3 +314,18 @@ func IsPlaying(id uint64) bool {
 	}
 	return false
 }
+
+// IsPlayModeEnabled returns whether audio playback is enabled (play mode vs editor mode)
+func IsPlayModeEnabled() bool {
+	return playModeEnabled
+}
+
+// GetListener returns the current listener state (for HRTF sources)
+func GetListener() Listener {
+	if globalManager == nil {
+		return Listener{}
+	}
+	globalManager.mu.Lock()
+	defer globalManager.mu.Unlock()
+	return globalManager.listener
+}
