@@ -1650,6 +1650,16 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		comp.Radius = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id, comp.Radius)
 		y += fieldH + 6
 
+	case *components.MeshCollider:
+		// Show read-only info about the mesh collider
+		if comp.IsBuilt() {
+			info := fmt.Sprintf("%d triangles", comp.TriangleCount())
+			drawTextEx(editorFont, info, indent, y+4, 15, colorTextMuted)
+		} else {
+			drawTextEx(editorFont, "Not built", indent, y+4, 15, rl.Red)
+		}
+		y += fieldH + 6
+
 	case *components.Rigidbody:
 		// Mass
 		drawTextEx(editorFont, "Mass", indent, y+4, 15, colorTextMuted)
@@ -1959,7 +1969,9 @@ func (e *Editor) addComponent(typeName string) {
 	for _, compType := range editorComponentTypes {
 		if compType.Name == typeName {
 			newComp := compType.Factory(e.world, e.Selected)
-			e.Selected.AddComponent(newComp)
+			if newComp != nil {
+				e.Selected.AddComponent(newComp)
+			}
 
 			// Re-register with physics world to update categorization
 			e.updatePhysicsRegistration(e.Selected)

@@ -22,6 +22,7 @@ var editorComponentTypes = []ComponentType{
 	{"ModelRenderer", createModelRenderer},
 	{"BoxCollider", createBoxCollider},
 	{"SphereCollider", createSphereCollider},
+	{"MeshCollider", createMeshCollider},
 	{"Rigidbody", createRigidbody},
 	{"DirectionalLight", createDirectionalLight},
 	{"PointLight", createPointLight},
@@ -44,6 +45,19 @@ func createBoxCollider(w *world.World, g *engine.GameObject) engine.Component {
 
 func createSphereCollider(w *world.World, g *engine.GameObject) engine.Component {
 	return components.NewSphereCollider(0.5)
+}
+
+func createMeshCollider(w *world.World, g *engine.GameObject) engine.Component {
+	meshCol := components.NewMeshCollider()
+	// If object already has a ModelRenderer, build the collider from it
+	if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+		// Need to add component first so it has access to GameObject
+		g.AddComponent(meshCol)
+		meshCol.BuildFromModel(renderer.Model)
+		// Return nil since we already added it
+		return nil
+	}
+	return meshCol
 }
 
 func createRigidbody(w *world.World, g *engine.GameObject) engine.Component {

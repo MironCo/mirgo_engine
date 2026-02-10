@@ -231,7 +231,21 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 		}
 	}
 
-	// 6. Dispatch collision callbacks
+	// 6. Kinematic vs MeshCollider (player vs terrain/complex geometry)
+	for _, kinematic := range p.Kinematics {
+		for _, static := range p.Statics {
+			p.resolveKinematicMeshCollision(kinematic, static)
+		}
+	}
+
+	// 7. Dynamic vs MeshCollider
+	for _, obj := range p.Objects {
+		for _, static := range p.Statics {
+			p.resolveDynamicMeshCollision(obj, static)
+		}
+	}
+
+	// 8. Dispatch collision callbacks
 	p.dispatchCollisionCallbacks()
 }
 
@@ -682,4 +696,103 @@ func (p *PhysicsWorld) resolveKinematicStaticCollision(kinematic, static *engine
 
 	// Push kinematic out of static (static doesn't move)
 	kinematic.Transform.Position = rl.Vector3Add(kinematic.Transform.Position, pushOut)
+}
+
+// resolveKinematicMeshCollision handles kinematic objects (player) colliding with mesh colliders
+func (p *PhysicsWorld) resolveKinematicMeshCollision(kinematic, static *engine.GameObject) {
+	meshCol := engine.GetComponent[*components.MeshCollider](static)
+	if meshCol == nil || !meshCol.IsBuilt() {
+		return
+	}
+
+	// Get the kinematic's collider - try box first, then sphere
+	boxCol := engine.GetComponent[*components.BoxCollider](kinematic)
+	sphereCol := engine.GetComponent[*components.SphereCollider](kinematic)
+
+	if boxCol != nil {
+		// Approximate box as sphere for mesh collision
+		center := boxCol.GetCenter()
+		size := boxCol.GetWorldSize()
+		// Use half the smallest dimension as radius (conservative)
+		radius := size.X
+		if size.Y < radius {
+			radius = size.Y
+		}
+		if size.Z < radius {
+			radius = size.Z
+		}
+		radius *= 0.5
+
+		if hit, push := meshCol.SphereIntersect(center, radius); hit {
+			p.recordCollision(kinematic, static)
+			kinematic.Transform.Position = rl.Vector3Add(kinematic.Transform.Position, push)
+		}
+	} else if sphereCol != nil {
+		center := sphereCol.GetCenter()
+		radius := sphereCol.Radius
+
+		if hit, push := meshCol.SphereIntersect(center, radius); hit {
+			p.recordCollision(kinematic, static)
+			kinematic.Transform.Position = rl.Vector3Add(kinematic.Transform.Position, push)
+		}
+	}
+}
+
+// resolveDynamicMeshCollision handles dynamic rigidbodies colliding with mesh colliders
+func (p *PhysicsWorld) resolveDynamicMeshCollision(obj, static *engine.GameObject) {
+	meshCol := engine.GetComponent[*components.MeshCollider](static)
+	if meshCol == nil || !meshCol.IsBuilt() {
+		return
+	}
+
+	rb := engine.GetComponent[*components.Rigidbody](obj)
+	if rb == nil {
+		return
+	}
+
+	// Get the object's collider
+	sphereCol := engine.GetComponent[*components.SphereCollider](obj)
+	boxCol := engine.GetComponent[*components.BoxCollider](obj)
+
+	var center rl.Vector3
+	var radius float32
+
+	if sphereCol != nil {
+		center = sphereCol.GetCenter()
+		radius = sphereCol.Radius
+	} else if boxCol != nil {
+		center = boxCol.GetCenter()
+		size := boxCol.GetWorldSize()
+		radius = size.X
+		if size.Y < radius {
+			radius = size.Y
+		}
+		if size.Z < radius {
+			radius = size.Z
+		}
+		radius *= 0.5
+	} else {
+		return
+	}
+
+	if hit, push := meshCol.SphereIntersect(center, radius); hit {
+		p.recordCollision(obj, static)
+
+		// Push out
+		obj.Transform.Position = rl.Vector3Add(obj.Transform.Position, push)
+
+		// Reflect velocity
+		pushLen := rl.Vector3Length(push)
+		if pushLen > 0.0001 {
+			normal := rl.Vector3Scale(push, 1.0/pushLen)
+			dot := rl.Vector3DotProduct(rb.Velocity, normal)
+			if dot < 0 {
+				// Reflect with bounciness
+				reflect := rl.Vector3Scale(normal, -2*dot*rb.Bounciness)
+				rb.Velocity = rl.Vector3Add(rb.Velocity, reflect)
+				// Apply friction
+				rb.Velocity = rl.Vector3Scale(rb.Velocity, 1.0-rb.Friction)
+			}
+		}
+	}
 }

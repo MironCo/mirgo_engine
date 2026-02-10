@@ -204,7 +204,8 @@ func (e *Editor) Draw3D() {
 
 		// Debug: draw bounding boxes for objects without colliders
 		if engine.GetComponent[*components.BoxCollider](g) == nil &&
-			engine.GetComponent[*components.SphereCollider](g) == nil {
+			engine.GetComponent[*components.SphereCollider](g) == nil &&
+			engine.GetComponent[*components.MeshCollider](g) == nil {
 			if mr := engine.GetComponent[*components.ModelRenderer](g); mr != nil {
 				bounds := rl.GetModelBoundingBox(mr.Model)
 				pos := g.WorldPosition()
@@ -239,6 +240,20 @@ func (e *Editor) Draw3D() {
 	} else if sphere := engine.GetComponent[*components.SphereCollider](e.Selected); sphere != nil {
 		center := sphere.GetCenter()
 		rl.DrawSphereWires(center, sphere.Radius, 8, 8, rl.Yellow)
+	} else if mesh := engine.GetComponent[*components.MeshCollider](e.Selected); mesh != nil && mesh.IsBuilt() {
+		// Draw BVH root bounds for mesh collider
+		bounds := mesh.GetBounds()
+		center := rl.Vector3{
+			X: (bounds.Min.X + bounds.Max.X) / 2,
+			Y: (bounds.Min.Y + bounds.Max.Y) / 2,
+			Z: (bounds.Min.Z + bounds.Max.Z) / 2,
+		}
+		size := rl.Vector3{
+			X: bounds.Max.X - bounds.Min.X,
+			Y: bounds.Max.Y - bounds.Min.Y,
+			Z: bounds.Max.Z - bounds.Min.Z,
+		}
+		rl.DrawCubeWiresV(center, size, rl.Yellow)
 	} else if pl := engine.GetComponent[*components.PointLight](e.Selected); pl != nil {
 		// Highlight selected point light
 		pos := pl.GetPosition()

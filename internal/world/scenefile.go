@@ -193,6 +193,8 @@ func (w *World) loadObject(objDef ObjectDef, parent *engine.GameObject) {
 			w.loadBoxCollider(g, raw)
 		case "SphereCollider":
 			w.loadSphereCollider(g, raw)
+		case "MeshCollider":
+			w.loadMeshCollider(g, raw)
 		case "Rigidbody":
 			w.loadRigidbody(g, raw)
 		case "DirectionalLight":
@@ -293,6 +295,20 @@ func (w *World) loadSphereCollider(g *engine.GameObject, raw json.RawMessage) {
 		return
 	}
 	g.AddComponent(components.NewSphereCollider(def.Radius))
+}
+
+func (w *World) loadMeshCollider(g *engine.GameObject, raw json.RawMessage) {
+	// MeshCollider uses the model from ModelRenderer
+	// It will be built after the object is fully loaded
+	meshCol := components.NewMeshCollider()
+	g.AddComponent(meshCol)
+
+	// Find the ModelRenderer to get the model
+	// Note: This requires ModelRenderer to be loaded first in the component list
+	renderer := engine.GetComponent[*components.ModelRenderer](g)
+	if renderer != nil {
+		meshCol.BuildFromModel(renderer.Model)
+	}
 }
 
 func (w *World) loadRigidbody(g *engine.GameObject, raw json.RawMessage) {
@@ -452,6 +468,8 @@ func (w *World) loadObjectAndReturn(objDef ObjectDef, parent *engine.GameObject)
 			w.loadBoxCollider(g, raw)
 		case "SphereCollider":
 			w.loadSphereCollider(g, raw)
+		case "MeshCollider":
+			w.loadMeshCollider(g, raw)
 		case "Rigidbody":
 			w.loadRigidbody(g, raw)
 		case "DirectionalLight":
@@ -570,6 +588,10 @@ func serializeComponent(c engine.Component) json.RawMessage {
 			Type:   "SphereCollider",
 			Radius: comp.Radius,
 		}
+
+	case *components.MeshCollider:
+		// MeshCollider just needs to be saved - it rebuilds from ModelRenderer on load
+		def = map[string]string{"type": "MeshCollider"}
 
 	case *components.Rigidbody:
 		useGravity := comp.UseGravity
