@@ -11,7 +11,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-const ScenePath = "assets/scenes/main.json"
+var ScenePath = "assets/scenes/main.json"
 
 const FloorSize = 60.0
 

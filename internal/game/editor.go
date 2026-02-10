@@ -2262,6 +2262,29 @@ func (e *Editor) drawAssetBrowser() {
 			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + half + 2), Y: float32(iconY + half + 2), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(220, 220, 220, 255))
 			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + half + 2), Y: float32(iconY + 4), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(120, 120, 130, 255))
 			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX + 4), Y: float32(iconY + half + 2), Width: float32(half - 6), Height: float32(half - 6)}, 0.2, 2, rl.NewColor(120, 120, 130, 255))
+		case "scene":
+			// Scene icon - clapperboard style
+			sceneColor := rl.NewColor(100, 180, 255, 255)    // Light blue
+			sceneDark := rl.NewColor(60, 120, 200, 255)      // Darker blue
+			sceneStripe := rl.NewColor(40, 80, 160, 255)     // Stripe color
+			// Clapperboard top (angled stripes part)
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY), Width: float32(iconSize), Height: 14}, 0.3, 4, sceneDark)
+			// Diagonal stripes on top
+			for i := int32(0); i < 5; i++ {
+				stripeX := iconX + i*9
+				rl.DrawRectangle(stripeX, iconY+2, 4, 10, sceneStripe)
+			}
+			// Main body
+			rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY + 12), Width: float32(iconSize), Height: float32(iconSize - 12)}, 0.15, 4, sceneColor)
+			// Play triangle in center
+			centerX := float32(iconX + iconSize/2)
+			centerY := float32(iconY + 12 + (iconSize-12)/2)
+			rl.DrawTriangle(
+				rl.NewVector2(centerX-6, centerY-8),
+				rl.NewVector2(centerX-6, centerY+8),
+				rl.NewVector2(centerX+8, centerY),
+				rl.White,
+			)
 		default:
 			// Generic file icon - document style
 			docColor := rl.NewColor(140, 140, 160, 255)
@@ -2312,6 +2335,11 @@ func (e *Editor) drawAssetBrowser() {
 			} else if asset.Type == "model" {
 				// Click model: spawn into scene
 				e.spawnModelFromAsset(asset)
+			} else if asset.Type == "scene" {
+				if isDoubleClick {
+					// Double-click scene: open it
+					e.openScene(asset.Path)
+				}
 			}
 
 			e.lastClickTime = now
@@ -2512,6 +2540,56 @@ func (e *Editor) spawnModelFromAsset(asset AssetEntry) {
 	e.Selected = obj
 
 	e.saveMsg = fmt.Sprintf("Spawned %s", asset.Name)
+	e.saveMsgTime = rl.GetTime()
+}
+
+// openScene saves the current scene and loads a new one
+func (e *Editor) openScene(scenePath string) {
+	// Don't reload if it's the same scene
+	if scenePath == world.ScenePath {
+		e.saveMsg = "Already editing this scene"
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Save current scene first
+	if err := e.world.SaveScene(world.ScenePath); err != nil {
+		e.saveMsg = fmt.Sprintf("Save failed: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Unload all models from current scene
+	for _, g := range e.world.Scene.GameObjects {
+		if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+			renderer.Unload()
+		}
+	}
+
+	// Clear scene and physics
+	e.world.Scene.GameObjects = e.world.Scene.GameObjects[:0]
+	e.world.PhysicsWorld.Objects = e.world.PhysicsWorld.Objects[:0]
+	e.world.PhysicsWorld.Statics = e.world.PhysicsWorld.Statics[:0]
+	e.world.PhysicsWorld.Kinematics = e.world.PhysicsWorld.Kinematics[:0]
+
+	// Update the scene path
+	world.ScenePath = scenePath
+
+	// Load the new scene
+	if err := e.world.LoadScene(scenePath); err != nil {
+		e.saveMsg = fmt.Sprintf("Failed to load scene: %v", err)
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
+	// Start all GameObjects in the new scene
+	e.world.Scene.Start()
+
+	// Clear selection and undo stack
+	e.Selected = nil
+	e.undoStack = e.undoStack[:0]
+
+	e.saveMsg = fmt.Sprintf("Opened %s", filepath.Base(scenePath))
 	e.saveMsgTime = rl.GetTime()
 }
 
@@ -2787,5 +2865,96 @@ func (e *Editor) rebuildAndRelaunch() {
 	if err != nil {
 		fmt.Printf("Failed to exec: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+// EditorPrefs holds persistent editor preferences saved between sessions
+type EditorPrefs struct {
+	WindowWidth     int        `json:"windowWidth"`
+	WindowHeight    int        `json:"windowHeight"`
+	WindowX         int        `json:"windowX"`
+	WindowY         int        `json:"windowY"`
+	CameraPosition  rl.Vector3 `json:"cameraPosition"`
+	CameraYaw       float32    `json:"cameraYaw"`
+	CameraPitch     float32    `json:"cameraPitch"`
+	CameraMoveSpeed float32    `json:"cameraMoveSpeed"`
+	ScenePath       string     `json:"scenePath"`
+	AssetBrowserOpen bool      `json:"assetBrowserOpen"`
+	AssetBrowserPath string    `json:"assetBrowserPath"`
+	HierarchyWidth   int32     `json:"hierarchyWidth"`
+	InspectorWidth   int32     `json:"inspectorWidth"`
+}
+
+const editorPrefsFile = ".editor_prefs.json"
+
+// LoadEditorPrefs loads editor preferences from disk
+func LoadEditorPrefs() *EditorPrefs {
+	data, err := os.ReadFile(editorPrefsFile)
+	if err != nil {
+		return nil
+	}
+
+	var prefs EditorPrefs
+	if err := json.Unmarshal(data, &prefs); err != nil {
+		fmt.Printf("Failed to parse editor prefs: %v\n", err)
+		return nil
+	}
+
+	return &prefs
+}
+
+// SavePrefs saves the current editor state to disk
+func (e *Editor) SavePrefs() {
+	prefs := EditorPrefs{
+		WindowWidth:      rl.GetScreenWidth(),
+		WindowHeight:     rl.GetScreenHeight(),
+		WindowX:          int(rl.GetWindowPosition().X),
+		WindowY:          int(rl.GetWindowPosition().Y),
+		CameraPosition:   e.camera.Position,
+		CameraYaw:        e.camera.Yaw,
+		CameraPitch:      e.camera.Pitch,
+		CameraMoveSpeed:  e.camera.MoveSpeed,
+		ScenePath:        world.ScenePath,
+		AssetBrowserOpen: e.showAssetBrowser,
+		AssetBrowserPath: e.currentAssetPath,
+		HierarchyWidth:   e.hierarchyWidth,
+		InspectorWidth:   e.inspectorWidth,
+	}
+
+	data, err := json.MarshalIndent(prefs, "", "  ")
+	if err != nil {
+		fmt.Printf("Failed to marshal editor prefs: %v\n", err)
+		return
+	}
+
+	if err := os.WriteFile(editorPrefsFile, data, 0644); err != nil {
+		fmt.Printf("Failed to save editor prefs: %v\n", err)
+	}
+}
+
+// ApplyPrefs applies loaded preferences to the editor
+func (e *Editor) ApplyPrefs(prefs *EditorPrefs) {
+	if prefs == nil {
+		return
+	}
+
+	e.camera.Position = prefs.CameraPosition
+	e.camera.Yaw = prefs.CameraYaw
+	e.camera.Pitch = prefs.CameraPitch
+	if prefs.CameraMoveSpeed > 0 {
+		e.camera.MoveSpeed = prefs.CameraMoveSpeed
+	}
+	if prefs.HierarchyWidth > 0 {
+		e.hierarchyWidth = prefs.HierarchyWidth
+	}
+	if prefs.InspectorWidth > 0 {
+		e.inspectorWidth = prefs.InspectorWidth
+	}
+	e.showAssetBrowser = prefs.AssetBrowserOpen
+	if prefs.AssetBrowserPath != "" {
+		e.currentAssetPath = prefs.AssetBrowserPath
+		if e.showAssetBrowser {
+			e.scanAssets()
+		}
 	}
 }
