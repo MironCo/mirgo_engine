@@ -14,6 +14,14 @@ type Editor struct {
 	Selected *engine.GameObject
 }
 
+type EditorPrefs struct {
+	WindowWidth  int
+	WindowHeight int
+	WindowX      int
+	WindowY      int
+	ScenePath    string
+}
+
 func NewEditor(_ *world.World) *Editor { return &Editor{} }
 func (e *Editor) Enter(_ rl.Camera3D)  { rl.DisableCursor() }
 func (e *Editor) Pause(_ rl.Camera3D)  {}
@@ -23,5 +31,8 @@ func (e *Editor) RestoreState()        {}
 func (e *Editor) GetRaylibCamera() rl.Camera3D {
 	return rl.Camera3D{}
 }
-func (e *Editor) Draw3D() {}
-func (e *Editor) DrawUI() {}
+func (e *Editor) Draw3D()                    {}
+func (e *Editor) DrawUI()                    {}
+func (e *Editor) SavePrefs()                 {}
+func (e *Editor) ApplyPrefs(_ *EditorPrefs)  {}
+func LoadEditorPrefs() *EditorPrefs          { return nil }
