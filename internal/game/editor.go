@@ -996,17 +996,24 @@ func (e *Editor) drawInspector() {
 	panelY := int32(36)
 	panelH := int32(rl.GetScreenHeight()) - panelY
 
+	// Fixed button area at bottom
+	btnH := int32(26)
+	btnAreaH := btnH + 20 // button height + padding
+	scrollableH := panelH - btnAreaH
+
 	// Panel background with subtle border
 	rl.DrawRectangle(panelX, panelY, panelW, panelH, colorBgPanel)
 	// Resize handle - slightly thicker border on left edge
 	rl.DrawRectangle(panelX, panelY, 2, panelH, colorBorder)
 
-	// Check for scroll input when mouse is in inspector
+	// Check for scroll input when mouse is in inspector (only in scrollable area)
 	mousePos := rl.GetMousePosition()
 	mouseInPanel := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
 		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+panelH)
+	mouseInScrollArea := mousePos.X >= float32(panelX) && mousePos.X <= float32(panelX+panelW) &&
+		mousePos.Y >= float32(panelY) && mousePos.Y <= float32(panelY+scrollableH)
 
-	if mouseInPanel && !rl.IsMouseButtonDown(rl.MouseRightButton) && !e.showAddComponentMenu {
+	if mouseInScrollArea && !rl.IsMouseButtonDown(rl.MouseRightButton) && !e.showAddComponentMenu {
 		scroll := rl.GetMouseWheelMove()
 		e.inspectorScroll -= int32(scroll * 20)
 		if e.inspectorScroll < 0 {
@@ -1014,8 +1021,8 @@ func (e *Editor) drawInspector() {
 		}
 	}
 
-	// Begin scissor mode for scrolling
-	rl.BeginScissorMode(panelX, panelY, panelW, panelH)
+	// Begin scissor mode for scrolling (only for scrollable content area)
+	rl.BeginScissorMode(panelX, panelY, panelW, scrollableH)
 
 	y := panelY + 8 - e.inspectorScroll
 
@@ -1137,19 +1144,34 @@ func (e *Editor) drawInspector() {
 		e.removeComponentAtIndex(removeIdx)
 	}
 
-	// Add Component button - rounded with accent on hover
-	y += 10
-	btnW := panelW - 40
-	btnH := int32(26)
-	btnX := panelX + 20
-	btnY := y
+	// Clamp scroll to content (before ending scissor mode)
+	totalHeight := y + e.inspectorScroll - panelY + 50
+	maxScroll := totalHeight - scrollableH
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if e.inspectorScroll > maxScroll {
+		e.inspectorScroll = maxScroll
+	}
 
-	hovered := mouseInPanel && mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
-		mousePos.Y >= float32(btnY+e.inspectorScroll) && mousePos.Y <= float32(btnY+btnH+e.inspectorScroll)
+	rl.EndScissorMode()
+
+	// Fixed Add Component button at bottom (outside scissor mode)
+	btnW := panelW - 40
+	btnX := panelX + 20
+	btnY := panelY + scrollableH + 10 // Fixed position at bottom of panel
+
+	// Draw background for button area to cover any scrolled content
+	rl.DrawRectangle(panelX, panelY+scrollableH, panelW, btnAreaH, colorBgPanel)
+	// Separator line above button
+	rl.DrawLine(panelX+12, panelY+scrollableH+2, panelX+panelW-12, panelY+scrollableH+2, rl.NewColor(40, 40, 55, 255))
+
+	btnHovered := mouseInPanel && mousePos.X >= float32(btnX) && mousePos.X <= float32(btnX+btnW) &&
+		mousePos.Y >= float32(btnY) && mousePos.Y <= float32(btnY+btnH)
 
 	btnColor := colorBgElement
 	txtColor := colorTextSecondary
-	if hovered {
+	if btnHovered {
 		btnColor = colorAccent
 		txtColor = colorTextPrimary
 	}
@@ -1158,7 +1180,7 @@ func (e *Editor) drawInspector() {
 	drawTextEx(editorFont, "+ Add Component", btnX+(btnW-textW)/2, btnY+5, 16, txtColor)
 
 	clickedAddButton := false
-	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+	if btnHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 		e.showAddComponentMenu = !e.showAddComponentMenu
 		if e.showAddComponentMenu {
 			e.addComponentScroll = 0 // Reset scroll when opening menu
@@ -1166,21 +1188,9 @@ func (e *Editor) drawInspector() {
 		clickedAddButton = true
 	}
 
-	rl.EndScissorMode()
-
-	// Draw add component dropdown menu (outside scissor mode so it's not clipped)
+	// Draw add component dropdown menu (shows upward from button)
 	if e.showAddComponentMenu {
-		e.drawAddComponentMenu(btnX, btnY+btnH-e.inspectorScroll, btnW, clickedAddButton)
-	}
-
-	// Clamp scroll to content
-	totalHeight := y + e.inspectorScroll - panelY + 100
-	maxScroll := totalHeight - panelH
-	if maxScroll < 0 {
-		maxScroll = 0
-	}
-	if e.inspectorScroll > maxScroll {
-		e.inspectorScroll = maxScroll
+		e.drawAddComponentMenu(btnX, btnY, btnW, clickedAddButton)
 	}
 }
 
@@ -1719,7 +1729,8 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 
 // drawAddComponentMenu draws the dropdown menu for adding components.
 // justOpened prevents the menu from closing on the same frame it was opened.
-func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
+// The menu appears ABOVE the button (y is the button's top position).
+func (e *Editor) drawAddComponentMenu(x, btnY, w int32, justOpened bool) {
 	itemH := int32(26)
 	maxVisibleItems := int32(12) // Max items visible before scrolling
 
@@ -1739,9 +1750,12 @@ func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 		menuH = maxVisibleItems * itemH
 	}
 
+	// Menu appears above the button
+	menuY := btnY - menuH - 4
+
 	mousePos := rl.GetMousePosition()
 	mouseInMenu := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
-		mousePos.Y >= float32(y) && mousePos.Y <= float32(y+menuH)
+		mousePos.Y >= float32(menuY) && mousePos.Y <= float32(menuY+menuH)
 
 	// Handle scroll wheel when hovering menu
 	if mouseInMenu {
@@ -1763,27 +1777,27 @@ func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 	}
 
 	// Draw menu background - rounded with border
-	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, colorBgPanel)
-	rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(menuH)}, 0.1, 4, 1, colorBorder)
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(menuY), Width: float32(w), Height: float32(menuH)}, 0.1, 4, colorBgPanel)
+	rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(menuY), Width: float32(w), Height: float32(menuH)}, 0.1, 4, 1, colorBorder)
 
 	// Begin scissor mode to clip items outside menu area
-	rl.BeginScissorMode(x, y, w, menuH)
+	rl.BeginScissorMode(x, menuY, w, menuH)
 
 	itemIndex := int32(0)
 
 	// Built-in components
 	for _, compType := range editorComponentTypes {
-		itemY := y + itemIndex*itemH - e.addComponentScroll
+		itemY := menuY + itemIndex*itemH - e.addComponentScroll
 
 		// Skip if completely outside visible area
-		if itemY+itemH < y || itemY > y+menuH {
+		if itemY+itemH < menuY || itemY > menuY+menuH {
 			itemIndex++
 			continue
 		}
 
 		hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
 			mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH) &&
-			mousePos.Y >= float32(y) && mousePos.Y < float32(y+menuH)
+			mousePos.Y >= float32(menuY) && mousePos.Y < float32(menuY+menuH)
 
 		if hovered {
 			rl.DrawRectangle(x+2, itemY, w-4, itemH, colorAccent)
@@ -1805,8 +1819,8 @@ func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 	// Scripts section
 	if len(scripts) > 0 {
 		// Separator with "Scripts" label
-		sepY := y + itemIndex*itemH - e.addComponentScroll
-		if sepY+itemH >= y && sepY <= y+menuH {
+		sepY := menuY + itemIndex*itemH - e.addComponentScroll
+		if sepY+itemH >= menuY && sepY <= menuY+menuH {
 			rl.DrawRectangle(x+10, sepY+itemH/2, w-20, 1, colorBorder)
 			drawTextEx(editorFont, "Scripts", x+12, sepY+5, 14, colorTextMuted)
 		}
@@ -1814,17 +1828,17 @@ func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 
 		// Script items
 		for _, scriptName := range scripts {
-			itemY := y + itemIndex*itemH - e.addComponentScroll
+			itemY := menuY + itemIndex*itemH - e.addComponentScroll
 
 			// Skip if completely outside visible area
-			if itemY+itemH < y || itemY > y+menuH {
+			if itemY+itemH < menuY || itemY > menuY+menuH {
 				itemIndex++
 				continue
 			}
 
 			hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
 				mousePos.Y >= float32(itemY) && mousePos.Y < float32(itemY+itemH) &&
-				mousePos.Y >= float32(y) && mousePos.Y < float32(y+menuH)
+				mousePos.Y >= float32(menuY) && mousePos.Y < float32(menuY+menuH)
 
 			if hovered {
 				rl.DrawRectangle(x+2, itemY, w-4, itemH, colorAccent)
@@ -1856,10 +1870,10 @@ func (e *Editor) drawAddComponentMenu(x, y, w int32, justOpened bool) {
 		if scrollThumbH < 20 {
 			scrollThumbH = 20
 		}
-		scrollThumbY := y + 4 + int32(float32(scrollTrackH-scrollThumbH)*float32(e.addComponentScroll)/float32(maxScroll))
+		scrollThumbY := menuY + 4 + int32(float32(scrollTrackH-scrollThumbH)*float32(e.addComponentScroll)/float32(maxScroll))
 
 		// Draw scroll track
-		rl.DrawRectangleRounded(rl.Rectangle{X: float32(scrollBarX), Y: float32(y + 4), Width: float32(scrollBarW), Height: float32(scrollTrackH)}, 0.5, 4, colorBgDark)
+		rl.DrawRectangleRounded(rl.Rectangle{X: float32(scrollBarX), Y: float32(menuY + 4), Width: float32(scrollBarW), Height: float32(scrollTrackH)}, 0.5, 4, colorBgDark)
 		// Draw scroll thumb
 		rl.DrawRectangleRounded(rl.Rectangle{X: float32(scrollBarX), Y: float32(scrollThumbY), Width: float32(scrollBarW), Height: float32(scrollThumbH)}, 0.5, 4, colorAccent)
 	}
