@@ -82,6 +82,8 @@ type Editor struct {
 	selectedMaterial     *assets.Material // Loaded material being edited
 	lastClickTime        float64          // For double-click detection
 	lastClickedAsset     string           // Path of last clicked asset
+	lastHierarchyClick   float64          // For hierarchy double-click detection
+	lastClickedObject    *engine.GameObject // Last clicked object in hierarchy
 
 	// Script hot-reload
 	scriptModTimes  map[string]int64 // path -> mod time (unix nano)
@@ -106,6 +108,12 @@ type Editor struct {
 	resizingPanel   int   // 0=none, 1=hierarchy, 2=inspector
 	resizeStartX    float32
 	resizeStartW    int32
+
+	// Camera zoom animation
+	zoomingToTarget bool
+	zoomTargetPos   rl.Vector3
+	zoomStartPos    rl.Vector3
+	zoomProgress    float32
 }
 
 // AssetEntry represents a file or folder in the asset browser
@@ -281,6 +289,9 @@ func (e *Editor) Exit() {
 }
 
 func (e *Editor) Update(deltaTime float32) {
+	// Update camera zoom animation
+	e.updateCameraZoom(deltaTime)
+
 	// Check for script file changes
 	e.checkScriptChanges()
 
@@ -336,6 +347,9 @@ func (e *Editor) Update(deltaTime float32) {
 
 	// Camera: right-click + drag to look, right-click + WASD to fly
 	if rl.IsMouseButtonDown(rl.MouseRightButton) {
+		// Cancel any zoom animation when user takes manual control
+		e.zoomingToTarget = false
+
 		mouseDelta := rl.GetMouseDelta()
 		e.camera.Yaw += mouseDelta.X * 0.1
 		e.camera.Pitch -= mouseDelta.Y * 0.1
@@ -459,6 +473,94 @@ func (e *Editor) GetRaylibCamera() rl.Camera3D {
 		Up:         rl.Vector3{X: 0, Y: 1, Z: 0},
 		Fovy:       45.0,
 		Projection: rl.CameraPerspective,
+	}
+}
+
+// focusOnObject starts a smooth camera zoom to look at the given object.
+func (e *Editor) focusOnObject(obj *engine.GameObject) {
+	if obj == nil {
+		return
+	}
+
+	// Get object's world position
+	targetPos := obj.WorldPosition()
+
+	// Calculate object size to determine camera distance
+	objectRadius := float32(1.0) // Default if no renderer
+
+	// Try to get bounds from ModelRenderer
+	if mr := engine.GetComponent[*components.ModelRenderer](obj); mr != nil {
+		bounds := rl.GetModelBoundingBox(mr.Model)
+		scale := obj.WorldScale()
+
+		// Calculate size from bounds
+		sizeX := (bounds.Max.X - bounds.Min.X) * float32(math.Abs(float64(scale.X)))
+		sizeY := (bounds.Max.Y - bounds.Min.Y) * float32(math.Abs(float64(scale.Y)))
+		sizeZ := (bounds.Max.Z - bounds.Min.Z) * float32(math.Abs(float64(scale.Z)))
+
+		// Use largest dimension as radius
+		objectRadius = sizeX
+		if sizeY > objectRadius {
+			objectRadius = sizeY
+		}
+		if sizeZ > objectRadius {
+			objectRadius = sizeZ
+		}
+		objectRadius /= 2
+	}
+
+	// Position camera at a nice distance (3x object radius, minimum 3 units)
+	distance := objectRadius * 3
+	if distance < 3 {
+		distance = 3
+	}
+
+	// Calculate camera position looking at object from current yaw/pitch direction
+	yawRad := float64(e.camera.Yaw) * math.Pi / 180
+	pitchRad := float64(e.camera.Pitch) * math.Pi / 180
+
+	// Camera offset from target (opposite of look direction)
+	offsetX := float32(-math.Cos(yawRad)*math.Cos(pitchRad)) * distance
+	offsetY := float32(-math.Sin(pitchRad)) * distance
+	offsetZ := float32(-math.Sin(yawRad)*math.Cos(pitchRad)) * distance
+
+	// Start zoom animation
+	e.zoomingToTarget = true
+	e.zoomStartPos = e.camera.Position
+	e.zoomTargetPos = rl.Vector3{
+		X: targetPos.X + offsetX,
+		Y: targetPos.Y + offsetY,
+		Z: targetPos.Z + offsetZ,
+	}
+	e.zoomProgress = 0
+}
+
+// updateCameraZoom updates the smooth camera zoom animation.
+func (e *Editor) updateCameraZoom(deltaTime float32) {
+	if !e.zoomingToTarget {
+		return
+	}
+
+	// Zoom speed - complete in ~0.3 seconds
+	speed := float32(4.0)
+	e.zoomProgress += deltaTime * speed
+
+	if e.zoomProgress >= 1.0 {
+		e.zoomProgress = 1.0
+		e.zoomingToTarget = false
+		e.camera.Position = e.zoomTargetPos
+		return
+	}
+
+	// Smooth easing (ease-out cubic)
+	t := e.zoomProgress
+	ease := 1 - (1-t)*(1-t)*(1-t)
+
+	// Lerp position
+	e.camera.Position = rl.Vector3{
+		X: e.zoomStartPos.X + (e.zoomTargetPos.X-e.zoomStartPos.X)*ease,
+		Y: e.zoomStartPos.Y + (e.zoomTargetPos.Y-e.zoomStartPos.Y)*ease,
+		Z: e.zoomStartPos.Z + (e.zoomTargetPos.Z-e.zoomStartPos.Z)*ease,
 	}
 }
 
@@ -762,9 +864,20 @@ func (e *Editor) drawHierarchy() {
 
 		// Start drag on mouse down (if not already dragging)
 		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !clickedNewButton && !e.draggingHierarchy {
+			now := rl.GetTime()
+			isDoubleClick := (now-e.lastHierarchyClick < 0.3) && (e.lastClickedObject == g)
+
 			e.Selected = g
 			e.draggingHierarchy = true
 			e.draggedObject = g
+
+			if isDoubleClick {
+				// Double-click: focus camera on object
+				e.focusOnObject(g)
+			}
+
+			e.lastHierarchyClick = now
+			e.lastClickedObject = g
 		}
 
 		// Compute depth for indentation
