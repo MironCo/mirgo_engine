@@ -43,6 +43,7 @@ func (a *AudioListener) Update(deltaTime float32) {
 	}
 
 	pos := g.WorldPosition()
+	up := rl.Vector3{X: 0, Y: 1, Z: 0}
 
 	var forward rl.Vector3
 
@@ -62,6 +63,5 @@ func (a *AudioListener) Update(deltaTime float32) {
 		}
 	}
 
-	up := rl.Vector3{X: 0, Y: 1, Z: 0}
 	audio.SetListener(pos, forward, up)
 }

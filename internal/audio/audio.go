@@ -1,7 +1,6 @@
 package audio
 
 import (
-	"math"
 	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -11,7 +10,7 @@ import (
 type Listener struct {
 	Position rl.Vector3
 	Forward  rl.Vector3
-	Right    rl.Vector3
+	Up       rl.Vector3
 }
 
 // Source represents an audio source in the world
@@ -97,23 +96,8 @@ func SetListener(pos, forward, up rl.Vector3) {
 	defer globalManager.mu.Unlock()
 
 	globalManager.listener.Position = pos
-
-	// Normalize forward, default to -Z if zero
-	fwdLen := rl.Vector3Length(forward)
-	if fwdLen > 0.001 {
-		globalManager.listener.Forward = rl.Vector3Scale(forward, 1.0/fwdLen)
-	} else {
-		globalManager.listener.Forward = rl.Vector3{X: 0, Y: 0, Z: -1}
-	}
-
-	// Calculate right vector (up × forward)
-	right := rl.Vector3CrossProduct(up, globalManager.listener.Forward)
-	rightLen := rl.Vector3Length(right)
-	if rightLen > 0.001 {
-		globalManager.listener.Right = rl.Vector3Scale(right, 1.0/rightLen)
-	} else {
-		globalManager.listener.Right = rl.Vector3{X: 1, Y: 0, Z: 0}
-	}
+	globalManager.listener.Forward = rl.Vector3Normalize(forward)
+	globalManager.listener.Up = up
 }
 
 // LoadSound loads audio from a file and returns a source ID
@@ -281,46 +265,38 @@ func Update() {
 		if !src.Spatial {
 			// 2D audio - center pan, full volume
 			rl.SetSoundVolume(src.Sound, src.Volume)
-			rl.SetSoundPan(src.Sound, 0.5)
+			rl.SetSoundPan(src.Sound, 0.0)
 			continue
 		}
 
 		// Calculate spatial audio
-		toSource := rl.Vector3Subtract(src.Position, listener.Position)
-		distance := rl.Vector3Length(toSource)
+		direction := rl.Vector3Subtract(src.Position, listener.Position)
+		distance := rl.Vector3Length(direction)
 
-		// Distance attenuation
-		var volume float32 = 0
-		if distance < src.MaxDistance {
-			// Linear falloff
-			volume = src.Volume * (1.0 - distance/src.MaxDistance)
+		// Logarithmic distance attenuation
+		attenuation := 1.0 / (1.0 + (distance / src.MaxDistance))
+		if attenuation < 0 {
+			attenuation = 0
+		} else if attenuation > 1 {
+			attenuation = 1
 		}
 
-		// Pan based on angle to listener's right vector
-		var pan float32 = 0.5 // center
-		if distance > 0.001 {
-			direction := rl.Vector3Scale(toSource, 1.0/distance)
-			rightDot := rl.Vector3DotProduct(direction, listener.Right)
-			// rightDot: -1 = full left, +1 = full right
-			// pan: 0 = full left, 0.5 = center, 1 = full right
-			pan = 0.5 + rightDot*0.5
+		// Calculate normalized vectors for spatial positioning
+		normalizedDirection := rl.Vector3Normalize(direction)
+		right := rl.Vector3Normalize(rl.Vector3CrossProduct(listener.Forward, listener.Up))
 
-			// Clamp pan to valid range
-			if pan < 0.0 {
-				pan = 0.0
-			} else if pan > 1.0 {
-				pan = 1.0
-			}
-
-			// Also factor in front/back - sounds behind are slightly quieter
-			frontDot := rl.Vector3DotProduct(direction, listener.Forward)
-			if frontDot < 0 {
-				// Sound is behind, reduce volume slightly
-				volume *= 0.7 + 0.3*float32(math.Abs(float64(frontDot)))
-			}
+		// Reduce volume for sounds behind the listener
+		dotProduct := rl.Vector3DotProduct(listener.Forward, normalizedDirection)
+		if dotProduct < 0 {
+			attenuation *= (1.0 + dotProduct*0.5)
 		}
 
-		rl.SetSoundVolume(src.Sound, volume)
+		// Set stereo panning based on sound position relative to listener
+		// Pan: -1 = left ear, 0 = center, +1 = right ear
+		pan := rl.Vector3DotProduct(normalizedDirection, right)
+
+		// Apply final sound properties
+		rl.SetSoundVolume(src.Sound, src.Volume*attenuation)
 		rl.SetSoundPan(src.Sound, pan)
 	}
 }
