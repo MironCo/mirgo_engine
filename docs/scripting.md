@@ -837,6 +837,84 @@ func collectibleSerializer(c engine.Component) map[string]any {
 
 ---
 
+## Collision Callbacks
+
+Scripts can implement the `CollisionHandler` interface to react to physics collisions:
+
+### OnCollisionEnter / OnCollisionExit
+
+```go
+package scripts
+
+import (
+    "fmt"
+    "test3d/internal/engine"
+)
+
+type Collectible struct {
+    engine.BaseComponent
+    Points    float32
+    TargetTag string
+    collected bool
+}
+
+func (c *Collectible) Start() {
+    if c.Points == 0 {
+        c.Points = 10
+    }
+    if c.TargetTag == "" {
+        c.TargetTag = "Player"
+    }
+}
+
+func (c *Collectible) OnCollisionEnter(other *engine.GameObject) {
+    if c.collected {
+        return
+    }
+
+    // Check if the other object has the target tag
+    if other.HasTag(c.TargetTag) {
+        c.collected = true
+        fmt.Printf("Collected! +%.0f points\n", c.Points)
+
+        // Destroy this object
+        g := c.GetGameObject()
+        if g != nil && g.Scene != nil && g.Scene.World != nil {
+            g.Scene.World.Destroy(g)
+        }
+    }
+}
+
+func (c *Collectible) OnCollisionExit(other *engine.GameObject) {
+    // Called when collision ends (optional)
+}
+```
+
+**How it works:**
+- The physics engine tracks collision pairs frame-to-frame
+- `OnCollisionEnter` is called once when two objects first collide
+- `OnCollisionExit` is called once when the collision ends
+- Both objects receive callbacks (A gets notified about B, and B gets notified about A)
+
+**Usage in scene:**
+```json
+{
+  "name": "Coin",
+  "components": [
+    {
+      "type": "Script",
+      "name": "Collectible",
+      "props": {
+        "points": 25,
+        "targetTag": "Player"
+      }
+    }
+  ]
+}
+```
+
+---
+
 ## Tips and Best Practices
 
 1. **Always null-check `GetGameObject()`** - It can be nil during teardown.

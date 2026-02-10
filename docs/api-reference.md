@@ -6,6 +6,7 @@ Complete reference for all core types, interfaces, and built-in components.
 
 - [Core Types](#core-types)
   - [Component](#component)
+  - [CollisionHandler](#collisionhandler)
   - [BaseComponent](#basecomponent)
   - [GameObject](#gameobject)
   - [Transform](#transform)
@@ -43,6 +44,40 @@ type Component interface {
 1. `SetGameObject()` - Called immediately when added via `AddComponent()`
 2. `Start()` - Called once on the first frame the object is active
 3. `Update()` - Called every frame while the object is active
+
+---
+
+### CollisionHandler
+
+Optional interface for components that want to receive collision callbacks.
+
+```go
+type CollisionHandler interface {
+    OnCollisionEnter(other *GameObject)  // Called when collision starts
+    OnCollisionExit(other *GameObject)   // Called when collision ends
+}
+```
+
+**Usage:**
+```go
+type Collectible struct {
+    engine.BaseComponent
+    Points float32
+}
+
+func (c *Collectible) OnCollisionEnter(other *engine.GameObject) {
+    if other.HasTag("Player") {
+        fmt.Printf("+%.0f points!\n", c.Points)
+        c.GetGameObject().Scene.World.Destroy(c.GetGameObject())
+    }
+}
+
+func (c *Collectible) OnCollisionExit(other *engine.GameObject) {
+    // Optional: called when objects separate
+}
+```
+
+**Note:** You don't need to explicitly implement this interface. Just define the methods on your component and the physics engine will detect and call them automatically.
 
 ---
 

@@ -5,10 +5,10 @@ A 3D game engine written in Go, built on top of [raylib-go](https://github.com/g
 ## Features
 
 - **PBR Rendering** - Metallic/roughness materials, normal mapping, shadow mapping, tone mapping
-- **Physics** - Rigidbodies, colliders (box/sphere), spatial hashing, raycasting
-- **Editor** - Free-fly camera, object selection, transform gizmos, inspector, hot reload
+- **Physics** - Rigidbodies, colliders (box/sphere), spatial hashing, raycasting, collision callbacks
+- **Editor** - Free-fly camera, object selection, transform gizmos, inspector, hot reload, persistent preferences
 - **Unity-like Scripting** - Write clean code, automatic boilerplate generation, hot reload
-- **Scene Management** - JSON scenes, hierarchies, component system, save/load
+- **Scene Management** - JSON scenes, hierarchies, component system, save/load, multi-scene support
 
 ## Quick Start
 
@@ -46,10 +46,31 @@ func (r *Rotator) Update(deltaTime float32) {
 }
 ```
 
-That's it! Run `make build` and the engine automatically generates:
-- Factory function (creates from JSON)
-- Serializer function (saves to JSON)
-- Registration code
+That's it! Run `make build` and the engine automatically generates factory, serializer, and registration code.
+
+### Collision Callbacks
+
+Scripts can react to physics collisions:
+
+```go
+type Collectible struct {
+    engine.BaseComponent
+    Points    float32
+    TargetTag string
+}
+
+func (c *Collectible) OnCollisionEnter(other *engine.GameObject) {
+    if other.HasTag(c.TargetTag) {
+        fmt.Printf("Collected! +%.0f points\n", c.Points)
+        g := c.GetGameObject()
+        g.Scene.World.Destroy(g)
+    }
+}
+
+func (c *Collectible) OnCollisionExit(other *engine.GameObject) {
+    // Called when collision ends
+}
+```
 
 Use in your scene:
 
@@ -154,12 +175,15 @@ utilities/         - Rust CLI tools (build, flipnormals, newscript)
 
 | Shortcut | Action |
 |----------|--------|
-| **Cmd/Ctrl+P** | Toggle game/editor mode |
+| **Cmd/Ctrl+P** | Toggle play mode (resets scene) |
+| **Cmd/Ctrl+Shift+P** | Pause/resume (preserves scene state) |
 | **Cmd/Ctrl+S** | Save scene |
 | **Cmd/Ctrl+R** | Hot reload (regenerate + rebuild) |
 | **Cmd/Ctrl+B** | Build standalone game |
 | **Ctrl+Z** | Undo transform |
 | **F1** | Debug overlay |
+| **Delete/Backspace** | Delete selected object |
+| **Double-click scene** | Open scene in asset browser |
 
 ## Building Standalone Games
 

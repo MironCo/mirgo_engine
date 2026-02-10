@@ -8,6 +8,10 @@ Press **Cmd/Ctrl+P** to switch between:
 - **Game Mode**: Play and test your game
 - **Editor Mode**: Edit scene, move objects, tweak properties
 
+Press **Cmd/Ctrl+Shift+P** to pause/resume:
+- Pauses gameplay while preserving scene state
+- Useful for debugging in-progress gameplay
+
 ## Editor Controls
 
 | Action | Control |
@@ -20,7 +24,9 @@ Press **Cmd/Ctrl+P** to switch between:
 | **Save Scene** | Cmd/Ctrl+S |
 | **Hot Reload** | Cmd/Ctrl+R (rebuilds + regenerates scripts) |
 | **Build Game** | Cmd/Ctrl+B |
-| **Toggle Game Mode** | Cmd/Ctrl+P |
+| **Toggle Play Mode** | Cmd/Ctrl+P |
+| **Pause/Resume** | Cmd/Ctrl+Shift+P |
+| **Delete Object** | Delete or Backspace |
 
 ## Editor Panels
 
@@ -43,7 +49,19 @@ Shows properties of the selected object:
 
 - Drag-and-drop GLTF models into the scene
 - Browse available assets
+- Double-click scene files (.json) to open them
 - "Flip Normals" button for GLTF models with inverted lighting
+
+## Editor Preferences
+
+The editor automatically saves and restores your preferences:
+
+- **Window size and position**
+- **Camera position and orientation**
+- **Panel sizes** (hierarchy, inspector, asset browser)
+- **Last opened scene**
+
+Preferences are stored in `editor_prefs.json` in the project root.
 
 ## Working with Objects
 
@@ -102,6 +120,12 @@ All changes are saved:
 
 ### Loading Scenes
 
+**In the Editor:**
+1. Open the Asset Browser
+2. Navigate to `assets/scenes/`
+3. Double-click a `.json` scene file to open it
+
+**Programmatically:**
 Modify `cmd/test3d/main.go`:
 
 ```go
@@ -255,14 +279,17 @@ See [README](../README.md#utilities-mirgo-utils) for build tool details.
 
 | Shortcut | Action |
 |----------|--------|
+| **Cmd/Ctrl+P** | Toggle play mode (resets scene) |
+| **Cmd/Ctrl+Shift+P** | Pause/resume (preserves scene) |
 | **Cmd/Ctrl+S** | Save scene |
 | **Cmd/Ctrl+R** | Hot reload (regenerate + rebuild) |
 | **Cmd/Ctrl+B** | Build standalone game |
-| **Cmd/Ctrl+P** | Toggle editor/game mode |
 | **Ctrl+Z** | Undo transform |
+| **Delete/Backspace** | Delete selected object |
 | **F1** | Toggle debug overlay (Game Mode) |
 | **Right Mouse** | Activate fly camera |
 | **Scroll** | Adjust fly speed |
+| **Double-click scene** | Open scene in asset browser |
 
 ## See Also
 
