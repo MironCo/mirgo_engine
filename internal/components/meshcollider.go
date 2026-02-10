@@ -8,6 +8,12 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+func init() {
+	engine.RegisterComponent("MeshCollider", func() engine.Serializable {
+		return NewMeshCollider()
+	})
+}
+
 // Triangle represents a single triangle with precomputed normal
 type Triangle struct {
 	V0, V1, V2 rl.Vector3
@@ -413,4 +419,19 @@ func (m *MeshCollider) GetBounds() AABB {
 		return AABB{}
 	}
 	return m.Root.Bounds
+}
+
+// TypeName implements engine.Serializable
+func (m *MeshCollider) TypeName() string {
+	return "MeshCollider"
+}
+
+// Serialize implements engine.Serializable
+func (m *MeshCollider) Serialize() map[string]any {
+	return map[string]any{"type": "MeshCollider"}
+}
+
+// Deserialize implements engine.Serializable
+func (m *MeshCollider) Deserialize(data map[string]any) {
+	// MeshCollider rebuilds from ModelRenderer, nothing to deserialize
 }

@@ -84,17 +84,6 @@ type cameraDef struct {
 	IsMain     bool    `json:"isMain,omitempty"`
 }
 
-type fpsControllerDef struct {
-	Type         string  `json:"type"`
-	MoveSpeed    float32 `json:"moveSpeed,omitempty"`
-	LookSpeed    float32 `json:"lookSpeed,omitempty"`
-	JumpStrength float32 `json:"jumpStrength,omitempty"`
-	EyeHeight    float32 `json:"eyeHeight,omitempty"`
-	Gravity      float32 `json:"gravity,omitempty"`
-	Yaw          float32 `json:"yaw,omitempty"`
-	Pitch        float32 `json:"pitch,omitempty"`
-}
-
 // --- Color mapping ---
 
 var colorByName = map[string]rl.Color{
@@ -186,26 +175,33 @@ func (w *World) loadObject(objDef ObjectDef, parent *engine.GameObject) {
 			continue
 		}
 
+		// Try component registry first (for Serializable components)
+		if comp := engine.CreateComponent(header.Type); comp != nil {
+			var data map[string]any
+			json.Unmarshal(raw, &data)
+			comp.Deserialize(data)
+			g.AddComponent(comp.(engine.Component))
+
+			// Post-load hooks for components that need extra setup
+			switch header.Type {
+			case "MeshCollider":
+				if mc, ok := comp.(*components.MeshCollider); ok {
+					if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+						mc.BuildFromModel(renderer.Model)
+					}
+				}
+			case "DirectionalLight":
+				if light, ok := comp.(*components.DirectionalLight); ok {
+					w.Light = g
+					w.Renderer.SetLight(light)
+				}
+			}
+			continue
+		}
+
 		switch header.Type {
 		case "ModelRenderer":
 			w.loadModelRenderer(g, raw)
-		case "BoxCollider":
-			w.loadBoxCollider(g, raw)
-		case "SphereCollider":
-			w.loadSphereCollider(g, raw)
-		case "MeshCollider":
-			w.loadMeshCollider(g, raw)
-		case "Rigidbody":
-			w.loadRigidbody(g, raw)
-		case "DirectionalLight":
-			w.loadDirectionalLight(g, raw)
-		case "Camera":
-			w.loadCamera(g, raw)
-		case "FPSController":
-			// FPSController is now a script - convert old format to script props
-			loadFPSControllerAsScript(g, raw)
-			// Auto-attach PlayerCollision for FPS characters
-			g.AddComponent(&PlayerCollision{})
 		case "Script":
 			loadScript(g, raw)
 		}
@@ -279,137 +275,12 @@ func (w *World) loadModelRenderer(g *engine.GameObject, raw json.RawMessage) {
 	g.AddComponent(renderer)
 }
 
-func (w *World) loadBoxCollider(g *engine.GameObject, raw json.RawMessage) {
-	var def boxColliderDef
-	if err := json.Unmarshal(raw, &def); err != nil {
-		return
-	}
-	col := components.NewBoxCollider(rl.Vector3{X: def.Size[0], Y: def.Size[1], Z: def.Size[2]})
-	col.Offset = rl.Vector3{X: def.Offset[0], Y: def.Offset[1], Z: def.Offset[2]}
-	g.AddComponent(col)
-}
-
-func (w *World) loadSphereCollider(g *engine.GameObject, raw json.RawMessage) {
-	var def sphereColliderDef
-	if err := json.Unmarshal(raw, &def); err != nil {
-		return
-	}
-	g.AddComponent(components.NewSphereCollider(def.Radius))
-}
-
-func (w *World) loadMeshCollider(g *engine.GameObject, raw json.RawMessage) {
-	// MeshCollider uses the model from ModelRenderer
-	// It will be built after the object is fully loaded
-	meshCol := components.NewMeshCollider()
-	g.AddComponent(meshCol)
-
-	// Find the ModelRenderer to get the model
-	// Note: This requires ModelRenderer to be loaded first in the component list
-	renderer := engine.GetComponent[*components.ModelRenderer](g)
-	if renderer != nil {
-		meshCol.BuildFromModel(renderer.Model)
-	}
-}
-
-func (w *World) loadRigidbody(g *engine.GameObject, raw json.RawMessage) {
-	var def rigidbodyDef
-	if err := json.Unmarshal(raw, &def); err != nil {
-		return
-	}
-	rb := components.NewRigidbody()
-	if def.Mass > 0 {
-		rb.Mass = def.Mass
-	}
-	if def.Bounciness > 0 {
-		rb.Bounciness = def.Bounciness
-	}
-	if def.Friction > 0 {
-		rb.Friction = def.Friction
-	}
-	if def.UseGravity != nil {
-		rb.UseGravity = *def.UseGravity
-	}
-	rb.IsKinematic = def.IsKinematic
-	g.AddComponent(rb)
-}
-
-func (w *World) loadDirectionalLight(g *engine.GameObject, raw json.RawMessage) {
-	var def directionalLightDef
-	if err := json.Unmarshal(raw, &def); err != nil {
-		return
-	}
-	light := components.NewDirectionalLight()
-	if def.Direction != [3]float32{} {
-		light.Direction = rl.Vector3Normalize(rl.Vector3{X: def.Direction[0], Y: def.Direction[1], Z: def.Direction[2]})
-	}
-	if def.Intensity > 0 {
-		light.Intensity = def.Intensity
-	}
-	g.AddComponent(light)
-
-	// Wire light to renderer
-	w.Light = g
-	w.Renderer.SetLight(light)
-}
-
 func loadScript(g *engine.GameObject, raw json.RawMessage) {
 	var def scriptDef
 	if err := json.Unmarshal(raw, &def); err != nil {
 		return
 	}
 	if comp := engine.CreateScript(def.Name, def.Props); comp != nil {
-		g.AddComponent(comp)
-	}
-}
-
-func (w *World) loadCamera(g *engine.GameObject, raw json.RawMessage) {
-	var def cameraDef
-	if err := json.Unmarshal(raw, &def); err != nil {
-		return
-	}
-	cam := components.NewCamera()
-	if def.FOV > 0 {
-		cam.FOV = def.FOV
-	}
-	if def.Near > 0 {
-		cam.Near = def.Near
-	}
-	if def.Far > 0 {
-		cam.Far = def.Far
-	}
-	cam.IsMain = def.IsMain
-	g.AddComponent(cam)
-}
-
-func loadFPSControllerAsScript(g *engine.GameObject, raw json.RawMessage) {
-	var def fpsControllerDef
-	if err := json.Unmarshal(raw, &def); err != nil {
-		return
-	}
-	// Convert to script props format
-	props := map[string]any{}
-	if def.MoveSpeed > 0 {
-		props["move_speed"] = float64(def.MoveSpeed)
-	}
-	if def.LookSpeed > 0 {
-		props["look_speed"] = float64(def.LookSpeed)
-	}
-	if def.JumpStrength > 0 {
-		props["jump_strength"] = float64(def.JumpStrength)
-	}
-	if def.EyeHeight > 0 {
-		props["eye_height"] = float64(def.EyeHeight)
-	}
-	if def.Gravity > 0 {
-		props["gravity"] = float64(def.Gravity)
-	}
-	if def.Yaw != 0 {
-		props["yaw"] = float64(def.Yaw)
-	}
-	if def.Pitch != 0 {
-		props["pitch"] = float64(def.Pitch)
-	}
-	if comp := engine.CreateScript("FPSController", props); comp != nil {
 		g.AddComponent(comp)
 	}
 }
@@ -461,24 +332,33 @@ func (w *World) loadObjectAndReturn(objDef ObjectDef, parent *engine.GameObject)
 			continue
 		}
 
+		// Try component registry first (for Serializable components)
+		if comp := engine.CreateComponent(header.Type); comp != nil {
+			var data map[string]any
+			json.Unmarshal(raw, &data)
+			comp.Deserialize(data)
+			g.AddComponent(comp.(engine.Component))
+
+			// Post-load hooks for components that need extra setup
+			switch header.Type {
+			case "MeshCollider":
+				if mc, ok := comp.(*components.MeshCollider); ok {
+					if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+						mc.BuildFromModel(renderer.Model)
+					}
+				}
+			case "DirectionalLight":
+				if light, ok := comp.(*components.DirectionalLight); ok {
+					w.Light = g
+					w.Renderer.SetLight(light)
+				}
+			}
+			continue
+		}
+
 		switch header.Type {
 		case "ModelRenderer":
 			w.loadModelRenderer(g, raw)
-		case "BoxCollider":
-			w.loadBoxCollider(g, raw)
-		case "SphereCollider":
-			w.loadSphereCollider(g, raw)
-		case "MeshCollider":
-			w.loadMeshCollider(g, raw)
-		case "Rigidbody":
-			w.loadRigidbody(g, raw)
-		case "DirectionalLight":
-			w.loadDirectionalLight(g, raw)
-		case "Camera":
-			w.loadCamera(g, raw)
-		case "FPSController":
-			loadFPSControllerAsScript(g, raw)
-			g.AddComponent(&PlayerCollision{})
 		case "Script":
 			loadScript(g, raw)
 		}
@@ -576,53 +456,12 @@ func serializeComponent(c engine.Component) json.RawMessage {
 		}
 		def = d
 
-	case *components.BoxCollider:
-		def = boxColliderDef{
-			Type:   "BoxCollider",
-			Size:   [3]float32{comp.Size.X, comp.Size.Y, comp.Size.Z},
-			Offset: [3]float32{comp.Offset.X, comp.Offset.Y, comp.Offset.Z},
-		}
-
-	case *components.SphereCollider:
-		def = sphereColliderDef{
-			Type:   "SphereCollider",
-			Radius: comp.Radius,
-		}
-
-	case *components.MeshCollider:
-		// MeshCollider just needs to be saved - it rebuilds from ModelRenderer on load
-		def = map[string]string{"type": "MeshCollider"}
-
-	case *components.Rigidbody:
-		useGravity := comp.UseGravity
-		def = rigidbodyDef{
-			Type:        "Rigidbody",
-			Mass:        comp.Mass,
-			Bounciness:  comp.Bounciness,
-			Friction:    comp.Friction,
-			UseGravity:  &useGravity,
-			IsKinematic: comp.IsKinematic,
-		}
-
-	case *components.DirectionalLight:
-		def = directionalLightDef{
-			Type:      "DirectionalLight",
-			Direction: [3]float32{comp.Direction.X, comp.Direction.Y, comp.Direction.Z},
-			Intensity: comp.Intensity,
-		}
-
-	case *components.Camera:
-		def = cameraDef{
-			Type:   "Camera",
-			FOV:    comp.FOV,
-			Near:   comp.Near,
-			Far:    comp.Far,
-			IsMain: comp.IsMain,
-		}
-
 	default:
-		// Try script registry
-		if name, props, ok := engine.SerializeScript(c); ok {
+		// Try Serializable interface first
+		if s, ok := c.(engine.Serializable); ok {
+			def = s.Serialize()
+		} else if name, props, ok := engine.SerializeScript(c); ok {
+			// Try script registry
 			def = scriptDef{Type: "Script", Name: name, Props: props}
 		} else {
 			return nil

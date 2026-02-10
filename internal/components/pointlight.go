@@ -6,6 +6,12 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+func init() {
+	engine.RegisterComponent("PointLight", func() engine.Serializable {
+		return NewPointLight()
+	})
+}
+
 type PointLight struct {
 	engine.BaseComponent
 	Color     rl.Color
@@ -18,6 +24,37 @@ func NewPointLight() *PointLight {
 		Color:     rl.White,
 		Intensity: 1.0,
 		Radius:    10.0,
+	}
+}
+
+// TypeName implements engine.Serializable
+func (p *PointLight) TypeName() string {
+	return "PointLight"
+}
+
+// Serialize implements engine.Serializable
+func (p *PointLight) Serialize() map[string]any {
+	return map[string]any{
+		"type":      "PointLight",
+		"color":     [3]uint8{p.Color.R, p.Color.G, p.Color.B},
+		"intensity": p.Intensity,
+		"radius":    p.Radius,
+	}
+}
+
+// Deserialize implements engine.Serializable
+func (p *PointLight) Deserialize(data map[string]any) {
+	if c, ok := data["color"].([]any); ok && len(c) == 3 {
+		p.Color.R = uint8(c[0].(float64))
+		p.Color.G = uint8(c[1].(float64))
+		p.Color.B = uint8(c[2].(float64))
+		p.Color.A = 255
+	}
+	if i, ok := data["intensity"].(float64); ok {
+		p.Intensity = float32(i)
+	}
+	if r, ok := data["radius"].(float64); ok {
+		p.Radius = float32(r)
 	}
 }
 

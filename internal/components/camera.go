@@ -6,6 +6,12 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+func init() {
+	engine.RegisterComponent("Camera", func() engine.Serializable {
+		return NewCamera()
+	})
+}
+
 type Camera struct {
 	engine.BaseComponent
 	FOV        float32
@@ -22,6 +28,38 @@ func NewCamera() *Camera {
 		Far:        1000.0,
 		Projection: rl.CameraPerspective,
 		IsMain:     false,
+	}
+}
+
+// TypeName implements engine.Serializable
+func (c *Camera) TypeName() string {
+	return "Camera"
+}
+
+// Serialize implements engine.Serializable
+func (c *Camera) Serialize() map[string]any {
+	return map[string]any{
+		"type":   "Camera",
+		"fov":    c.FOV,
+		"near":   c.Near,
+		"far":    c.Far,
+		"isMain": c.IsMain,
+	}
+}
+
+// Deserialize implements engine.Serializable
+func (c *Camera) Deserialize(data map[string]any) {
+	if f, ok := data["fov"].(float64); ok {
+		c.FOV = float32(f)
+	}
+	if n, ok := data["near"].(float64); ok {
+		c.Near = float32(n)
+	}
+	if f, ok := data["far"].(float64); ok {
+		c.Far = float32(f)
+	}
+	if m, ok := data["isMain"].(bool); ok {
+		c.IsMain = m
 	}
 }
 

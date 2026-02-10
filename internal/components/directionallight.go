@@ -7,6 +7,12 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+func init() {
+	engine.RegisterComponent("DirectionalLight", func() engine.Serializable {
+		return NewDirectionalLight()
+	})
+}
+
 type DirectionalLight struct {
 	engine.BaseComponent
 	Direction      rl.Vector3
@@ -23,6 +29,32 @@ func NewDirectionalLight() *DirectionalLight {
 		Intensity:      1.0,
 		AmbientColor:   rl.NewColor(25, 25, 25, 255),
 		ShadowDistance: 50.0,
+	}
+}
+
+// TypeName implements engine.Serializable
+func (l *DirectionalLight) TypeName() string {
+	return "DirectionalLight"
+}
+
+// Serialize implements engine.Serializable
+func (l *DirectionalLight) Serialize() map[string]any {
+	return map[string]any{
+		"type":      "DirectionalLight",
+		"direction": [3]float32{l.Direction.X, l.Direction.Y, l.Direction.Z},
+		"intensity": l.Intensity,
+	}
+}
+
+// Deserialize implements engine.Serializable
+func (l *DirectionalLight) Deserialize(data map[string]any) {
+	if dir, ok := data["direction"].([]any); ok && len(dir) == 3 {
+		l.Direction.X = float32(dir[0].(float64))
+		l.Direction.Y = float32(dir[1].(float64))
+		l.Direction.Z = float32(dir[2].(float64))
+	}
+	if i, ok := data["intensity"].(float64); ok {
+		l.Intensity = float32(i)
 	}
 }
 
