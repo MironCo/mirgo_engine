@@ -5,6 +5,7 @@ package game
 import (
 	"fmt"
 	"math"
+	"sync"
 	"test3d/internal/assets"
 	"test3d/internal/audio"
 	"test3d/internal/components"
@@ -81,6 +82,14 @@ type Editor struct {
 	scriptModTimes  map[string]int64 // path -> mod time (unix nano)
 	scriptsChanged  bool
 	lastScriptCheck float64
+
+	// Rebuild progress tracking
+	rebuildInProgress  bool
+	rebuildProgress    float32 // 0.0 to 1.0
+	rebuildStage       string  // e.g., "Generating scripts...", "Compiling...", "Reloading..."
+	rebuildReadyToExit bool    // Signal main thread to close window and relaunch
+	rebuildExecPath    string  // Path to new executable
+	rebuildMutex       sync.Mutex
 
 	// Drag-and-drop state
 	draggingAsset       bool               // True if dragging an asset from the browser
@@ -189,6 +198,9 @@ func (e *Editor) Exit() {
 }
 
 func (e *Editor) Update(deltaTime float32) {
+	// Check if rebuild is ready to relaunch (must be on main thread)
+	e.checkRebuildExit()
+
 	// Update camera zoom animation
 	e.updateCameraZoom(deltaTime)
 
@@ -511,6 +523,39 @@ func (e *Editor) DrawUI() {
 			color = rl.NewColor(255, 120, 120, 255) // Soft red
 		}
 		drawTextEx(editorFontBold, e.saveMsg, int32(rl.GetScreenWidth()/2)-50, 47, 16, color)
+	}
+
+	// Rebuild progress bar
+	e.rebuildMutex.Lock()
+	if e.rebuildInProgress {
+		progress := e.rebuildProgress
+		stage := e.rebuildStage
+		e.rebuildMutex.Unlock()
+
+		// Draw progress bar and stage text
+		screenWidth := int32(rl.GetScreenWidth())
+		barWidth := int32(400)
+		barHeight := int32(30)
+		barX := (screenWidth - barWidth) / 2
+		barY := int32(70)
+
+		// Background
+		rl.DrawRectangle(barX, barY, barWidth, barHeight, rl.NewColor(30, 30, 40, 200))
+		rl.DrawRectangleLines(barX, barY, barWidth, barHeight, colorAccent)
+
+		// Progress fill
+		fillWidth := int32(float32(barWidth-4) * progress)
+		if fillWidth > 0 {
+			rl.DrawRectangle(barX+2, barY+2, fillWidth, barHeight-4, rl.NewColor(108, 99, 255, 180))
+		}
+
+		// Stage text centered in the bar
+		stageTextWidth := rl.MeasureText(stage, 14)
+		textX := barX + (barWidth-stageTextWidth)/2
+		textY := barY + 8
+		drawTextEx(editorFont, stage, textX, textY, 14, rl.White)
+	} else {
+		e.rebuildMutex.Unlock()
 	}
 
 	// Reset field hover tracking for this frame
