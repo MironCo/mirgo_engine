@@ -119,6 +119,9 @@ type Editor struct {
 	zoomTargetPos   rl.Vector3
 	zoomStartPos    rl.Vector3
 	zoomProgress    float32
+
+	// UI Edit Mode
+	uiEditState *UIEditState
 }
 
 func NewEditor(w *world.World) *Editor {
@@ -202,6 +205,18 @@ func (e *Editor) Exit() {
 func (e *Editor) Update(deltaTime float32) {
 	// Check if rebuild is ready to relaunch (must be on main thread)
 	e.checkRebuildExit()
+
+	// U key: toggle UI edit mode (only when not editing text)
+	isEditingText := e.editingName || e.editingTags || e.activeInputID != ""
+	if rl.IsKeyPressed(rl.KeyU) && !isEditingText && !rl.IsMouseButtonDown(rl.MouseRightButton) {
+		e.ToggleUIEditMode()
+	}
+
+	// If in UI edit mode, handle that separately
+	if e.uiEditState != nil && e.uiEditState.Active {
+		e.UpdateUIEditMode()
+		return
+	}
 
 	// Update camera zoom animation
 	e.updateCameraZoom(deltaTime)
@@ -310,7 +325,7 @@ func (e *Editor) Update(deltaTime float32) {
 	}
 
 	// Gizmo mode hotkeys (only when not holding RMB for camera and not editing text)
-	isEditingText := e.editingName || e.editingTags || e.activeInputID != ""
+	isEditingText = e.editingName || e.editingTags || e.activeInputID != ""
 	if !rl.IsMouseButtonDown(rl.MouseRightButton) && !isEditingText {
 		if rl.IsKeyPressed(rl.KeyW) {
 			e.gizmoMode = GizmoMove

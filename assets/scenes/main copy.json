@@ -1,0 +1,597 @@
+{
+  "objects": [
+    {
+      "uid": 7,
+      "name": "Duck",
+      "position": [
+        9.604138,
+        -0.045312483,
+        -3.7268355
+      ],
+      "rotation": [
+        0,
+        192.20293,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
+          "material": "assets/materials/rubber.json"
+        },
+        {
+          "offset": [
+            0,
+            0.10925781,
+            0
+          ],
+          "size": [
+            0.16,
+            0.20945312,
+            0.28035158
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "bounciness": 0.6,
+          "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
+          "useGravity": true
+        }
+      ]
+    },
+    {
+      "uid": 8,
+      "name": "DirectionalLight",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "direction": [
+            0.46479055,
+            -0.75361764,
+            -0.46479055
+          ],
+          "intensity": 1,
+          "type": "DirectionalLight"
+        }
+      ]
+    },
+    {
+      "uid": 200,
+      "name": "Floor",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "plane",
+          "meshSize": [
+            60,
+            60
+          ],
+          "color": "LightGray",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            -0.5,
+            0
+          ],
+          "size": [
+            60,
+            1,
+            60
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 201,
+      "name": "building-a",
+      "position": [
+        14.599365,
+        0.010281205,
+        22.397093
+      ],
+      "rotation": [
+        0,
+        -0.15798211,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/building-a/building-a.glb",
+          "color": "White",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            0.6109375,
+            0
+          ],
+          "size": [
+            0.88875,
+            1.3694531,
+            1
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 300,
+      "name": "MetalCube",
+      "position": [
+        0,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/metal.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 301,
+      "name": "PlasticCube",
+      "position": [
+        3.84,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        280.9118,
+        0
+      ],
+      "scale": [
+        1.0623437,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/plastic.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "type": "Script",
+          "name": "Rotator",
+          "props": {
+            "speed": 15
+          }
+        }
+      ]
+    },
+    {
+      "uid": 302,
+      "name": "GlowCube",
+      "position": [
+        -4,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/glow.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 303,
+      "name": "TexturedCube",
+      "position": [
+        -8,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/brick.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 5,
+      "name": "Player",
+      "tags": [
+        "Player"
+      ],
+      "position": [
+        -5.0329967,
+        2.0295312,
+        8.421766
+      ],
+      "rotation": [
+        0,
+        -90,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "far": 1000,
+          "fov": 45,
+          "isMain": true,
+          "near": 0.1,
+          "type": "Camera"
+        },
+        {
+          "type": "AudioListener"
+        },
+        {
+          "offset": [
+            0,
+            0.31734374,
+            0
+          ],
+          "size": [
+            0.8,
+            4.100273,
+            0.8
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "bounciness": 0.5,
+          "friction": 0.1,
+          "isKinematic": true,
+          "mass": 1,
+          "type": "Rigidbody",
+          "useGravity": false
+        },
+        {
+          "type": "Script",
+          "name": "Shooter",
+          "props": {
+            "cooldown": 0.20000000298023224
+          }
+        },
+        {
+          "type": "Script",
+          "name": "FPSController",
+          "props": {
+            "eye_height": 2.0295312,
+            "gravity": 20,
+            "jump_strength": 10.536875,
+            "look_speed": 0.1,
+            "move_speed": 8,
+            "pitch": -18.851141,
+            "yaw": 672.8285
+          }
+        }
+      ]
+    },
+    {
+      "uid": 305,
+      "name": "building-a_copy",
+      "position": [
+        -8.160851,
+        0.010281205,
+        22.052076
+      ],
+      "rotation": [
+        0,
+        -0.15798211,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/building-a/building-a.glb",
+          "color": "White",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            0.6109375,
+            0
+          ],
+          "size": [
+            0.88875,
+            1.3694531,
+            1
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 306,
+      "name": "building-a_copy_copy",
+      "position": [
+        3.4043255,
+        0.010281205,
+        22.397093
+      ],
+      "rotation": [
+        0,
+        -0.15798211,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/building-a/building-a.glb",
+          "color": "White",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            0.6109375,
+            0
+          ],
+          "size": [
+            0.88875,
+            1.3694531,
+            1
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 333,
+      "name": "Duck_copy",
+      "position": [
+        7.8425727,
+        -0.04531244,
+        3.528602
+      ],
+      "rotation": [
+        0,
+        175.0576,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
+          "material": "assets/materials/rubber.json"
+        },
+        {
+          "offset": [
+            0,
+            0.10925781,
+            0
+          ],
+          "size": [
+            0.16,
+            0.20945312,
+            0.28035158
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "type": "MeshCollider"
+        }
+      ]
+    },
+    {
+      "uid": 483,
+      "name": "MetalCube_copy",
+      "position": [
+        20.324158,
+        1,
+        8.596891
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/metal.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "bounciness": 0.5,
+          "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
+          "useGravity": true
+        }
+      ]
+    }
+  ]
+}

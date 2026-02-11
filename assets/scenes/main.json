@@ -1,0 +1,1031 @@
+{
+  "objects": [
+    {
+      "uid": 7,
+      "name": "Duck",
+      "position": [
+        9.604138,
+        -0.045312416,
+        -3.7268355
+      ],
+      "rotation": [
+        0,
+        192.20293,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
+          "material": "assets/materials/rubber.json"
+        },
+        {
+          "offset": [
+            0,
+            0.10925781,
+            0
+          ],
+          "size": [
+            0.16,
+            0.20945312,
+            0.28035158
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "bounciness": 0.6,
+          "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
+          "useGravity": true
+        }
+      ]
+    },
+    {
+      "uid": 8,
+      "name": "DirectionalLight",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "direction": [
+            0.46479055,
+            -0.57752395,
+            -0.46479055
+          ],
+          "intensity": 1.4567398,
+          "type": "DirectionalLight"
+        }
+      ]
+    },
+    {
+      "uid": 200,
+      "name": "Floor",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "plane",
+          "meshSize": [
+            60,
+            60
+          ],
+          "color": "LightGray",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            -0.5,
+            0
+          ],
+          "size": [
+            60,
+            1,
+            60
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 201,
+      "name": "building-a",
+      "position": [
+        14.599365,
+        0.010281205,
+        22.397093
+      ],
+      "rotation": [
+        0,
+        -0.15798211,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/building-a/building-a.glb",
+          "color": "White",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            0.6109375,
+            0
+          ],
+          "size": [
+            0.88875,
+            1.3694531,
+            1
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 300,
+      "name": "MetalCube",
+      "position": [
+        0,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/metal.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 301,
+      "name": "PlasticCube",
+      "position": [
+        3.84,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        295.57733,
+        0
+      ],
+      "scale": [
+        1.0623437,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/plastic.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "type": "Script",
+          "name": "Rotator",
+          "props": {
+            "speed": 15
+          }
+        }
+      ]
+    },
+    {
+      "uid": 302,
+      "name": "GlowCube",
+      "position": [
+        -4,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/glow.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 303,
+      "name": "TexturedCube",
+      "position": [
+        -8,
+        1,
+        -5
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/brick.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 5,
+      "name": "Player",
+      "tags": [
+        "Player"
+      ],
+      "position": [
+        -5.0329967,
+        2.401893,
+        8.421766
+      ],
+      "rotation": [
+        0,
+        -90,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "Script",
+          "name": "Shooter",
+          "props": {
+            "cooldown": 0.20000000298023224
+          }
+        },
+        {
+          "type": "Script",
+          "name": "FPSController",
+          "props": {
+            "eye_height": 1.6,
+            "jump_strength": 10.536875,
+            "look_speed": 0.1,
+            "move_speed": 8,
+            "pitch": -18.851141,
+            "yaw": 672.8285
+          }
+        },
+        {
+          "gravity": 20,
+          "height": 3.293281,
+          "radius": 0.4,
+          "slopeLimit": 45,
+          "stepHeight": 0.4,
+          "type": "CharacterController",
+          "useGravity": true
+        }
+      ],
+      "children": [
+        {
+          "uid": 500,
+          "name": "Camera",
+          "position": [
+            0,
+            1.8057462,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "far": 1000,
+              "fov": 45,
+              "isMain": true,
+              "near": 0.1,
+              "type": "Camera"
+            },
+            {
+              "type": "AudioListener"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uid": 305,
+      "name": "building-a_copy",
+      "position": [
+        -8.160851,
+        0.010281205,
+        22.052076
+      ],
+      "rotation": [
+        0,
+        -0.15798211,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/building-a/building-a.glb",
+          "color": "White",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            0.6109375,
+            0
+          ],
+          "size": [
+            0.88875,
+            1.3694531,
+            1
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 306,
+      "name": "building-a_copy_copy",
+      "position": [
+        3.4043255,
+        0.010281205,
+        22.397093
+      ],
+      "rotation": [
+        0,
+        -0.15798211,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/building-a/building-a.glb",
+          "color": "White",
+          "roughness": 0.5
+        },
+        {
+          "offset": [
+            0,
+            0.6109375,
+            0
+          ],
+          "size": [
+            0.88875,
+            1.3694531,
+            1
+          ],
+          "type": "BoxCollider"
+        }
+      ]
+    },
+    {
+      "uid": 333,
+      "name": "Duck_copy",
+      "position": [
+        7.8425727,
+        -0.04531244,
+        3.528602
+      ],
+      "rotation": [
+        0,
+        175.0576,
+        0
+      ],
+      "scale": [
+        10,
+        10,
+        10
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "model": "assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
+          "material": "assets/materials/rubber.json"
+        },
+        {
+          "offset": [
+            0,
+            0.10925781,
+            0
+          ],
+          "size": [
+            0.16,
+            0.20945312,
+            0.28035158
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "type": "MeshCollider"
+        }
+      ]
+    },
+    {
+      "uid": 483,
+      "name": "MetalCube_copy",
+      "position": [
+        -5.088005,
+        5.7448454,
+        1.8252068
+      ],
+      "rotation": [
+        80.99002,
+        0,
+        -225.77565
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/metal.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        },
+        {
+          "bounciness": 0.5,
+          "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
+          "useGravity": true
+        }
+      ]
+    },
+    {
+      "uid": 484,
+      "name": "MetalCube_copy",
+      "position": [
+        13.944298,
+        0.6236006,
+        -2.2849765
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        0.5130877,
+        1
+      ],
+      "components": [
+        {
+          "type": "ModelRenderer",
+          "mesh": "cube",
+          "meshSize": [
+            2,
+            2,
+            2
+          ],
+          "material": "assets/materials/metal.json"
+        },
+        {
+          "offset": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            2,
+            2,
+            2
+          ],
+          "type": "BoxCollider"
+        }
+      ],
+      "children": [
+        {
+          "uid": 485,
+          "name": "MetalCube_copy_copy",
+          "position": [
+            1.7541695,
+            0.98799795,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            0.90579724,
+            1
+          ],
+          "components": [
+            {
+              "type": "ModelRenderer",
+              "mesh": "cube",
+              "meshSize": [
+                2,
+                2,
+                2
+              ],
+              "material": "assets/materials/metal.json"
+            },
+            {
+              "offset": [
+                0,
+                0,
+                0
+              ],
+              "size": [
+                2,
+                2,
+                2
+              ],
+              "type": "BoxCollider"
+            }
+          ]
+        },
+        {
+          "uid": 486,
+          "name": "MetalCube_copy_copy_copy",
+          "position": [
+            3.5512009,
+            1.5099342,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1.452247,
+            1
+          ],
+          "components": [
+            {
+              "type": "ModelRenderer",
+              "mesh": "cube",
+              "meshSize": [
+                2,
+                2,
+                2
+              ],
+              "material": "assets/materials/metal.json"
+            },
+            {
+              "offset": [
+                0,
+                0,
+                0
+              ],
+              "size": [
+                2,
+                2,
+                2
+              ],
+              "type": "BoxCollider"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uid": 501,
+      "name": "PointLight",
+      "position": [
+        8.032842,
+        4.7459726,
+        3.5635538
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "color": [
+            255,
+            100,
+            0
+          ],
+          "intensity": 3.0290928,
+          "radius": 10.954554,
+          "type": "PointLight"
+        }
+      ]
+    },
+    {
+      "uid": 1000,
+      "name": "UI",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "sortOrder": 0,
+          "type": "UICanvas"
+        },
+        {
+          "anchorMax": [
+            1,
+            1
+          ],
+          "anchorMin": [
+            0,
+            0
+          ],
+          "anchoredPosition": [
+            0,
+            0
+          ],
+          "pivot": [
+            0.5,
+            0.5
+          ],
+          "sizeDelta": [
+            0,
+            0
+          ],
+          "type": "RectTransform"
+        }
+      ],
+      "children": [
+        {
+          "uid": 1001,
+          "name": "HealthBar",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0,
+                0
+              ],
+              "anchorMin": [
+                0,
+                0
+              ],
+              "anchoredPosition": [
+                20,
+                20
+              ],
+              "pivot": [
+                0,
+                0
+              ],
+              "sizeDelta": [
+                200,
+                24
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "backgroundColor": "KCgyyA==",
+              "borderColor": "UFBk/w==",
+              "borderWidth": 1,
+              "fillColor": "3Dw8/w==",
+              "fillFromRight": false,
+              "maxValue": 100,
+              "type": "UIProgressBar",
+              "value": 75
+            }
+          ]
+        },
+        {
+          "uid": 1002,
+          "name": "HealthLabel",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0,
+                0
+              ],
+              "anchorMin": [
+                0,
+                0
+              ],
+              "anchoredPosition": [
+                20,
+                48
+              ],
+              "pivot": [
+                0,
+                0
+              ],
+              "sizeDelta": [
+                100,
+                20
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "alignment": 0,
+              "color": "yMjI/w==",
+              "fontSize": 16,
+              "text": "Health: 75",
+              "type": "UIText"
+            }
+          ]
+        },
+        {
+          "uid": 1003,
+          "name": "ScorePanel",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                1,
+                0
+              ],
+              "anchorMin": [
+                1,
+                0
+              ],
+              "anchoredPosition": [
+                -20,
+                20
+              ],
+              "pivot": [
+                1,
+                0
+              ],
+              "sizeDelta": [
+                150,
+                50
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "borderColor": "RkZa/w==",
+              "borderRadius": 8,
+              "borderWidth": 1,
+              "color": "Hh4t3A==",
+              "type": "UIPanel"
+            }
+          ],
+          "children": [
+            {
+              "uid": 1004,
+              "name": "ScoreText",
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "components": [
+                {
+                  "anchorMax": [
+                    1,
+                    1
+                  ],
+                  "anchorMin": [
+                    0,
+                    0
+                  ],
+                  "anchoredPosition": [
+                    0,
+                    0
+                  ],
+                  "pivot": [
+                    0.5,
+                    0.5
+                  ],
+                  "sizeDelta": [
+                    0,
+                    0
+                  ],
+                  "type": "RectTransform"
+                },
+                {
+                  "alignment": 1,
+                  "color": "/9xk/w==",
+                  "fontSize": 20,
+                  "text": "Score: 0",
+                  "type": "UIText"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

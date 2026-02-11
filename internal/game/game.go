@@ -186,26 +186,40 @@ func (g *Game) Draw() {
 		camera = cam.GetRaylibCamera()
 	}
 
-	// Shadow pass
-	shadowStart := time.Now()
-	g.World.Renderer.DrawShadowMap(g.World.Scene.GameObjects)
-	g.shadowMs = float64(time.Since(shadowStart).Microseconds()) / 1000.0
+	// Check if in UI edit mode - skip 3D rendering, draw 2D UI instead
+	uiEditMode := g.editor.Active && g.editor.IsUIEditModeActive()
+
+	if !uiEditMode {
+		// Shadow pass (only in 3D mode)
+		shadowStart := time.Now()
+		g.World.Renderer.DrawShadowMap(g.World.Scene.GameObjects)
+		g.shadowMs = float64(time.Since(shadowStart).Microseconds()) / 1000.0
+	}
 
 	// Main render
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.NewColor(20, 20, 30, 255))
 
-	drawStart := time.Now()
-	rl.BeginMode3D(camera)
-	g.World.Renderer.DrawWithShadows(camera, g.World.Scene.GameObjects)
-	if g.editor.Active {
-		g.editor.Draw3D()
+	if uiEditMode {
+		// Draw 2D UI editor view instead of 3D scene
+		g.editor.Draw3DForUIMode()
+	} else {
+		// Normal 3D rendering
+		drawStart := time.Now()
+		rl.BeginMode3D(camera)
+		g.World.Renderer.DrawWithShadows(camera, g.World.Scene.GameObjects)
+		if g.editor.Active {
+			g.editor.Draw3D()
+		}
+		rl.EndMode3D()
+		g.drawMs = float64(time.Since(drawStart).Microseconds()) / 1000.0
 	}
-	rl.EndMode3D()
-	g.drawMs = float64(time.Since(drawStart).Microseconds()) / 1000.0
 
+	// Draw editor UI (panels, etc) - same for both modes
 	if g.editor.Active {
 		g.editor.DrawUI()
+		// Draw UI edit mode overlay (2D badge, cursor handling)
+		g.editor.DrawUIEditModeOverlay()
 	} else {
 		g.DrawUI()
 	}

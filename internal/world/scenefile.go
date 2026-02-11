@@ -459,7 +459,10 @@ func serializeComponent(c engine.Component) json.RawMessage {
 	default:
 		// Try Serializable interface first
 		if s, ok := c.(engine.Serializable); ok {
-			def = s.Serialize()
+			data := s.Serialize()
+			// Add the type field from TypeName
+			data["type"] = s.TypeName()
+			def = data
 		} else if name, props, ok := engine.SerializeScript(c); ok {
 			// Try script registry
 			def = scriptDef{Type: "Script", Name: name, Props: props}

@@ -16,5 +16,3 @@ raylib-go/examples/
 assets/models/*
 !assets/models/rubber_duck_toy_1k.gltf/
 
-# Ignore all scenes
-assets/scenes/
