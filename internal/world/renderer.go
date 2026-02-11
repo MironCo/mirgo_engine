@@ -24,10 +24,18 @@ type Renderer struct {
 	LightCamera     rl.Camera3D
 	MatLightVP      rl.Matrix
 	floorSize       float32
+	frustum         Frustum // current frame's view frustum for culling
+	CullEnabled     bool    // frustum culling toggle (default true)
+
+	// Stats for debug display
+	DrawnObjects int // objects rendered this frame
+	CulledObjects int // objects culled this frame
 }
 
 func NewRenderer() *Renderer {
-	return &Renderer{}
+	return &Renderer{
+		CullEnabled: true, // frustum culling on by default
+	}
 }
 
 func (r *Renderer) Initialize(floorSize float32) {
@@ -114,12 +122,17 @@ func (r *Renderer) DrawShadowMap(gameObjects []*engine.GameObject) {
 	r.MatLightVP = rl.MatrixMultiply(lightView, lightProj)
 }
 
-func (r *Renderer) DrawWithShadows(cameraPos rl.Vector3, gameObjects []*engine.GameObject) {
+func (r *Renderer) DrawWithShadows(camera rl.Camera3D, gameObjects []*engine.GameObject) {
 	// Sync light uniforms and camera every frame (in case editor changed them)
 	r.updateLightCamera()
 	r.updateShaderUniforms()
 
-	viewPos := []float32{cameraPos.X, cameraPos.Y, cameraPos.Z}
+	// Extract frustum planes for culling
+	if r.CullEnabled {
+		r.frustum = ExtractFrustum(camera)
+	}
+
+	viewPos := []float32{camera.Position.X, camera.Position.Y, camera.Position.Z}
 
 	// Update both shaders with view position and light VP matrix
 	for _, shader := range []rl.Shader{r.Shader, r.InstanceShader} {
@@ -163,6 +176,10 @@ type instanceBatch struct {
 }
 
 func (r *Renderer) drawScene(gameObjects []*engine.GameObject) {
+	// Reset stats
+	r.DrawnObjects = 0
+	r.CulledObjects = 0
+
 	// Group objects by mesh type for instanced rendering
 	batches := make(map[string]*instanceBatch)
 
@@ -174,6 +191,17 @@ func (r *Renderer) drawScene(gameObjects []*engine.GameObject) {
 		if mr == nil {
 			continue
 		}
+
+		// Frustum culling: skip objects outside the view frustum
+		if r.CullEnabled {
+			pos := g.WorldPosition()
+			radius := r.getBoundingRadius(g, mr)
+			if !r.frustum.ContainsSphere(pos, radius) {
+				r.CulledObjects++
+				continue
+			}
+		}
+		r.DrawnObjects++
 
 		// Only batch generated meshes (sphere, cube, plane) - file models render individually
 		// Also skip batching if mesh has custom size (like the floor) since mesh geometry differs
@@ -244,6 +272,48 @@ func (r *Renderer) drawScene(gameObjects []*engine.GameObject) {
 // colorKey returns a string key for a color (for batching by color)
 func colorKey(c rl.Color) string {
 	return string([]byte{c.R, c.G, c.B, c.A})
+}
+
+// getBoundingRadius returns a conservative bounding sphere radius for culling
+func (r *Renderer) getBoundingRadius(g *engine.GameObject, mr *components.ModelRenderer) float32 {
+	scale := g.WorldScale()
+	// Use the largest scale axis for a conservative bounding sphere
+	maxScale := scale.X
+	if scale.Y > maxScale {
+		maxScale = scale.Y
+	}
+	if scale.Z > maxScale {
+		maxScale = scale.Z
+	}
+
+	// Check for custom mesh size (e.g., floor plane with meshSize [60, 60])
+	if len(mr.MeshSize) >= 2 {
+		// MeshSize defines the actual mesh dimensions
+		meshMax := mr.MeshSize[0]
+		for _, s := range mr.MeshSize[1:] {
+			if s > meshMax {
+				meshMax = s
+			}
+		}
+		// Diagonal of the mesh (sqrt(2) for 2D, sqrt(3) for 3D)
+		return meshMax * 0.707 * maxScale // half-diagonal for radius
+	}
+
+	// Base radius depends on mesh type (unit primitives)
+	var baseRadius float32 = 1.0
+	switch mr.MeshType {
+	case "sphere":
+		baseRadius = 1.0 // unit sphere
+	case "cube":
+		baseRadius = 1.732 // diagonal of unit cube (sqrt(3))
+	case "plane":
+		baseRadius = 1.414 // diagonal of unit plane (sqrt(2))
+	default:
+		// For file models, use a generous estimate
+		baseRadius = 2.0
+	}
+
+	return baseRadius * maxScale
 }
 
 func (r *Renderer) updatePointLights(gameObjects []*engine.GameObject) {
