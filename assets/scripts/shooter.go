@@ -2,6 +2,7 @@ package scripts
 
 import (
 	"fmt"
+	"test3d/internal/assets"
 	"test3d/internal/components"
 	"test3d/internal/engine"
 
@@ -69,10 +70,11 @@ func (s *Shooter) Shoot() {
 
 	sphere := engine.NewGameObject(fmt.Sprintf("Shot_%d", s.shotCounter))
 	sphere.Transform.Position = spawnPos
+	sphere.Transform.Scale = rl.Vector3{X: radius, Y: radius, Z: radius} // unit sphere has radius 1, scale to desired radius
 
-	mesh := rl.GenMeshSphere(radius, 16, 16)
-	model := rl.LoadModelFromMesh(mesh)
+	model := assets.GetSphereModel() // shared cached model
 	renderer := components.NewModelRenderer(model, rl.Orange)
+	renderer.MeshType = "sphere" // mark for instanced batching
 	renderer.SetShader(s.GetGameObject().Scene.World.GetShader())
 	sphere.AddComponent(renderer)
 

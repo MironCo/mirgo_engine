@@ -130,7 +130,8 @@ func (m *ModelRenderer) Draw() {
 
 func (m *ModelRenderer) Unload() {
 	// Only unload if not from asset manager (asset manager handles its own cleanup)
-	if m.FilePath == "" {
+	// Skip if FilePath is set (loaded from file) or MeshType is set (shared primitive)
+	if m.FilePath == "" && m.MeshType == "" {
 		rl.UnloadModel(m.Model)
 	}
 }

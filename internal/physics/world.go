@@ -1,8 +1,11 @@
 package physics
 
 import (
+	"log"
 	"test3d/internal/components"
+	"test3d/internal/compute"
 	"test3d/internal/engine"
+	"time"
 	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -66,9 +69,22 @@ type PhysicsWorld struct {
 	grid       map[CellKey][]*engine.GameObject
 
 	// Collision tracking for callbacks
-	activeCollisions map[CollisionPair]bool // collisions from last frame
+	activeCollisions  map[CollisionPair]bool // collisions from last frame
 	currentCollisions map[CollisionPair]bool // collisions this frame
+
+	// GPU broad-phase (nil if compute unavailable or object count too low)
+	gpuBroadPhase   *compute.BroadPhase
+	useGPU          bool      // switches on when object count exceeds threshold
+	lastLoggedCount int       // prevents duplicate logs at same object count
+	lastLogTime     time.Time // rate-limit collision pair logs
 }
+
+// GPUBroadPhaseThreshold is the minimum object count before GPU broad-phase kicks in.
+// Below this, CPU spatial hashing is faster due to GPU overhead.
+const GPUBroadPhaseThreshold = 500
+
+// MaxPhysicsObjects is the maximum objects the GPU broad-phase can handle.
+const MaxPhysicsObjects = 50000
 
 func NewPhysicsWorld() *PhysicsWorld {
 	return &PhysicsWorld{
@@ -79,6 +95,18 @@ func NewPhysicsWorld() *PhysicsWorld {
 		grid:              make(map[CellKey][]*engine.GameObject),
 		activeCollisions:  make(map[CollisionPair]bool),
 		currentCollisions: make(map[CollisionPair]bool),
+	}
+}
+
+// InitGPU initializes GPU broad-phase. Call after compute.Initialize().
+func (p *PhysicsWorld) InitGPU() {
+	if p.gpuBroadPhase != nil {
+		return // Already initialized
+	}
+	bp, err := compute.NewBroadPhase(MaxPhysicsObjects, MaxPhysicsObjects*20)
+	if err == nil && bp != nil {
+		p.gpuBroadPhase = bp
+		log.Printf("Physics: GPU broad-phase ready (threshold: %d objects)", GPUBroadPhaseThreshold)
 	}
 }
 
@@ -94,6 +122,34 @@ func (p *PhysicsWorld) rebuildGrid() {
 		cell := posToCell(obj.Transform.Position)
 		p.grid[cell] = append(p.grid[cell], obj)
 	}
+}
+
+// buildBoundingSpheres creates sphere bounds for all dynamic objects
+func (p *PhysicsWorld) buildBoundingSpheres() []compute.Sphere {
+	spheres := make([]compute.Sphere, len(p.Objects))
+
+	for i, obj := range p.Objects {
+		pos := obj.Transform.Position
+		var radius float32 = 0.5 // default
+
+		// Get actual collider radius
+		if sphere := engine.GetComponent[*components.SphereCollider](obj); sphere != nil {
+			radius = sphere.Radius
+		} else if box := engine.GetComponent[*components.BoxCollider](obj); box != nil {
+			// Use half-diagonal of box as bounding sphere radius
+			size := box.GetWorldSize()
+			radius = rl.Vector3Length(size) * 0.5
+		}
+
+		spheres[i] = compute.Sphere{
+			X:      pos.X,
+			Y:      pos.Y,
+			Z:      pos.Z,
+			Radius: radius,
+		}
+	}
+
+	return spheres
 }
 
 // getNeighborObjects returns all objects in same cell and 26 neighboring cells
@@ -148,6 +204,24 @@ func (p *PhysicsWorld) RemoveObject(g *engine.GameObject) {
 	}
 }
 
+// Release frees GPU resources
+func (p *PhysicsWorld) Release() {
+	if p.gpuBroadPhase != nil {
+		p.gpuBroadPhase.Release()
+		p.gpuBroadPhase = nil
+	}
+}
+
+// UsingGPU returns true if GPU broad-phase is currently active
+func (p *PhysicsWorld) UsingGPU() bool {
+	return p.useGPU
+}
+
+// DynamicObjectCount returns the number of dynamic physics objects
+func (p *PhysicsWorld) DynamicObjectCount() int {
+	return len(p.Objects)
+}
+
 func (p *PhysicsWorld) Update(deltaTime float32) {
 	// Reset current frame collisions
 	p.currentCollisions = make(map[CollisionPair]bool)
@@ -184,29 +258,67 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 		rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, damping)
 	}
 
-	// 2. Rebuild spatial grid and do broad-phase collision
-	p.rebuildGrid()
+	// 2. Broad-phase collision detection
+	// Use GPU when object count is high enough to benefit
+	wasUsingGPU := p.useGPU
+	p.useGPU = p.gpuBroadPhase != nil && len(p.Objects) >= GPUBroadPhaseThreshold
 
-	// Track checked pairs to avoid duplicate checks
-	checked := make(map[[2]uintptr]bool)
+	// Log when GPU kicks in or out, and periodically show object count
+	if p.useGPU && !wasUsingGPU {
+		log.Printf("Physics: GPU broad-phase ON (%d objects)", len(p.Objects))
+	} else if !p.useGPU && wasUsingGPU {
+		log.Printf("Physics: GPU broad-phase OFF (%d objects)", len(p.Objects))
+	} else if len(p.Objects)%100 == 0 && len(p.Objects) > 0 && len(p.Objects) != p.lastLoggedCount {
+		p.lastLoggedCount = len(p.Objects)
+		mode := "CPU"
+		if p.useGPU {
+			mode = "GPU"
+		}
+		log.Printf("Physics: %d objects (%s)", len(p.Objects), mode)
+	}
 
-	for _, obj := range p.Objects {
-		neighbors := p.getNeighborObjects(obj)
-		for _, other := range neighbors {
-			if obj == other {
-				continue
+	if p.useGPU {
+		// GPU broad-phase: get collision pairs from compute shader
+		spheres := p.buildBoundingSpheres()
+		pairs, err := p.gpuBroadPhase.DetectPairs(spheres)
+		if err == nil {
+			// Log collision pairs once per second
+			if len(pairs) > 0 && time.Since(p.lastLogTime) >= time.Second {
+				p.lastLogTime = time.Now()
+				log.Printf("Physics: GPU detected %d collision pairs (%d objects)", len(pairs), len(p.Objects))
 			}
-			// Create consistent pair key using pointer addresses (smaller first)
-			ptrA, ptrB := uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(other))
-			if ptrA > ptrB {
-				ptrA, ptrB = ptrB, ptrA
+			// Narrow-phase only on pairs the GPU found
+			for _, pair := range pairs {
+				if int(pair.A) < len(p.Objects) && int(pair.B) < len(p.Objects) {
+					p.resolveCollision(p.Objects[pair.A], p.Objects[pair.B])
+				}
 			}
-			key := [2]uintptr{ptrA, ptrB}
-			if checked[key] {
-				continue
+		}
+	} else {
+		// CPU broad-phase: spatial hashing
+		p.rebuildGrid()
+
+		// Track checked pairs to avoid duplicate checks
+		checked := make(map[[2]uintptr]bool)
+
+		for _, obj := range p.Objects {
+			neighbors := p.getNeighborObjects(obj)
+			for _, other := range neighbors {
+				if obj == other {
+					continue
+				}
+				// Create consistent pair key using pointer addresses (smaller first)
+				ptrA, ptrB := uintptr(unsafe.Pointer(obj)), uintptr(unsafe.Pointer(other))
+				if ptrA > ptrB {
+					ptrA, ptrB = ptrB, ptrA
+				}
+				key := [2]uintptr{ptrA, ptrB}
+				if checked[key] {
+					continue
+				}
+				checked[key] = true
+				p.resolveCollision(obj, other)
 			}
-			checked[key] = true
-			p.resolveCollision(obj, other)
 		}
 	}
 

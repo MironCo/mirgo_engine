@@ -43,17 +43,32 @@ var (
 	initErr      error
 )
 
+// AdapterInfo contains GPU information.
+type AdapterInfo struct {
+	Name         string
+	Vendor       string
+	Backend      string
+	DeviceType   string
+	Driver       string
+}
+
 // Initialize sets up the compute system. Safe to call multiple times.
-// Returns the GPU name and backend type on success.
-func Initialize() (gpuName string, backend string, err error) {
+// Returns detailed GPU info on success.
+func Initialize() (info AdapterInfo, err error) {
 	initOnce.Do(func() {
 		globalSystem, initErr = newSystem()
 	})
 	if initErr != nil {
-		return "", "", initErr
+		return AdapterInfo{}, initErr
 	}
-	info := globalSystem.adapter.GetInfo()
-	return info.Name, info.BackendType.String(), nil
+	adapterInfo := globalSystem.adapter.GetInfo()
+	return AdapterInfo{
+		Name:       adapterInfo.Name,
+		Vendor:     adapterInfo.VendorName,
+		Backend:    adapterInfo.BackendType.String(),
+		DeviceType: adapterInfo.AdapterType.String(),
+		Driver:     adapterInfo.DriverDescription,
+	}, nil
 }
 
 // Get returns the global compute system. Must call Initialize first.

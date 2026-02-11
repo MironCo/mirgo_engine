@@ -1,15 +1,15 @@
 {
-  "windowWidth": 1512,
-  "windowHeight": 823,
-  "windowX": 0,
+  "windowWidth": 1043,
+  "windowHeight": 581,
+  "windowX": 391,
   "windowY": 65,
   "cameraPosition": {
-    "X": 21.867609,
-    "Y": 8.867978,
-    "Z": 10.063555
+    "X": -7.371847,
+    "Y": 4.0590625,
+    "Z": 8.743956
   },
-  "cameraYaw": 197.95462,
-  "cameraPitch": -20.175392,
+  "cameraYaw": -11.824015,
+  "cameraPitch": -15.083979,
   "cameraMoveSpeed": 10.2,
   "scenePath": "assets/scenes/main.json",
   "assetBrowserOpen": true,

@@ -40,10 +40,11 @@ func (w *World) Initialize() {
 	w.Renderer.Initialize(FloorSize)
 
 	// Initialize GPU compute (Metal on Mac, Vulkan on Linux/Windows)
-	if gpuName, backend, err := compute.Initialize(); err != nil {
+	if info, err := compute.Initialize(); err != nil {
 		log.Printf("Compute shaders unavailable: %v", err)
 	} else {
-		log.Printf("Compute: %s (%s)", gpuName, backend)
+		log.Printf("Compute: %s | %s | %s | %s", info.Backend, info.Vendor, info.Name, info.DeviceType)
+		w.PhysicsWorld.InitGPU()
 	}
 
 	// Load scene objects from JSON
@@ -149,6 +150,7 @@ func (w *World) EditorRaycast(origin, direction rl.Vector3, maxDistance float32)
 
 func (w *World) Unload() {
 	w.Renderer.Unload(w.Scene.GameObjects)
+	w.PhysicsWorld.Release()
 	assets.Unload()
 	audio.Close()
 	if cs := compute.Get(); cs != nil {
