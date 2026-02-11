@@ -12,7 +12,3 @@ internal/scripts/
 # Raylib examples (vendored for reference only)
 raylib-go/examples/
 
-# Ignore all models except rubber duck
-assets/models/*
-!assets/models/rubber_duck_toy_1k.gltf/
-
