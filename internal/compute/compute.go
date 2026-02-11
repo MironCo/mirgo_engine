@@ -290,6 +290,75 @@ func (s *System) ReadBuffer(buf *Buffer) ([]byte, error) {
 	return result, nil
 }
 
+// ReadBufferNonBlocking attempts to read GPU buffer data without blocking.
+// Returns (nil, nil) if GPU work is still pending.
+// Returns (data, nil) if data is ready.
+// Returns (nil, err) on actual errors.
+func (s *System) ReadBufferNonBlocking(buf *Buffer) ([]byte, error) {
+	// Create staging buffer
+	staging, err := s.device.CreateBuffer(&wgpu.BufferDescriptor{
+		Label: "staging_read_nb",
+		Size:  buf.size,
+		Usage: wgpu.BufferUsageMapRead | wgpu.BufferUsageCopyDst,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create staging buffer: %w", err)
+	}
+	defer staging.Release()
+
+	// Copy to staging
+	encoder, err := s.device.CreateCommandEncoder(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create command encoder: %w", err)
+	}
+	encoder.CopyBufferToBuffer(buf.buffer, 0, staging, 0, buf.size)
+	commands, err := encoder.Finish(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to finish encoder: %w", err)
+	}
+	s.queue.Submit(commands)
+	commands.Release()
+
+	// Map and read - NON-BLOCKING
+	done := make(chan error, 1)
+	mapped := false
+	err = staging.MapAsync(wgpu.MapModeRead, 0, buf.size, func(status wgpu.BufferMapAsyncStatus) {
+		if status != wgpu.BufferMapAsyncStatusSuccess {
+			done <- fmt.Errorf("failed to map buffer: %v", status)
+		} else {
+			done <- nil
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Poll once without blocking - if work isn't done, return nil
+	s.device.Poll(false, nil)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			return nil, err
+		}
+		mapped = true
+	default:
+		// GPU work still pending
+		return nil, nil
+	}
+
+	if !mapped {
+		return nil, nil
+	}
+
+	mappedData := staging.GetMappedRange(0, uint(buf.size))
+	result := make([]byte, len(mappedData))
+	copy(result, mappedData)
+	staging.Unmap()
+
+	return result, nil
+}
+
 // ReadBufferFloat32 is a convenience method for reading float32 data.
 func (s *System) ReadBufferFloat32(buf *Buffer) ([]float32, error) {
 	data, err := s.ReadBuffer(buf)

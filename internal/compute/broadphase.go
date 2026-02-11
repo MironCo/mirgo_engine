@@ -18,6 +18,12 @@ type BroadPhase struct {
 
 	maxObjects uint32
 	maxPairs   uint32
+
+	// Cached pipeline objects (reused every frame)
+	cachedBindGroupLayout *wgpu.BindGroupLayout
+	cachedPipelineLayout  *wgpu.PipelineLayout
+	cachedShaderModule    *wgpu.ShaderModule
+	cachedPipeline        *wgpu.ComputePipeline
 }
 
 // Sphere represents a bounding sphere for broad-phase detection.
@@ -123,14 +129,89 @@ func NewBroadPhase(maxObjects, maxPairs uint32) (*BroadPhase, error) {
 		return nil, err
 	}
 
+	// Create and cache pipeline objects (reused every frame for performance)
+	device := sys.device
+
+	// Create bind group layout for 4 bindings
+	layoutDesc := wgpu.BindGroupLayoutDescriptor{
+		Label: "broadphase_layout",
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{Binding: 0, Visibility: wgpu.ShaderStageCompute,
+				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
+			{Binding: 1, Visibility: wgpu.ShaderStageCompute,
+				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeStorage}},
+			{Binding: 2, Visibility: wgpu.ShaderStageCompute,
+				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeStorage}},
+			{Binding: 3, Visibility: wgpu.ShaderStageCompute,
+				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeUniform}},
+		},
+	}
+	bindGroupLayout, err := device.CreateBindGroupLayout(&layoutDesc)
+	if err != nil {
+		sphereBuffer.Release()
+		pairBuffer.Release()
+		countBuffer.Release()
+		return nil, err
+	}
+
+	// Create pipeline layout
+	pipelineLayout, err := device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
+		Label:            "broadphase_pipeline_layout",
+		BindGroupLayouts: []*wgpu.BindGroupLayout{bindGroupLayout},
+	})
+	if err != nil {
+		bindGroupLayout.Release()
+		sphereBuffer.Release()
+		pairBuffer.Release()
+		countBuffer.Release()
+		return nil, err
+	}
+
+	// Create shader module
+	shaderModule, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
+		Label:          "broadphase_shader",
+		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{Code: broadPhaseShader},
+	})
+	if err != nil {
+		pipelineLayout.Release()
+		bindGroupLayout.Release()
+		sphereBuffer.Release()
+		pairBuffer.Release()
+		countBuffer.Release()
+		return nil, err
+	}
+
+	// Create compute pipeline
+	computePipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
+		Label:  "broadphase_pipeline",
+		Layout: pipelineLayout,
+		Compute: wgpu.ProgrammableStageDescriptor{
+			Module:     shaderModule,
+			EntryPoint: "main",
+		},
+	})
+	if err != nil {
+		shaderModule.Release()
+		pipelineLayout.Release()
+		bindGroupLayout.Release()
+		sphereBuffer.Release()
+		pairBuffer.Release()
+		countBuffer.Release()
+		return nil, err
+	}
+
 	return &BroadPhase{
-		system:       sys,
-		pipeline:     pipeline,
-		sphereBuffer: sphereBuffer,
-		pairBuffer:   pairBuffer,
-		countBuffer:  countBuffer,
-		maxObjects:   maxObjects,
-		maxPairs:     maxPairs,
+		system:                sys,
+		pipeline:              pipeline,
+		sphereBuffer:          sphereBuffer,
+		pairBuffer:            pairBuffer,
+		countBuffer:           countBuffer,
+		maxObjects:            maxObjects,
+		maxPairs:              maxPairs,
+		cachedBindGroupLayout: bindGroupLayout,
+		cachedPipelineLayout:  pipelineLayout,
+		cachedShaderModule:    shaderModule,
+		cachedPipeline:        computePipeline,
 	}, nil
 }
 
@@ -201,29 +282,11 @@ func (bp *BroadPhase) dispatchWithUniform(objectCount uint32, uniformBuffer *Buf
 	device := bp.system.device
 	queue := bp.system.queue
 
-	// Create bind group layout for 4 bindings
-	layoutDesc := wgpu.BindGroupLayoutDescriptor{
-		Label: "broadphase_layout",
-		Entries: []wgpu.BindGroupLayoutEntry{
-			{Binding: 0, Visibility: wgpu.ShaderStageCompute,
-				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeReadOnlyStorage}},
-			{Binding: 1, Visibility: wgpu.ShaderStageCompute,
-				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeStorage}},
-			{Binding: 2, Visibility: wgpu.ShaderStageCompute,
-				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeStorage}},
-			{Binding: 3, Visibility: wgpu.ShaderStageCompute,
-				Buffer: wgpu.BufferBindingLayout{Type: wgpu.BufferBindingTypeUniform}},
-		},
-	}
-	layout, err := device.CreateBindGroupLayout(&layoutDesc)
-	if err != nil {
-		return err
-	}
-	defer layout.Release()
-
+	// Create bind group (only this needs to be created per frame due to dynamic uniform buffer)
+	// All other pipeline objects are cached and reused
 	bindGroup, err := device.CreateBindGroup(&wgpu.BindGroupDescriptor{
 		Label:  "broadphase_bindgroup",
-		Layout: layout,
+		Layout: bp.cachedBindGroupLayout,
 		Entries: []wgpu.BindGroupEntry{
 			{Binding: 0, Buffer: bp.sphereBuffer.buffer, Size: bp.sphereBuffer.size},
 			{Binding: 1, Buffer: bp.pairBuffer.buffer, Size: bp.pairBuffer.size},
@@ -236,47 +299,14 @@ func (bp *BroadPhase) dispatchWithUniform(objectCount uint32, uniformBuffer *Buf
 	}
 	defer bindGroup.Release()
 
-	// Create pipeline layout
-	pipelineLayout, err := device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
-		Label:           "broadphase_pipeline_layout",
-		BindGroupLayouts: []*wgpu.BindGroupLayout{layout},
-	})
-	if err != nil {
-		return err
-	}
-	defer pipelineLayout.Release()
-
-	// Create compute pipeline with explicit layout
-	shaderModule, err := device.CreateShaderModule(&wgpu.ShaderModuleDescriptor{
-		Label:          "broadphase_shader",
-		WGSLDescriptor: &wgpu.ShaderModuleWGSLDescriptor{Code: broadPhaseShader},
-	})
-	if err != nil {
-		return err
-	}
-	defer shaderModule.Release()
-
-	pipeline, err := device.CreateComputePipeline(&wgpu.ComputePipelineDescriptor{
-		Label:  "broadphase_pipeline",
-		Layout: pipelineLayout,
-		Compute: wgpu.ProgrammableStageDescriptor{
-			Module:     shaderModule,
-			EntryPoint: "main",
-		},
-	})
-	if err != nil {
-		return err
-	}
-	defer pipeline.Release()
-
-	// Dispatch
+	// Dispatch using cached pipeline
 	encoder, err := device.CreateCommandEncoder(nil)
 	if err != nil {
 		return err
 	}
 
 	pass := encoder.BeginComputePass(nil)
-	pass.SetPipeline(pipeline)
+	pass.SetPipeline(bp.cachedPipeline)
 	pass.SetBindGroup(0, bindGroup, nil)
 	workgroups := (objectCount + 255) / 256
 	pass.DispatchWorkgroups(workgroups, 1, 1)

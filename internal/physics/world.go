@@ -72,6 +72,9 @@ type PhysicsWorld struct {
 	activeCollisions  map[CollisionPair]bool // collisions from last frame
 	currentCollisions map[CollisionPair]bool // collisions this frame
 
+	// Normal forces - accumulated during collision resolution, applied before gravity
+	normalForces map[*engine.GameObject]rl.Vector3
+
 	// GPU broad-phase (nil if compute unavailable or object count too low)
 	gpuBroadPhase   *compute.BroadPhase
 	useGPU          bool      // switches on when object count exceeds threshold
@@ -95,6 +98,7 @@ func NewPhysicsWorld() *PhysicsWorld {
 		grid:              make(map[CellKey][]*engine.GameObject),
 		activeCollisions:  make(map[CollisionPair]bool),
 		currentCollisions: make(map[CollisionPair]bool),
+		normalForces:      make(map[*engine.GameObject]rl.Vector3),
 	}
 }
 
@@ -226,7 +230,7 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 	// Reset current frame collisions
 	p.currentCollisions = make(map[CollisionPair]bool)
 
-	// 1. Apply gravity and integrate velocity (skip sleeping objects)
+	// 1. Apply forces (gravity + normal forces from previous frame) and integrate velocity
 	for _, obj := range p.Objects {
 		rb := engine.GetComponent[*components.Rigidbody](obj)
 		if rb == nil {
@@ -240,7 +244,16 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 
 		// Apply gravity
 		if rb.UseGravity {
-			rb.Velocity = rl.Vector3Add(rb.Velocity, rl.Vector3Scale(p.Gravity, deltaTime))
+			gravityAccel := rl.Vector3Scale(p.Gravity, deltaTime)
+
+			// Apply normal force from last frame to counter gravity (prevents sinking)
+			if normalForce, hasNormal := p.normalForces[obj]; hasNormal {
+				// Normal force counters gravity
+				normalAccel := rl.Vector3Scale(normalForce, deltaTime/rb.Mass)
+				gravityAccel = rl.Vector3Add(gravityAccel, normalAccel)
+			}
+
+			rb.Velocity = rl.Vector3Add(rb.Velocity, gravityAccel)
 		}
 
 		// Integrate position
@@ -265,6 +278,9 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 		// Check if object should go to sleep
 		rb.TrySleep(deltaTime)
 	}
+
+	// Clear normal forces - they will be recalculated during collision resolution
+	p.normalForces = make(map[*engine.GameObject]rl.Vector3)
 
 	// 2. Broad-phase collision detection
 	// Use GPU when object count is high enough to benefit
@@ -374,12 +390,26 @@ func (p *PhysicsWorld) recordCollision(a, b *engine.GameObject) {
 	pair := makePair(a, b)
 	p.currentCollisions[pair] = true
 
-	// Wake sleeping rigidbodies on collision
-	if rbA := engine.GetComponent[*components.Rigidbody](a); rbA != nil && rbA.IsSleeping {
-		rbA.Wake()
-	}
-	if rbB := engine.GetComponent[*components.Rigidbody](b); rbB != nil && rbB.IsSleeping {
-		rbB.Wake()
+	// Wake sleeping rigidbodies only if collision has significant relative velocity
+	// This prevents micro-collisions from waking settled stacks
+	rbA := engine.GetComponent[*components.Rigidbody](a)
+	rbB := engine.GetComponent[*components.Rigidbody](b)
+
+	if rbA != nil && rbB != nil {
+		relVel := rl.Vector3Subtract(rbA.Velocity, rbB.Velocity)
+		relSpeed := rl.Vector3Length(relVel)
+
+		// Only wake if relative velocity is significant (> 2x sleep threshold)
+		wakeThreshold := float32(components.SleepVelocityThreshold * 2.0)
+
+		if relSpeed > wakeThreshold {
+			if rbA.IsSleeping {
+				rbA.Wake()
+			}
+			if rbB.IsSleeping {
+				rbB.Wake()
+			}
+		}
 	}
 }
 
@@ -555,6 +585,44 @@ func (p *PhysicsWorld) resolveSphereVsSphere(a, b *engine.GameObject, rbA, rbB *
 	// Relative velocity
 	relVel := rl.Vector3Subtract(rbA.Velocity, rbB.Velocity)
 	velAlongNormal := rl.Vector3DotProduct(relVel, normal)
+
+	// Static friction and normal force - if objects are nearly at rest and stacked
+	relSpeed := rl.Vector3Length(relVel)
+	if relSpeed < 0.5 && penetration < 0.1 {
+		// Apply strong damping to settle stacked objects
+		friction := (rbA.Friction + rbB.Friction) / 2
+		rbA.Velocity = rl.Vector3Scale(rbA.Velocity, 1.0-friction)
+		rbB.Velocity = rl.Vector3Scale(rbB.Velocity, 1.0-friction)
+
+		// Apply normal force to counter gravity if contact normal points upward
+		// This prevents slow sinking through stacked objects
+		if normal.Y > 0.5 { // Contact points upward (B supports A)
+			// A is on top of B - apply upward normal force to A
+			normalForce := rl.Vector3Scale(rl.Vector3{X: 0, Y: 1, Z: 0}, -p.Gravity.Y*rbA.Mass)
+			if existing, ok := p.normalForces[a]; ok {
+				p.normalForces[a] = rl.Vector3Add(existing, normalForce)
+			} else {
+				p.normalForces[a] = normalForce
+			}
+		} else if normal.Y < -0.5 { // Contact points downward (A supports B)
+			// B is on top of A - apply upward normal force to B
+			normalForce := rl.Vector3Scale(rl.Vector3{X: 0, Y: 1, Z: 0}, -p.Gravity.Y*rbB.Mass)
+			if existing, ok := p.normalForces[b]; ok {
+				p.normalForces[b] = rl.Vector3Add(existing, normalForce)
+			} else {
+				p.normalForces[b] = normalForce
+			}
+		}
+
+		// If velocity is very low, zero it out to stop jitter
+		if rl.Vector3Length(rbA.Velocity) < 0.1 {
+			rbA.Velocity = rl.Vector3{}
+		}
+		if rl.Vector3Length(rbB.Velocity) < 0.1 {
+			rbB.Velocity = rl.Vector3{}
+		}
+		return
+	}
 
 	if velAlongNormal > 0 {
 		return
