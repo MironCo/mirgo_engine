@@ -2,26 +2,25 @@ package scripts
 
 import (
 	"math"
+	"test3d/internal/components"
 	"test3d/internal/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // FPSController provides first-person camera controls with WASD movement and mouse look.
+// Requires a CharacterController component on the same GameObject for collision/movement.
 type FPSController struct {
 	engine.BaseComponent
 	Yaw          float32
 	Pitch        float32
 	MoveSpeed    float32
 	LookSpeed    float32
-	Gravity      float32
 	JumpStrength float32
 	EyeHeight    float32
-	// Velocity components (not serialized - runtime state)
-	velocityX float32
-	velocityY float32
-	velocityZ float32
-	grounded  bool
+
+	// Cached CharacterController reference
+	charController *components.CharacterController
 }
 
 func (f *FPSController) Start() {
@@ -32,9 +31,6 @@ func (f *FPSController) Start() {
 	if f.LookSpeed == 0 {
 		f.LookSpeed = 0.1
 	}
-	if f.Gravity == 0 {
-		f.Gravity = 20.0
-	}
 	if f.JumpStrength == 0 {
 		f.JumpStrength = 8.0
 	}
@@ -44,6 +40,12 @@ func (f *FPSController) Start() {
 	if f.Yaw == 0 && f.Pitch == 0 {
 		f.Yaw = -135.0
 		f.Pitch = -30.0
+	}
+
+	// Cache CharacterController reference
+	g := f.GetGameObject()
+	if g != nil {
+		f.charController = engine.GetComponent[*components.CharacterController](g)
 	}
 }
 
@@ -95,34 +97,26 @@ func (f *FPSController) Update(deltaTime float32) {
 		moveDirZ /= moveLen
 	}
 
-	// Apply horizontal velocity
-	f.velocityX = moveDirX * f.MoveSpeed
-	f.velocityZ = moveDirZ * f.MoveSpeed
+	// Use CharacterController if available
+	if f.charController != nil {
+		// Build speed vector (CharacterController handles deltaTime internally in SimpleMove)
+		speed := rl.Vector3{
+			X: moveDirX * f.MoveSpeed,
+			Y: 0,
+			Z: moveDirZ * f.MoveSpeed,
+		}
 
-	// Jump
-	if rl.IsKeyPressed(rl.KeySpace) && f.grounded {
-		f.velocityY = f.JumpStrength
-		f.grounded = false
-	}
+		// Jump
+		if rl.IsKeyPressed(rl.KeySpace) && f.charController.IsGrounded() {
+			f.charController.SetVelocityY(f.JumpStrength)
+		}
 
-	// Apply gravity
-	if !f.grounded {
-		f.velocityY -= f.Gravity * deltaTime
-	}
-
-	// Update position
-	g.Transform.Position.X += f.velocityX * deltaTime
-	g.Transform.Position.Y += f.velocityY * deltaTime
-	g.Transform.Position.Z += f.velocityZ * deltaTime
-
-	// Simple ground check - floor is at Y=0
-	feetY := g.Transform.Position.Y - f.EyeHeight
-	if feetY <= 0 {
-		g.Transform.Position.Y = f.EyeHeight
-		f.velocityY = 0
-		f.grounded = true
+		// Let CharacterController handle movement, collision, and gravity
+		f.charController.SimpleMove(speed, deltaTime)
 	} else {
-		f.grounded = false
+		// Fallback: direct movement without collision (for backwards compatibility)
+		g.Transform.Position.X += moveDirX * f.MoveSpeed * deltaTime
+		g.Transform.Position.Z += moveDirZ * f.MoveSpeed * deltaTime
 	}
 }
 
@@ -157,20 +151,8 @@ func (f *FPSController) GetEyeHeight() float32 {
 
 // Grounded returns whether the controller is on the ground
 func (f *FPSController) Grounded() bool {
-	return f.grounded
-}
-
-// SetGrounded sets whether the controller is on the ground
-func (f *FPSController) SetGrounded(grounded bool) {
-	f.grounded = grounded
-}
-
-// SetVelocityY sets the vertical velocity (used by physics)
-func (f *FPSController) SetVelocityY(vy float32) {
-	f.velocityY = vy
-}
-
-// GetVelocity returns the current velocity
-func (f *FPSController) GetVelocity() (x, y, z float32) {
-	return f.velocityX, f.velocityY, f.velocityZ
+	if f.charController != nil {
+		return f.charController.IsGrounded()
+	}
+	return false
 }

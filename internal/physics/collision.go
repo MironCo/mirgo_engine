@@ -419,7 +419,11 @@ func (p *PhysicsWorld) resolveKinematicCollision(kinematic, obj *engine.GameObje
 	}
 }
 
+// MaxStepHeight is the maximum height the player can step up
+const MaxStepHeight = 0.5
+
 // resolveKinematicStaticCollision handles kinematic objects (player) colliding with static objects (walls)
+// Includes stair/step climbing support
 func (p *PhysicsWorld) resolveKinematicStaticCollision(kinematic, static *engine.GameObject) {
 	colKin := engine.GetComponent[*components.BoxCollider](kinematic)
 	colStatic := engine.GetComponent[*components.BoxCollider](static)
@@ -439,7 +443,45 @@ func (p *PhysicsWorld) resolveKinematicStaticCollision(kinematic, static *engine
 	// Record collision for callbacks
 	p.recordCollision(kinematic, static)
 
-	// Push kinematic out of static (static doesn't move)
+	// Check if this is a horizontal collision (potential step)
+	// If push is mostly horizontal (wall-like), try stepping up
+	horizontalPush := pushOut.X*pushOut.X + pushOut.Z*pushOut.Z
+	verticalPush := pushOut.Y * pushOut.Y
+
+	if horizontalPush > verticalPush*4 && pushOut.Y <= 0 {
+		// This looks like a wall collision, try to step up
+		// Calculate how high the obstacle is relative to player's feet
+		kinFeetY := colKin.GetCenter().Y - colKin.Size.Y/2
+		staticTopY := colStatic.GetCenter().Y + colStatic.Size.Y/2
+
+		stepHeight := staticTopY - kinFeetY
+
+		// If step is climbable (within max step height)
+		if stepHeight > 0 && stepHeight <= MaxStepHeight {
+			// Check if there's room above the step for the player
+			// Create OBB at test position (stepped up)
+			testOBB := NewOBBFromBox(
+				rl.Vector3{
+					X: colKin.GetCenter().X,
+					Y: colKin.GetCenter().Y + stepHeight + 0.01,
+					Z: colKin.GetCenter().Z,
+				},
+				colKin.Size,
+				kinematic.WorldRotation(),
+				kinematic.WorldScale(),
+			)
+
+			// Check if test position collides with the static object
+			testPush := testOBB.ResolveOBB(obbStatic)
+			if testPush.X == 0 && testPush.Y == 0 && testPush.Z == 0 {
+				// No collision at stepped-up position - do the step!
+				kinematic.Transform.Position.Y += stepHeight + 0.01
+				return
+			}
+		}
+	}
+
+	// Normal push-out (not a step or can't climb)
 	kinematic.Transform.Position = rl.Vector3Add(kinematic.Transform.Position, pushOut)
 }
 

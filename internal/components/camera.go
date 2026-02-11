@@ -1,6 +1,7 @@
 package components
 
 import (
+	"math"
 	"test3d/internal/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -69,14 +70,28 @@ func (c *Camera) GetRaylibCamera() rl.Camera3D {
 		return rl.Camera3D{}
 	}
 
-	// Get eye position (feet + eye height)
+	// Get eye position from world position
 	eyePos := g.WorldPosition()
 
-	// Look for any LookProvider component (FPSController, etc.)
-	lookProvider := engine.FindComponent[engine.LookProvider](g)
+	// Look for any LookProvider component on this object or parents
+	var lookProvider engine.LookProvider
+	for obj := g; obj != nil; obj = obj.Parent {
+		if lp := engine.FindComponent[engine.LookProvider](obj); lp != nil {
+			lookProvider = lp
+			break
+		}
+	}
 
+	// If camera is a child, use parent's position + eye height offset
+	// If camera is on the same object as LookProvider, add eye height
 	if lookProvider != nil {
-		eyePos.Y += lookProvider.GetEyeHeight()
+		if g.Parent != nil {
+			// Camera is a child - use parent position + local offset
+			eyePos = g.WorldPosition()
+		} else {
+			// Camera is on same object as controller - add eye height
+			eyePos.Y += lookProvider.GetEyeHeight()
+		}
 	}
 
 	var target rl.Vector3
@@ -85,8 +100,16 @@ func (c *Camera) GetRaylibCamera() rl.Camera3D {
 		lookDir := rl.Vector3{X: x, Y: y, Z: z}
 		target = rl.Vector3Add(eyePos, lookDir)
 	} else {
-		// Default: look forward along Z
-		target = rl.Vector3Add(eyePos, rl.Vector3{X: 0, Y: 0, Z: 1})
+		// Default: look forward based on object's rotation
+		rot := g.WorldRotation()
+		// Convert euler to forward vector (simplified - just yaw for now)
+		yawRad := float64(rot.Y) * 3.14159265 / 180.0
+		forward := rl.Vector3{
+			X: float32(-sin(yawRad)),
+			Y: 0,
+			Z: float32(-cos(yawRad)),
+		}
+		target = rl.Vector3Add(eyePos, forward)
 	}
 
 	return rl.Camera3D{
@@ -96,4 +119,12 @@ func (c *Camera) GetRaylibCamera() rl.Camera3D {
 		Fovy:       c.FOV,
 		Projection: c.Projection,
 	}
+}
+
+func sin(x float64) float64 {
+	return math.Sin(x)
+}
+
+func cos(x float64) float64 {
+	return math.Cos(x)
 }

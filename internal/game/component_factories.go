@@ -24,6 +24,7 @@ var editorComponentTypes = []ComponentType{
 	{"SphereCollider", createSphereCollider},
 	{"MeshCollider", createMeshCollider},
 	{"Rigidbody", createRigidbody},
+	{"CharacterController", createCharacterController},
 	{"DirectionalLight", createDirectionalLight},
 	{"PointLight", createPointLight},
 	{"Camera", createCamera},
@@ -78,4 +79,8 @@ func createPointLight(w *world.World, g *engine.GameObject) engine.Component {
 
 func createCamera(w *world.World, g *engine.GameObject) engine.Component {
 	return components.NewCamera()
+}
+
+func createCharacterController(w *world.World, g *engine.GameObject) engine.Component {
+	return components.NewCharacterController()
 }

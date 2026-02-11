@@ -724,6 +724,32 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		}
 		y += fieldH + 6
 
+	case *components.CharacterController:
+		// Height
+		drawTextEx(editorFont, "Height", indent, y+4, 15, colorTextMuted)
+		comp.Height = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("cc%d.height", compIdx), comp.Height)
+		y += fieldH + 2
+
+		// Radius
+		drawTextEx(editorFont, "Radius", indent, y+4, 15, colorTextMuted)
+		comp.Radius = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("cc%d.radius", compIdx), comp.Radius)
+		y += fieldH + 2
+
+		// Step Height
+		drawTextEx(editorFont, "Step", indent, y+4, 15, colorTextMuted)
+		comp.StepHeight = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("cc%d.step", compIdx), comp.StepHeight)
+		y += fieldH + 2
+
+		// Gravity
+		drawTextEx(editorFont, "Gravity", indent, y+4, 15, colorTextMuted)
+		comp.Gravity = e.drawFloatField(indent+labelW, y, fieldW, fieldH, fmt.Sprintf("cc%d.grav", compIdx), comp.Gravity)
+		y += fieldH + 4
+
+		// UseGravity checkbox
+		gravityBounds := rl.Rectangle{X: float32(indent), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		comp.UseGravity = gui.CheckBox(gravityBounds, "Use Gravity", comp.UseGravity)
+		y += fieldH + 6
+
 	case *components.Rigidbody:
 		// Mass
 		drawTextEx(editorFont, "Mass", indent, y+4, 15, colorTextMuted)

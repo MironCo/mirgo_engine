@@ -192,93 +192,164 @@ func (e *Editor) updateDrag(ray rl.Ray) {
 
 // Draw3D draws selection wireframes and gizmo. Call inside BeginMode3D/EndMode3D.
 func (e *Editor) Draw3D() {
-	// Draw point light gizmos for all point lights (not just selected)
+	// Ensure depth testing is enabled for component gizmos (colliders, lights, cameras)
+	// so they render correctly in 3D space
+	rl.EnableDepthTest()
+
+	// Draw component gizmos for all objects (depth-tested)
 	for _, g := range e.world.Scene.GameObjects {
-		if pl := engine.GetComponent[*components.PointLight](g); pl != nil {
-			pos := pl.GetPosition()
-			// Draw small sphere at light position
-			rl.DrawSphere(pos, 0.15, pl.Color)
-			// Draw radius wireframe
-			rl.DrawSphereWires(pos, pl.Radius, 8, 8, rl.Fade(pl.Color, 0.3))
-		}
-
-		// Debug: draw bounding boxes for objects without colliders
-		if engine.GetComponent[*components.BoxCollider](g) == nil &&
-			engine.GetComponent[*components.SphereCollider](g) == nil &&
-			engine.GetComponent[*components.MeshCollider](g) == nil {
-			if mr := engine.GetComponent[*components.ModelRenderer](g); mr != nil {
-				bounds := rl.GetModelBoundingBox(mr.Model)
-				pos := g.WorldPosition()
-				scale := g.WorldScale()
-
-				// Calculate size from bounds (always positive)
-				size := rl.Vector3{
-					X: (bounds.Max.X - bounds.Min.X) * absF(scale.X),
-					Y: (bounds.Max.Y - bounds.Min.Y) * absF(scale.Y),
-					Z: (bounds.Max.Z - bounds.Min.Z) * absF(scale.Z),
-				}
-
-				// Bounding box is centered at object position
-				rl.DrawCubeWiresV(pos, size, rl.Magenta)
-			}
-		}
+		e.drawAlwaysOnGizmos(g)
 	}
 
+	// Flush the depth-tested gizmos before switching modes
+	rl.DrawRenderBatchActive()
+
+	// Draw transform gizmo for selected object (always on top)
+	e.drawSelectionGizmo()
+}
+
+// drawAlwaysOnGizmos draws gizmos that are always visible (not just when selected)
+func (e *Editor) drawAlwaysOnGizmos(g *engine.GameObject) {
+	isSelected := g == e.Selected
+
+	// Point lights - always show
+	if pl := engine.GetComponent[*components.PointLight](g); pl != nil {
+		pos := pl.GetPosition()
+		rl.DrawSphere(pos, 0.15, pl.Color)
+		rl.DrawSphereWires(pos, pl.Radius, 8, 8, rl.Fade(pl.Color, 0.3))
+	}
+
+	// Box colliders - always show (green, yellow if selected)
+	if box := engine.GetComponent[*components.BoxCollider](g); box != nil {
+		center := box.GetCenter()
+		rot := g.WorldRotation()
+		color := rl.Fade(rl.Green, 0.5)
+		if isSelected {
+			color = rl.Yellow
+		}
+		drawRotatedBoxWires(center, box.GetWorldSize(), rot, color)
+	}
+
+	// Sphere colliders - always show
+	if sphere := engine.GetComponent[*components.SphereCollider](g); sphere != nil {
+		center := sphere.GetCenter()
+		color := rl.Fade(rl.Green, 0.5)
+		if isSelected {
+			color = rl.Yellow
+		}
+		rl.DrawSphereWires(center, sphere.Radius, 8, 8, color)
+	}
+
+	// Character controllers - always show (green wireframe)
+	if cc := engine.GetComponent[*components.CharacterController](g); cc != nil {
+		pos := g.WorldPosition()
+		size := rl.Vector3{
+			X: cc.Radius * 2,
+			Y: cc.Height,
+			Z: cc.Radius * 2,
+		}
+		color := rl.Fade(rl.Green, 0.6)
+		if isSelected {
+			color = rl.Green
+		}
+		rl.DrawCubeWiresV(pos, size, color)
+	}
+
+	// Cameras - always show frustum
+	if cam := engine.GetComponent[*components.Camera](g); cam != nil {
+		e.drawCameraGizmo(g, cam, isSelected)
+	}
+
+	// Recurse into children
+	for _, child := range g.Children {
+		e.drawAlwaysOnGizmos(child)
+	}
+}
+
+// drawCameraGizmo draws the camera frustum wireframe
+func (e *Editor) drawCameraGizmo(g *engine.GameObject, cam *components.Camera, isSelected bool) {
+	pos := g.WorldPosition()
+	rot := g.WorldRotation()
+
+	// Get forward direction from rotation
+	yawRad := float64(rot.Y) * 3.14159265 / 180.0
+	pitchRad := float64(rot.X) * 3.14159265 / 180.0
+	forward := rl.Vector3{
+		X: float32(-math.Sin(yawRad) * math.Cos(pitchRad)),
+		Y: float32(-math.Sin(pitchRad)),
+		Z: float32(-math.Cos(yawRad) * math.Cos(pitchRad)),
+	}
+	right := rl.Vector3{
+		X: float32(math.Cos(yawRad)),
+		Y: 0,
+		Z: float32(-math.Sin(yawRad)),
+	}
+	up := rl.Vector3CrossProduct(right, forward)
+
+	// Draw frustum lines
+	nearDist := float32(0.5)
+	farDist := float32(2.0)
+	fovRad := float64(cam.FOV) * 3.14159265 / 180.0
+	aspect := float32(1.7)
+	nearH := nearDist * float32(math.Tan(fovRad/2))
+	nearW := nearH * aspect
+	farH := farDist * float32(math.Tan(fovRad/2))
+	farW := farH * aspect
+
+	// Near plane corners
+	nearCenter := rl.Vector3Add(pos, rl.Vector3Scale(forward, nearDist))
+	nearTL := rl.Vector3Add(nearCenter, rl.Vector3Add(rl.Vector3Scale(up, nearH), rl.Vector3Scale(right, -nearW)))
+	nearTR := rl.Vector3Add(nearCenter, rl.Vector3Add(rl.Vector3Scale(up, nearH), rl.Vector3Scale(right, nearW)))
+	nearBL := rl.Vector3Add(nearCenter, rl.Vector3Add(rl.Vector3Scale(up, -nearH), rl.Vector3Scale(right, -nearW)))
+	nearBR := rl.Vector3Add(nearCenter, rl.Vector3Add(rl.Vector3Scale(up, -nearH), rl.Vector3Scale(right, nearW)))
+
+	// Far plane corners
+	farCenter := rl.Vector3Add(pos, rl.Vector3Scale(forward, farDist))
+	farTL := rl.Vector3Add(farCenter, rl.Vector3Add(rl.Vector3Scale(up, farH), rl.Vector3Scale(right, -farW)))
+	farTR := rl.Vector3Add(farCenter, rl.Vector3Add(rl.Vector3Scale(up, farH), rl.Vector3Scale(right, farW)))
+	farBL := rl.Vector3Add(farCenter, rl.Vector3Add(rl.Vector3Scale(up, -farH), rl.Vector3Scale(right, -farW)))
+	farBR := rl.Vector3Add(farCenter, rl.Vector3Add(rl.Vector3Scale(up, -farH), rl.Vector3Scale(right, farW)))
+
+	lineColor := rl.Fade(rl.White, 0.5)
+	coneColor := rl.Fade(rl.Yellow, 0.5)
+	if isSelected {
+		lineColor = rl.White
+		coneColor = rl.Yellow
+	}
+
+	// Draw near plane
+	rl.DrawLine3D(nearTL, nearTR, lineColor)
+	rl.DrawLine3D(nearTR, nearBR, lineColor)
+	rl.DrawLine3D(nearBR, nearBL, lineColor)
+	rl.DrawLine3D(nearBL, nearTL, lineColor)
+
+	// Draw far plane
+	rl.DrawLine3D(farTL, farTR, lineColor)
+	rl.DrawLine3D(farTR, farBR, lineColor)
+	rl.DrawLine3D(farBR, farBL, lineColor)
+	rl.DrawLine3D(farBL, farTL, lineColor)
+
+	// Draw edges connecting near to far
+	rl.DrawLine3D(nearTL, farTL, lineColor)
+	rl.DrawLine3D(nearTR, farTR, lineColor)
+	rl.DrawLine3D(nearBL, farBL, lineColor)
+	rl.DrawLine3D(nearBR, farBR, lineColor)
+
+	// Draw camera icon (small pyramid at position)
+	rl.DrawLine3D(pos, nearTL, coneColor)
+	rl.DrawLine3D(pos, nearTR, coneColor)
+	rl.DrawLine3D(pos, nearBL, coneColor)
+	rl.DrawLine3D(pos, nearBR, coneColor)
+}
+
+func (e *Editor) drawSelectionGizmo() {
 	if e.Selected == nil {
 		return
 	}
 
-	// Disable depth testing so gizmos always draw on top
-	rl.DrawRenderBatchActive() // Force flush of previous draw calls
+	// Disable depth testing so transform gizmo always draws on top
+	rl.DrawRenderBatchActive()
 	rl.DisableDepthTest()
-
-	// Selection wireframe
-	if box := engine.GetComponent[*components.BoxCollider](e.Selected); box != nil {
-		center := box.GetCenter()
-		rot := e.Selected.WorldRotation()
-		drawRotatedBoxWires(center, box.GetWorldSize(), rot, rl.Yellow)
-	} else if sphere := engine.GetComponent[*components.SphereCollider](e.Selected); sphere != nil {
-		center := sphere.GetCenter()
-		rl.DrawSphereWires(center, sphere.Radius, 8, 8, rl.Yellow)
-	} else if mesh := engine.GetComponent[*components.MeshCollider](e.Selected); mesh != nil && mesh.IsBuilt() {
-		// Draw BVH root bounds for mesh collider
-		bounds := mesh.GetBounds()
-		center := rl.Vector3{
-			X: (bounds.Min.X + bounds.Max.X) / 2,
-			Y: (bounds.Min.Y + bounds.Max.Y) / 2,
-			Z: (bounds.Min.Z + bounds.Max.Z) / 2,
-		}
-		size := rl.Vector3{
-			X: bounds.Max.X - bounds.Min.X,
-			Y: bounds.Max.Y - bounds.Min.Y,
-			Z: bounds.Max.Z - bounds.Min.Z,
-		}
-		rl.DrawCubeWiresV(center, size, rl.Yellow)
-	} else if pl := engine.GetComponent[*components.PointLight](e.Selected); pl != nil {
-		// Highlight selected point light
-		pos := pl.GetPosition()
-		rl.DrawSphereWires(pos, pl.Radius, 12, 12, rl.Yellow)
-	} else if mr := engine.GetComponent[*components.ModelRenderer](e.Selected); mr != nil {
-		// Draw model bounding box for objects without colliders
-		bounds := rl.GetModelBoundingBox(mr.Model)
-		pos := e.Selected.WorldPosition()
-		scale := e.Selected.WorldScale()
-
-		// Calculate world-space bounding box size
-		size := rl.Vector3{
-			X: (bounds.Max.X - bounds.Min.X) * scale.X,
-			Y: (bounds.Max.Y - bounds.Min.Y) * scale.Y,
-			Z: (bounds.Max.Z - bounds.Min.Z) * scale.Z,
-		}
-		// Calculate center offset
-		localCenter := rl.Vector3{
-			X: (bounds.Min.X + bounds.Max.X) / 2 * scale.X,
-			Y: (bounds.Min.Y + bounds.Max.Y) / 2 * scale.Y,
-			Z: (bounds.Min.Z + bounds.Max.Z) / 2 * scale.Z,
-		}
-		worldCenter := rl.Vector3Add(pos, localCenter)
-		rl.DrawCubeWiresV(worldCenter, size, rl.Yellow)
-	}
 
 	// Transform gizmo
 	center := e.Selected.WorldPosition()
