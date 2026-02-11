@@ -2,6 +2,7 @@ package physics
 
 import (
 	"log"
+	"math"
 	"test3d/internal/components"
 	"test3d/internal/compute"
 	"test3d/internal/engine"
@@ -18,6 +19,77 @@ func cross(a, b rl.Vector3) rl.Vector3 {
 		Y: a.Z*b.X - a.X*b.Z,
 		Z: a.X*b.Y - a.Y*b.X,
 	}
+}
+
+// applyBoxFlatteningTorque applies corrective torque to rotate boxes toward their nearest flat face
+func applyBoxFlatteningTorque(obj *engine.GameObject, rb *components.Rigidbody, box *components.BoxCollider, deltaTime float32) {
+	// Only apply when box is nearly at rest and grounded
+	if rl.Vector3Length(rb.Velocity) > 3.0 {
+		return // Moving too fast, let physics play out naturally
+	}
+	if rb.Velocity.Y < -1.0 || rb.Velocity.Y > 1.0 {
+		return // Not grounded (falling or jumping)
+	}
+
+	// Get all 6 face normals in world space using quaternion
+	quat := obj.Transform.GetQuaternion()
+	worldUp := rl.Vector3{X: 0, Y: 1, Z: 0}
+
+	// Box's 6 face normals in local space
+	localFaces := []rl.Vector3{
+		{X: 0, Y: 1, Z: 0},  // Top
+		{X: 0, Y: -1, Z: 0}, // Bottom
+		{X: 1, Y: 0, Z: 0},  // Right
+		{X: -1, Y: 0, Z: 0}, // Left
+		{X: 0, Y: 0, Z: 1},  // Front
+		{X: 0, Y: 0, Z: -1}, // Back
+	}
+
+	// Find which face is closest to pointing up
+	var bestFaceLocal rl.Vector3
+	bestDot := float32(-2.0)
+
+	for _, localFace := range localFaces {
+		worldFace := rl.Vector3RotateByQuaternion(localFace, quat)
+		dot := rl.Vector3DotProduct(worldFace, worldUp)
+		if dot > bestDot {
+			bestDot = dot
+			bestFaceLocal = localFace
+		}
+	}
+
+	// If already flat enough, don't apply torque
+	if bestDot > 0.95 {
+		return
+	}
+
+	// Calculate the rotation axis to align the best face with world up
+	bestFaceWorld := rl.Vector3RotateByQuaternion(bestFaceLocal, quat)
+	rotationAxis := rl.Vector3CrossProduct(bestFaceWorld, worldUp)
+	axisLength := rl.Vector3Length(rotationAxis)
+
+	if axisLength < 0.001 {
+		return // Already aligned
+	}
+
+	rotationAxis = rl.Vector3Scale(rotationAxis, 1.0/axisLength) // Normalize
+
+	// Calculate how far we are from upright (angle in radians)
+	angle := float32(math.Acos(float64(rl.Vector3DotProduct(bestFaceWorld, worldUp))))
+
+	// Apply corrective torque proportional to misalignment
+	// Stronger torque = faster correction
+	torqueStrength := angle * 150.0 * rb.Mass // Tune this multiplier
+	torque := rl.Vector3Scale(rotationAxis, torqueStrength)
+
+	// Convert torque to angular acceleration (degrees per second)
+	angularAccel := rl.Vector3Scale(torque, rl.Rad2deg)
+
+	// Apply to angular velocity
+	rb.AngularVelocity = rl.Vector3Add(
+		rb.AngularVelocity,
+		rl.Vector3Scale(angularAccel, deltaTime),
+	)
 }
 
 // Estimate contact point on object's surface given push direction
@@ -274,6 +346,11 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 			damping = 0
 		}
 		rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, damping)
+
+		// Box flattening: apply corrective torque to rotate boxes toward nearest flat orientation
+		if boxCollider := engine.GetComponent[*components.BoxCollider](obj); boxCollider != nil {
+			applyBoxFlatteningTorque(obj, rb, boxCollider, deltaTime)
+		}
 
 		// Check if object should go to sleep
 		rb.TrySleep(deltaTime)
