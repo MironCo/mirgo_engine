@@ -5,6 +5,7 @@ import (
 	"test3d/internal/assets"
 	"test3d/internal/audio"
 	"test3d/internal/components"
+	"test3d/internal/compute"
 	"test3d/internal/engine"
 	"test3d/internal/physics"
 	_ "test3d/internal/scripts"
@@ -37,6 +38,14 @@ func (w *World) Initialize() {
 	assets.Init()
 	audio.Init()
 	w.Renderer.Initialize(FloorSize)
+
+	// Initialize GPU compute (Metal on Mac, Vulkan on Linux/Windows)
+	if info, err := compute.Initialize(); err != nil {
+		log.Printf("Compute shaders unavailable: %v", err)
+	} else {
+		log.Printf("Compute: %s | %s | %s | %s", info.Backend, info.Vendor, info.Name, info.DeviceType)
+		w.PhysicsWorld.InitGPU()
+	}
 
 	// Load scene objects from JSON
 	if err := w.LoadScene(ScenePath); err != nil {
@@ -141,8 +150,12 @@ func (w *World) EditorRaycast(origin, direction rl.Vector3, maxDistance float32)
 
 func (w *World) Unload() {
 	w.Renderer.Unload(w.Scene.GameObjects)
+	w.PhysicsWorld.Release()
 	assets.Unload()
 	audio.Close()
+	if cs := compute.Get(); cs != nil {
+		cs.Release()
+	}
 }
 
 func (w *World) GetShader() rl.Shader {

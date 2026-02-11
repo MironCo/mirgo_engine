@@ -34,6 +34,7 @@ type Manager struct {
 	models    map[string]rl.Model
 	textures  map[string]rl.Texture2D
 	materials map[string]*Material
+	meshes    map[string]rl.Mesh // unused, kept for compatibility
 }
 
 // Color name mapping for materials
@@ -83,7 +84,41 @@ func Init() {
 		models:    make(map[string]rl.Model),
 		textures:  make(map[string]rl.Texture2D),
 		materials: make(map[string]*Material),
+		meshes:    make(map[string]rl.Mesh),
 	}
+}
+
+// GetSphereModel returns a cached sphere model. All spheres share this model.
+// Scale is applied via transform, not mesh generation.
+// The returned model should NOT be unloaded by the caller.
+func GetSphereModel() rl.Model {
+	if manager == nil {
+		Init()
+	}
+	key := "sphere_16_16"
+	if model, exists := manager.models[key]; exists {
+		return model
+	}
+	mesh := rl.GenMeshSphere(1.0, 16, 16) // unit sphere, scale via transform
+	model := rl.LoadModelFromMesh(mesh)
+	manager.models[key] = model
+	return model
+}
+
+// GetCubeModel returns a cached unit cube model.
+// The returned model should NOT be unloaded by the caller.
+func GetCubeModel() rl.Model {
+	if manager == nil {
+		Init()
+	}
+	key := "cube_1"
+	if model, exists := manager.models[key]; exists {
+		return model
+	}
+	mesh := rl.GenMeshCube(1.0, 1.0, 1.0)
+	model := rl.LoadModelFromMesh(mesh)
+	manager.models[key] = model
+	return model
 }
 
 func LoadModel(path string) rl.Model {
@@ -196,4 +231,5 @@ func Unload() {
 	manager.models = make(map[string]rl.Model)
 	manager.textures = make(map[string]rl.Texture2D)
 	manager.materials = make(map[string]*Material)
+	manager.meshes = make(map[string]rl.Mesh)
 }

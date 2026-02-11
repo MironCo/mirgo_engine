@@ -1,19 +1,19 @@
 {
   "windowWidth": 1512,
   "windowHeight": 823,
-  "windowX": 0,
+  "windowX": -1,
   "windowY": 65,
   "cameraPosition": {
-    "X": -4.812415,
-    "Y": 4.0590625,
-    "Z": 4.8356133
+    "X": -9.935996,
+    "Y": 9.891431,
+    "Z": -12.817077
   },
-  "cameraYaw": -11.780634,
-  "cameraPitch": -15.277727,
+  "cameraYaw": 81.10681,
+  "cameraPitch": -25.92536,
   "cameraMoveSpeed": 10.2,
   "scenePath": "assets/scenes/main.json",
-  "assetBrowserOpen": true,
-  "assetBrowserPath": "assets/materials",
+  "assetBrowserOpen": false,
+  "assetBrowserPath": "",
   "hierarchyWidth": 210,
-  "inspectorWidth": 282
+  "inspectorWidth": 310
 }

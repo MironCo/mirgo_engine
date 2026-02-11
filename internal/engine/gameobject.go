@@ -12,8 +12,11 @@ var uidCounter uint64
 
 type Transform struct {
 	Position rl.Vector3
-	Rotation rl.Vector3 // Euler angles in degrees
+	Rotation rl.Vector3 // Euler angles in degrees (XYZ order)
 	Scale    rl.Vector3
+
+	quaternion rl.Quaternion
+	quatDirty  bool
 }
 
 type GameObject struct {
@@ -35,9 +38,11 @@ func NewGameObject(name string) *GameObject {
 		Name:   name,
 		Active: true,
 		Transform: Transform{
-			Position: rl.Vector3{},
-			Rotation: rl.Vector3{},
-			Scale:    rl.Vector3{X: 1, Y: 1, Z: 1},
+			Position:   rl.Vector3{},
+			Rotation:   rl.Vector3{},
+			Scale:      rl.Vector3{X: 1, Y: 1, Z: 1},
+			quaternion: rl.Quaternion{X: 0, Y: 0, Z: 0, W: 1}, // Identity
+			quatDirty:  true, // Will convert from Euler on first GetQuaternion() call
 		},
 		components: make([]Component, 0),
 		Children:   make([]*GameObject, 0),
@@ -61,9 +66,11 @@ func NewGameObjectWithUID(name string, uid uint64) *GameObject {
 		Name:   name,
 		Active: true,
 		Transform: Transform{
-			Position: rl.Vector3{},
-			Rotation: rl.Vector3{},
-			Scale:    rl.Vector3{X: 1, Y: 1, Z: 1},
+			Position:   rl.Vector3{},
+			Rotation:   rl.Vector3{},
+			Scale:      rl.Vector3{X: 1, Y: 1, Z: 1},
+			quaternion: rl.Quaternion{X: 0, Y: 0, Z: 0, W: 1},
+			quatDirty:  true, // Will convert from Euler on first GetQuaternion() call
 		},
 		components: make([]Component, 0),
 		Children:   make([]*GameObject, 0),
@@ -225,4 +232,36 @@ func (g *GameObject) WorldScale() rl.Vector3 {
 		Y: ps.Y * g.Transform.Scale.Y,
 		Z: ps.Z * g.Transform.Scale.Z,
 	}
+}
+
+// GetQuaternion returns the quaternion representation of the rotation.
+// Converts from Euler angles if needed (lazy evaluation).
+func (t *Transform) GetQuaternion() rl.Quaternion {
+	if t.quatDirty {
+		radX := t.Rotation.X * rl.Deg2rad
+		radY := t.Rotation.Y * rl.Deg2rad
+		radZ := t.Rotation.Z * rl.Deg2rad
+
+		t.quaternion = rl.QuaternionFromEuler(radX, radY, radZ)
+		t.quatDirty = false
+	}
+	return t.quaternion
+}
+
+// SetQuaternion sets the rotation from a quaternion and updates Euler angles.
+func (t *Transform) SetQuaternion(q rl.Quaternion) {
+	t.quaternion = q
+	t.quatDirty = false
+
+	euler := rl.QuaternionToEuler(q)
+	t.Rotation = rl.Vector3{
+		X: euler.X * rl.Rad2deg,
+		Y: euler.Y * rl.Rad2deg,
+		Z: euler.Z * rl.Rad2deg,
+	}
+}
+
+// MarkRotationDirty marks that the Euler angles have changed and quaternion needs updating.
+func (t *Transform) MarkRotationDirty() {
+	t.quatDirty = true
 }

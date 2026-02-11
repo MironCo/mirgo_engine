@@ -195,7 +195,7 @@ func (g *Game) Draw() {
 
 	drawStart := time.Now()
 	rl.BeginMode3D(camera)
-	g.World.Renderer.DrawWithShadows(camera.Position, g.World.Scene.GameObjects)
+	g.World.Renderer.DrawWithShadows(camera, g.World.Scene.GameObjects)
 	if g.editor.Active {
 		g.editor.Draw3D()
 	}
@@ -244,5 +244,11 @@ func (g *Game) DrawUI() {
 		rl.DrawText(fmt.Sprintf("Shadows: %.2f ms", g.shadowMs), 10, 130, 16, rl.Green)
 		rl.DrawText(fmt.Sprintf("Draw:    %.2f ms", g.drawMs), 10, 150, 16, rl.Green)
 		rl.DrawText(fmt.Sprintf("Total:   %.2f ms", g.updateMs+g.shadowMs+g.drawMs), 10, 170, 16, rl.Lime)
+
+		// Frustum culling stats
+		drawn := g.World.Renderer.DrawnObjects
+		culled := g.World.Renderer.CulledObjects
+		total := drawn + culled
+		rl.DrawText(fmt.Sprintf("Drawn: %d / %d (culled: %d)", drawn, total, culled), 10, 195, 16, rl.SkyBlue)
 	}
 }

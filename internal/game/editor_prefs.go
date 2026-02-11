@@ -62,92 +62,145 @@ func (e *Editor) RestoreState() {
 
 // rebuildAndRelaunch saves state, rebuilds the binary, and relaunches
 func (e *Editor) rebuildAndRelaunch() {
-	e.saveMsg = "Compiling..."
-	e.saveMsgTime = rl.GetTime()
-
-	// Get the current executable path
-	execPath, err := os.Executable()
-	if err != nil {
-		e.saveMsg = fmt.Sprintf("Failed to get executable: %v", err)
+	// Don't allow rebuild while paused (scene has runtime modifications)
+	if e.Paused {
+		e.saveMsg = "Cannot rebuild while paused"
 		e.saveMsgTime = rl.GetTime()
 		return
 	}
 
-	// Build to a temp file first to check if it compiles
-	tempExec := execPath + ".new"
-	fmt.Println("Compiling...")
-
-	// Run gen-scripts first to ensure scripts are up to date
-	genCmd := exec.Command("go", "run", "./cmd/gen-scripts")
-	genOutput, genErr := genCmd.CombinedOutput()
-	if genErr != nil {
-		e.saveMsg = "Script generation failed!"
-		e.saveMsgTime = rl.GetTime()
-		fmt.Printf("Script generation error:\n%s\n", string(genOutput))
+	// Check if a rebuild is already in progress
+	e.rebuildMutex.Lock()
+	if e.rebuildInProgress {
+		e.rebuildMutex.Unlock()
 		return
 	}
+	e.rebuildInProgress = true
+	e.rebuildProgress = 0.0
+	e.rebuildStage = "Starting..."
+	e.rebuildMutex.Unlock()
 
-	cmd := exec.Command("go", "build", "-o", tempExec, "./cmd/test3d")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		// Build failed - show error, keep window open
-		e.saveMsg = "Build failed!"
-		e.saveMsgTime = rl.GetTime()
-		fmt.Printf("Build error:\n%s\n", string(output))
-		os.Remove(tempExec)
-		return
-	}
+	// Run rebuild asynchronously
+	go func() {
+		// Helper to update progress
+		updateProgress := func(progress float32, stage string) {
+			e.rebuildMutex.Lock()
+			e.rebuildProgress = progress
+			e.rebuildStage = stage
+			e.rebuildMutex.Unlock()
+		}
 
-	// Build succeeded - now save state and relaunch
-	e.saveMsg = "Reloading..."
-	e.saveMsgTime = rl.GetTime()
+		// Helper to handle errors
+		handleError := func(msg string) {
+			e.rebuildMutex.Lock()
+			e.rebuildInProgress = false
+			e.saveMsg = msg
+			e.saveMsgTime = rl.GetTime()
+			e.rebuildMutex.Unlock()
+		}
 
-	// Save the scene
-	if err := e.world.SaveScene(world.ScenePath); err != nil {
-		e.saveMsg = fmt.Sprintf("Save failed: %v", err)
-		e.saveMsgTime = rl.GetTime()
-		os.Remove(tempExec)
-		return
-	}
+		// Get the current executable path
+		execPath, err := os.Executable()
+		if err != nil {
+			handleError(fmt.Sprintf("Failed to get executable: %v", err))
+			return
+		}
 
-	// Save editor state for restoration
-	state := EditorRestoreState{
-		CameraPosition:  e.camera.Position,
-		CameraYaw:       e.camera.Yaw,
-		CameraPitch:     e.camera.Pitch,
-		CameraMoveSpeed: e.camera.MoveSpeed,
-		GizmoMode:       int(e.gizmoMode),
-	}
-	if e.Selected != nil {
-		state.SelectedUID = e.Selected.UID
-	}
-	stateJSON, _ := json.MarshalIndent(state, "", "  ")
-	if err := os.WriteFile(editorRestoreFile, stateJSON, 0644); err != nil {
-		e.saveMsg = fmt.Sprintf("Failed to save state: %v", err)
-		e.saveMsgTime = rl.GetTime()
-		os.Remove(tempExec)
-		return
-	}
+		// Build to a temp file first to check if it compiles
+		tempExec := execPath + ".new"
 
-	// Replace old binary with new one
-	if err := os.Rename(tempExec, execPath); err != nil {
-		e.saveMsg = fmt.Sprintf("Failed to replace binary: %v", err)
-		e.saveMsgTime = rl.GetTime()
-		os.Remove(tempExec)
-		os.Remove(editorRestoreFile)
-		return
-	}
+		// Stage 1: Generate scripts (0% - 20%)
+		updateProgress(0.0, "Generating scripts...")
+		fmt.Println("Generating scripts...")
 
-	fmt.Println("Relaunching...")
+		genCmd := exec.Command("go", "run", "./cmd/gen-scripts")
+		genOutput, genErr := genCmd.CombinedOutput()
+		if genErr != nil {
+			handleError("Script generation failed!")
+			fmt.Printf("Script generation error:\n%s\n", string(genOutput))
+			return
+		}
 
-	// Close the window before relaunching
-	rl.CloseWindow()
+		// Stage 2: Compile (20% - 80%)
+		updateProgress(0.2, "Compiling...")
+		fmt.Println("Compiling...")
 
-	// Replace current process with new binary
-	err = execNewBinary(execPath, []string{execPath, "--restore-editor"})
-	if err != nil {
-		fmt.Printf("Failed to exec: %v\n", err)
-		os.Exit(1)
+		cmd := exec.Command("go", "build", "-o", tempExec, "./cmd/test3d")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			// Build failed - show error, keep window open
+			handleError("Build failed!")
+			fmt.Printf("Build error:\n%s\n", string(output))
+			os.Remove(tempExec)
+			return
+		}
+
+		// Stage 3: Save state and prepare relaunch (80% - 100%)
+		updateProgress(0.8, "Preparing reload...")
+
+		// Save the scene
+		if err := e.world.SaveScene(world.ScenePath); err != nil {
+			handleError(fmt.Sprintf("Save failed: %v", err))
+			os.Remove(tempExec)
+			return
+		}
+
+		// Save editor state for restoration
+		state := EditorRestoreState{
+			CameraPosition:  e.camera.Position,
+			CameraYaw:       e.camera.Yaw,
+			CameraPitch:     e.camera.Pitch,
+			CameraMoveSpeed: e.camera.MoveSpeed,
+			GizmoMode:       int(e.gizmoMode),
+		}
+		if e.Selected != nil {
+			state.SelectedUID = e.Selected.UID
+		}
+		stateJSON, _ := json.MarshalIndent(state, "", "  ")
+		if err := os.WriteFile(editorRestoreFile, stateJSON, 0644); err != nil {
+			handleError(fmt.Sprintf("Failed to save state: %v", err))
+			os.Remove(tempExec)
+			return
+		}
+
+		// Replace old binary with new one
+		if err := os.Rename(tempExec, execPath); err != nil {
+			handleError(fmt.Sprintf("Failed to replace binary: %v", err))
+			os.Remove(tempExec)
+			os.Remove(editorRestoreFile)
+			return
+		}
+
+		updateProgress(1.0, "Reloading...")
+		fmt.Println("Relaunching...")
+
+		// Signal main thread to close window and relaunch
+		// (can't call CloseWindow from goroutine - must be on main thread)
+		e.rebuildMutex.Lock()
+		e.rebuildReadyToExit = true
+		e.rebuildExecPath = execPath
+		e.rebuildMutex.Unlock()
+	}()
+}
+
+// checkRebuildExit checks if rebuild is ready to relaunch and handles it on main thread
+func (e *Editor) checkRebuildExit() {
+	e.rebuildMutex.Lock()
+	if e.rebuildReadyToExit {
+		execPath := e.rebuildExecPath
+		e.rebuildMutex.Unlock()
+
+		// Close the window (must be on main thread)
+		rl.CloseWindow()
+
+		// Replace current process with new binary
+		err := execNewBinary(execPath, []string{execPath, "--restore-editor"})
+		if err != nil {
+			fmt.Printf("Failed to exec: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		e.rebuildMutex.Unlock()
 	}
 }
 

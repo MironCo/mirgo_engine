@@ -12,6 +12,13 @@ func init() {
 	})
 }
 
+// Sleep thresholds
+const (
+	SleepVelocityThreshold = 0.3  // units/sec - below this, object might sleep
+	SleepAngularThreshold  = 1.0  // deg/sec - below this, object might sleep
+	SleepTimeThreshold     = 0.3  // seconds of low velocity before sleeping
+)
+
 type Rigidbody struct {
 	engine.BaseComponent
 	Velocity        rl.Vector3
@@ -22,6 +29,11 @@ type Rigidbody struct {
 	AngularDamping  float32 // how fast rotation slows down
 	UseGravity      bool
 	IsKinematic     bool // moves but doesn't get pushed by physics
+
+	// Sleep state - sleeping objects skip physics simulation
+	IsSleeping    bool
+	sleepTimer    float32 // time spent below velocity threshold
+	CanSleep      bool    // whether this object can sleep (default true)
 }
 
 func NewRigidbody() *Rigidbody {
@@ -34,6 +46,41 @@ func NewRigidbody() *Rigidbody {
 		AngularDamping:  0.98, // slight damping each frame
 		UseGravity:      true,
 		IsKinematic:     false,
+		CanSleep:        true,
+	}
+}
+
+// Wake forces the rigidbody out of sleep state
+func (r *Rigidbody) Wake() {
+	r.IsSleeping = false
+	r.sleepTimer = 0
+}
+
+// TrySleep checks if the rigidbody should go to sleep based on velocity
+func (r *Rigidbody) TrySleep(deltaTime float32) {
+	if !r.CanSleep || r.IsSleeping {
+		return
+	}
+
+	// Check if velocities are below threshold
+	speed := rl.Vector3Length(r.Velocity)
+	angSpeed := rl.Vector3Length(r.AngularVelocity)
+
+	if speed < SleepVelocityThreshold && angSpeed < SleepAngularThreshold {
+		r.sleepTimer += deltaTime
+
+		// Apply extra damping when nearly at rest to reduce jitter
+		dampFactor := float32(0.9)
+		r.Velocity = rl.Vector3Scale(r.Velocity, dampFactor)
+		r.AngularVelocity = rl.Vector3Scale(r.AngularVelocity, dampFactor)
+
+		if r.sleepTimer >= SleepTimeThreshold {
+			r.IsSleeping = true
+			r.Velocity = rl.Vector3{}
+			r.AngularVelocity = rl.Vector3{}
+		}
+	} else {
+		r.sleepTimer = 0
 	}
 }
 
