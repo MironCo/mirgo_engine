@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Force raylib to use X11/XWayland instead of native Wayland
+# This works around NVIDIA EGL texture loading issues on Wayland
+
+# Force GLFW to use X11 platform via session type
+export XDG_SESSION_TYPE=x11
+
+# Force NVIDIA OpenGL
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+
+# Ensure X11 display is set
+export DISPLAY="${DISPLAY:-:0}"
+
+# Run with Wayland display unset
+env -u WAYLAND_DISPLAY ./test3d "$@"
