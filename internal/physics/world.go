@@ -81,7 +81,7 @@ type PhysicsWorld struct {
 
 // GPUBroadPhaseThreshold is the minimum object count before GPU broad-phase kicks in.
 // Below this, CPU spatial hashing is faster due to GPU overhead.
-const GPUBroadPhaseThreshold = 500
+const GPUBroadPhaseThreshold = 750
 
 // MaxPhysicsObjects is the maximum objects the GPU broad-phase can handle.
 const MaxPhysicsObjects = 50000
@@ -226,10 +226,15 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 	// Reset current frame collisions
 	p.currentCollisions = make(map[CollisionPair]bool)
 
-	// 1. Apply gravity and integrate velocity
+	// 1. Apply gravity and integrate velocity (skip sleeping objects)
 	for _, obj := range p.Objects {
 		rb := engine.GetComponent[*components.Rigidbody](obj)
 		if rb == nil {
+			continue
+		}
+
+		// Skip sleeping objects
+		if rb.IsSleeping {
 			continue
 		}
 
@@ -256,6 +261,9 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 			damping = 0
 		}
 		rb.AngularVelocity = rl.Vector3Scale(rb.AngularVelocity, damping)
+
+		// Check if object should go to sleep
+		rb.TrySleep(deltaTime)
 	}
 
 	// 2. Broad-phase collision detection
@@ -361,10 +369,18 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 	p.dispatchCollisionCallbacks()
 }
 
-// recordCollision marks a collision pair as active this frame
+// recordCollision marks a collision pair as active this frame and wakes sleeping objects
 func (p *PhysicsWorld) recordCollision(a, b *engine.GameObject) {
 	pair := makePair(a, b)
 	p.currentCollisions[pair] = true
+
+	// Wake sleeping rigidbodies on collision
+	if rbA := engine.GetComponent[*components.Rigidbody](a); rbA != nil && rbA.IsSleeping {
+		rbA.Wake()
+	}
+	if rbB := engine.GetComponent[*components.Rigidbody](b); rbB != nil && rbB.IsSleeping {
+		rbB.Wake()
+	}
 }
 
 // dispatchCollisionCallbacks sends OnCollisionEnter/Exit to handlers
@@ -413,6 +429,11 @@ func (p *PhysicsWorld) resolveCollision(a, b *engine.GameObject) {
 	rbA := engine.GetComponent[*components.Rigidbody](a)
 	rbB := engine.GetComponent[*components.Rigidbody](b)
 	if rbA == nil || rbB == nil {
+		return
+	}
+
+	// Skip if both objects are sleeping
+	if rbA.IsSleeping && rbB.IsSleeping {
 		return
 	}
 
