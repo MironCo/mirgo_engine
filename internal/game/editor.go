@@ -183,9 +183,11 @@ func (e *Editor) Pause(currentCam rl.Camera3D) {
 }
 
 func (e *Editor) Exit() {
-	// Save scene before entering play mode
-	if err := e.world.SaveScene(world.ScenePath); err != nil {
-		fmt.Printf("Warning: Failed to save scene before play mode: %v\n", err)
+	// Only save scene if we're in pure editor mode (not resuming from pause)
+	if !e.Paused {
+		if err := e.world.SaveScene(world.ScenePath); err != nil {
+			fmt.Printf("Warning: Failed to save scene before play mode: %v\n", err)
+		}
 	}
 
 	e.Active = false
@@ -215,8 +217,8 @@ func (e *Editor) Update(deltaTime float32) {
 		e.undo()
 	}
 
-	// Ctrl+S: save scene
-	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyS) {
+	// Ctrl+S: save scene - ONLY in pure editor mode (not paused)
+	if (rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyLeftSuper)) && rl.IsKeyPressed(rl.KeyS) && !e.Paused {
 		if err := e.world.SaveScene(world.ScenePath); err != nil {
 			e.saveMsg = fmt.Sprintf("Save failed: %v", err)
 		} else {

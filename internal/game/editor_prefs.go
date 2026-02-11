@@ -62,6 +62,13 @@ func (e *Editor) RestoreState() {
 
 // rebuildAndRelaunch saves state, rebuilds the binary, and relaunches
 func (e *Editor) rebuildAndRelaunch() {
+	// Don't allow rebuild while paused (scene has runtime modifications)
+	if e.Paused {
+		e.saveMsg = "Cannot rebuild while paused"
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
 	// Check if a rebuild is already in progress
 	e.rebuildMutex.Lock()
 	if e.rebuildInProgress {

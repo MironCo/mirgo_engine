@@ -2,7 +2,6 @@ package physics
 
 import (
 	"log"
-	"math"
 	"test3d/internal/components"
 	"test3d/internal/compute"
 	"test3d/internal/engine"
@@ -21,17 +20,17 @@ func cross(a, b rl.Vector3) rl.Vector3 {
 	}
 }
 
-// applyBoxFlatteningTorque applies corrective torque to rotate boxes toward their nearest flat face
+// applyBoxFlatteningTorque applies off-center gravity torque to naturally tip boxes toward flat faces
 func applyBoxFlatteningTorque(obj *engine.GameObject, rb *components.Rigidbody, box *components.BoxCollider, deltaTime float32) {
 	// Only apply when box is nearly at rest and grounded
-	if rl.Vector3Length(rb.Velocity) > 3.0 {
+	speed := rl.Vector3Length(rb.Velocity)
+	if speed > 2.0 {
 		return // Moving too fast, let physics play out naturally
 	}
-	if rb.Velocity.Y < -1.0 || rb.Velocity.Y > 1.0 {
+	if rb.Velocity.Y < -0.5 || rb.Velocity.Y > 0.5 {
 		return // Not grounded (falling or jumping)
 	}
 
-	// Get all 6 face normals in world space using quaternion
 	quat := obj.Transform.GetQuaternion()
 	worldUp := rl.Vector3{X: 0, Y: 1, Z: 0}
 
@@ -58,38 +57,39 @@ func applyBoxFlatteningTorque(obj *engine.GameObject, rb *components.Rigidbody, 
 		}
 	}
 
-	// If already flat enough, don't apply torque
-	if bestDot > 0.95 {
+	// If flat enough, we're done
+	if bestDot > 0.995 {
 		return
 	}
 
-	// Calculate the rotation axis to align the best face with world up
+	// Calculate the tipping torque from off-center gravity
+	// When tilted, gravity acts at center of mass but support is at the contact edge
+	// This creates a natural torque that tips the box
 	bestFaceWorld := rl.Vector3RotateByQuaternion(bestFaceLocal, quat)
-	rotationAxis := rl.Vector3CrossProduct(bestFaceWorld, worldUp)
-	axisLength := rl.Vector3Length(rotationAxis)
+
+	// The torque axis is perpendicular to both the face normal and world up
+	torqueAxis := rl.Vector3CrossProduct(bestFaceWorld, worldUp)
+	axisLength := rl.Vector3Length(torqueAxis)
 
 	if axisLength < 0.001 {
-		return // Already aligned
+		return
 	}
 
-	rotationAxis = rl.Vector3Scale(rotationAxis, 1.0/axisLength) // Normalize
+	torqueAxis = rl.Vector3Scale(torqueAxis, 1.0/axisLength)
 
-	// Calculate how far we are from upright (angle in radians)
-	angle := float32(math.Acos(float64(rl.Vector3DotProduct(bestFaceWorld, worldUp))))
+	// Torque magnitude based on how tilted we are (sin of tilt angle)
+	// More tilt = more torque, just like real physics
+	tiltAmount := axisLength // This is sin(angle) from the cross product
 
-	// Apply corrective torque proportional to misalignment
-	// Stronger torque = faster correction
-	torqueStrength := angle * 150.0 * rb.Mass // Tune this multiplier
-	torque := rl.Vector3Scale(rotationAxis, torqueStrength)
+	// Apply torque - gravity * lever arm * tilt
+	// Increased multiplier to overcome angular damping
+	gravityMag := float32(20.0) // Match world gravity
+	leverArm := (box.Size.X + box.Size.Y + box.Size.Z) / 6.0
+	torqueMag := gravityMag * leverArm * tiltAmount * 2.0
 
-	// Convert torque to angular acceleration (degrees per second)
-	angularAccel := rl.Vector3Scale(torque, rl.Rad2deg)
-
-	// Apply to angular velocity
-	rb.AngularVelocity = rl.Vector3Add(
-		rb.AngularVelocity,
-		rl.Vector3Scale(angularAccel, deltaTime),
-	)
+	// Apply as angular acceleration (in degrees)
+	angularAccel := rl.Vector3Scale(torqueAxis, torqueMag*deltaTime*rl.Rad2deg)
+	rb.AngularVelocity = rl.Vector3Add(rb.AngularVelocity, angularAccel)
 }
 
 // Estimate contact point on object's surface given push direction
@@ -339,6 +339,7 @@ func (p *PhysicsWorld) Update(deltaTime float32) {
 			obj.Transform.Rotation,
 			rl.Vector3Scale(rb.AngularVelocity, deltaTime),
 		)
+		obj.Transform.MarkRotationDirty() // Quaternion cache needs refresh
 
 		// Apply angular damping (time-based so it's framerate independent)
 		damping := float32(1.0) - (1.0-rb.AngularDamping)*deltaTime*60

@@ -47,6 +47,11 @@ func NewModelRendererFromFile(path string, color rl.Color) *ModelRenderer {
 func (m *ModelRenderer) SetShader(shader rl.Shader) {
 	m.shader = shader
 
+	// Guard against nil materials (model not yet loaded)
+	if m.Model.Materials == nil || m.Model.MaterialCount == 0 {
+		return
+	}
+
 	// Apply shader to ALL materials (GLTF models can have multiple)
 	materials := unsafe.Slice(m.Model.Materials, m.Model.MaterialCount)
 	for i := range materials {
@@ -55,7 +60,7 @@ func (m *ModelRenderer) SetShader(shader rl.Shader) {
 
 	// Only override color for generated meshes, not file-loaded models
 	// File-loaded models (GLTF) keep their original textures
-	if m.FilePath == "" {
+	if m.FilePath == "" && m.Model.Materials.Maps != nil {
 		m.Model.Materials.Maps.Color = m.Color
 	}
 }

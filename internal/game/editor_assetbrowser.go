@@ -491,6 +491,13 @@ func (e *Editor) spawnModelFromAsset(asset AssetEntry) {
 
 // openScene saves the current scene and loads a new one
 func (e *Editor) openScene(scenePath string) {
+	// Don't allow scene switching while paused (scene has runtime modifications)
+	if e.Paused {
+		e.saveMsg = "Cannot switch scenes while paused"
+		e.saveMsgTime = rl.GetTime()
+		return
+	}
+
 	// Don't reload if it's the same scene
 	if scenePath == world.ScenePath {
 		e.saveMsg = "Already editing this scene"
