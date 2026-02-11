@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"test3d/internal/components"
+	"test3d/internal/engine"
 	"test3d/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -211,6 +213,13 @@ func (g *Game) Draw() {
 }
 
 func (g *Game) DrawUI() {
+	// Draw UI canvases from the scene
+	for _, obj := range g.World.Scene.GameObjects {
+		if canvas := engine.GetComponent[*components.UICanvas](obj); canvas != nil {
+			canvas.Draw()
+		}
+	}
+
 	rl.DrawText("WASD to move, Space to jump, Mouse to look", 10, 10, 20, rl.DarkGray)
 	rl.DrawText("F1: debug | P: pause | Cmd+P: editor (reset)", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
