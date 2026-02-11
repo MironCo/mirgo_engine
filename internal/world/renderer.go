@@ -347,14 +347,15 @@ func (r *Renderer) updatePointLights(gameObjects []*engine.GameObject) {
 		countLoc := rl.GetShaderLocation(shader, "pointLightCount")
 		rl.SetUniform(countLoc, []int32{int32(count)}, int32(rl.ShaderUniformInt), 1)
 
+		// Use SetShaderValueV to set arrays of uniforms (V = vector/array version)
 		posLoc := rl.GetShaderLocation(shader, "pointLightPos")
-		rl.SetShaderValue(shader, posLoc, positions, rl.ShaderUniformVec3)
+		rl.SetShaderValueV(shader, posLoc, positions, rl.ShaderUniformVec3, MaxPointLights)
 
 		colorLoc := rl.GetShaderLocation(shader, "pointLightColor")
-		rl.SetShaderValue(shader, colorLoc, colors, rl.ShaderUniformVec3)
+		rl.SetShaderValueV(shader, colorLoc, colors, rl.ShaderUniformVec3, MaxPointLights)
 
 		radiusLoc := rl.GetShaderLocation(shader, "pointLightRadius")
-		rl.SetShaderValue(shader, radiusLoc, radii, rl.ShaderUniformFloat)
+		rl.SetShaderValueV(shader, radiusLoc, radii, rl.ShaderUniformFloat, MaxPointLights)
 	}
 }
 
