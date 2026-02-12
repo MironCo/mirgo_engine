@@ -4,6 +4,7 @@ test3d-linux
 mirgo-utils
 utilities/target/
 build/
+.editor_prefs.json
 
 # Generated scripts (source files are in assets/scripts/)
 internal/scripts/
@@ -12,9 +13,3 @@ internal/scripts/
 # Raylib examples (vendored for reference only)
 raylib-go/examples/
 
-# Ignore all models except rubber duck
-assets/models/*
-!assets/models/rubber_duck_toy_1k.gltf/
-
-# Ignore all scenes
-assets/scenes/
