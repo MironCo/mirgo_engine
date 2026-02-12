@@ -57,7 +57,6 @@ func (g *Game) Run(restoreEditor bool) {
 
 	// Initialize world after OpenGL context is created
 	g.World.Initialize()
-	defer g.World.Unload()
 
 	g.editor = NewEditor(g.World)
 
@@ -93,6 +92,10 @@ func (g *Game) Run(restoreEditor bool) {
 
 	// Save editor preferences before closing
 	g.editor.SavePrefs()
+
+	// Unload world resources BEFORE closing window (while OpenGL context is still valid)
+	g.World.Unload()
+
 	rl.CloseWindow()
 }
 
