@@ -1,6 +1,31 @@
 {
   "objects": [
     {
+      "uid": 9999,
+      "name": "ButtonManager",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "Script",
+          "name": "ButtonTester"
+        }
+      ]
+    },
+    {
       "uid": 7,
       "name": "Duck",
       "position": [
@@ -368,13 +393,6 @@
       "components": [
         {
           "type": "Script",
-          "name": "Shooter",
-          "props": {
-            "cooldown": 0.20000000298023224
-          }
-        },
-        {
-          "type": "Script",
           "name": "FPSController",
           "props": {
             "eye_height": 1.6,
@@ -393,6 +411,13 @@
           "stepHeight": 0.4,
           "type": "CharacterController",
           "useGravity": true
+        },
+        {
+          "type": "Script",
+          "name": "Shooter",
+          "props": {
+            "cooldown": 0.10460937023162842
+          }
         }
       ],
       "children": [
@@ -1054,8 +1079,8 @@
                 1
               ],
               "anchoredPosition": [
-                975.624,
-                -936.8739
+                905.5768,
+                -919.1582
               ],
               "pivot": [
                 0,
@@ -1063,14 +1088,14 @@
               ],
               "sizeDelta": [
                 600,
-                20
+                42.652344
               ],
               "type": "RectTransform"
             },
             {
               "alignment": 0,
               "color": "/////w==",
-              "fontSize": 20,
+              "fontSize": 25,
               "text": "WASD to move, Space to jump, Mouse to look",
               "type": "UIText"
             }
@@ -1121,9 +1146,116 @@
             {
               "alignment": 0,
               "color": "/////w==",
-              "fontSize": 20,
+              "fontSize": 28,
               "text": "F1: debug | P: pause | Cmd+P: editor (reset)",
               "type": "UIText"
+            }
+          ]
+        },
+        {
+          "uid": 1007,
+          "name": "TestButton",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0,
+                1
+              ],
+              "anchorMin": [
+                0,
+                1
+              ],
+              "anchoredPosition": [
+                50,
+                -50
+              ],
+              "pivot": [
+                0,
+                1
+              ],
+              "sizeDelta": [
+                150,
+                40
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "borderColor": "ZGRz/w==",
+              "borderWidth": 2,
+              "disabled": false,
+              "disabledColor": "KCgt/w==",
+              "hoverColor": "UFBf/w==",
+              "normalColor": "PDxG/w==",
+              "pressedColor": "ZGR4/w==",
+              "type": "UIButton"
+            }
+          ],
+          "children": [
+            {
+              "uid": 1008,
+              "name": "ButtonText",
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "components": [
+                {
+                  "anchorMax": [
+                    0,
+                    0
+                  ],
+                  "anchorMin": [
+                    0,
+                    0
+                  ],
+                  "anchoredPosition": [
+                    0,
+                    0
+                  ],
+                  "pivot": [
+                    0,
+                    0
+                  ],
+                  "sizeDelta": [
+                    150,
+                    40
+                  ],
+                  "type": "RectTransform"
+                },
+                {
+                  "alignment": 1,
+                  "color": "/////w==",
+                  "fontSize": 18,
+                  "text": "Click Me!",
+                  "type": "UIText"
+                }
+              ]
             }
           ]
         }

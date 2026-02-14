@@ -71,6 +71,17 @@ func (s *Scene) FindByTag(tag string) []*GameObject {
 	return result
 }
 
+// FindGameObjectByTag returns the first GameObject with the given tag, or nil if not found.
+// This is useful when you expect only one GameObject with a tag (e.g., "Player").
+func (s *Scene) FindGameObjectByTag(tag string) *GameObject {
+	for _, g := range s.GameObjects {
+		if g.HasTag(tag) {
+			return g
+		}
+	}
+	return nil
+}
+
 func (s *Scene) Start() {
 	for _, g := range s.GameObjects {
 		g.Start()

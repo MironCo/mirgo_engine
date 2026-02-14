@@ -265,3 +265,89 @@ func (t *Transform) SetQuaternion(q rl.Quaternion) {
 func (t *Transform) MarkRotationDirty() {
 	t.quatDirty = true
 }
+
+// GetComponentInChildren searches this GameObject and all children for a component of type T.
+// Returns the first matching component found, or zero value if not found.
+func GetComponentInChildren[T Component](g *GameObject) T {
+	var zero T
+
+	// Check this GameObject first
+	comp := GetComponent[T](g)
+	// Use reflection to check if it's non-nil (works for interfaces)
+	if any(comp) != nil {
+		return comp
+	}
+
+	// Recursively check children
+	for _, child := range g.Children {
+		comp = GetComponentInChildren[T](child)
+		if any(comp) != nil {
+			return comp
+		}
+	}
+
+	return zero
+}
+
+// GetComponentsInChildren searches this GameObject and all children for all components of type T.
+// Returns a slice of all matching components found.
+func GetComponentsInChildren[T Component](g *GameObject) []T {
+	var result []T
+
+	// Check this GameObject
+	comp := GetComponent[T](g)
+	if any(comp) != nil {
+		result = append(result, comp)
+	}
+
+	// Recursively check children
+	for _, child := range g.Children {
+		result = append(result, GetComponentsInChildren[T](child)...)
+	}
+
+	return result
+}
+
+// FindChildByName searches this GameObject's children (recursively) for a GameObject with the given name.
+// Returns the first match found, or nil if not found.
+func (g *GameObject) FindChildByName(name string) *GameObject {
+	for _, child := range g.Children {
+		if child.Name == name {
+			return child
+		}
+		// Recursively search child's children
+		if found := child.FindChildByName(name); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// FindChildByTag searches this GameObject's children (recursively) for a GameObject with the given tag.
+// Returns the first match found, or nil if not found.
+func (g *GameObject) FindChildByTag(tag string) *GameObject {
+	for _, child := range g.Children {
+		if child.HasTag(tag) {
+			return child
+		}
+		// Recursively search child's children
+		if found := child.FindChildByTag(tag); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// FindChildrenByTag searches this GameObject's children (recursively) for all GameObjects with the given tag.
+// Returns a slice of all matches found.
+func (g *GameObject) FindChildrenByTag(tag string) []*GameObject {
+	var result []*GameObject
+	for _, child := range g.Children {
+		if child.HasTag(tag) {
+			result = append(result, child)
+		}
+		// Recursively search child's children
+		result = append(result, child.FindChildrenByTag(tag)...)
+	}
+	return result
+}

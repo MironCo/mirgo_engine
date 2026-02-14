@@ -48,6 +48,9 @@ func (g *Game) Run(restoreEditor bool) {
 		rl.SetWindowPosition(prefs.WindowX, prefs.WindowY)
 	}
 
+	// Disable Escape key from closing the window (we'll use it for mouse capture toggle)
+	rl.SetExitKey(0)
+
 	rl.SetTargetFPS(120)
 
 	// Load the scene from prefs if available
@@ -103,6 +106,15 @@ func (g *Game) Update() {
 	// Mode toggles (always active)
 	if rl.IsKeyPressed(rl.KeyF1) {
 		g.DebugMode = !g.DebugMode
+	}
+
+	// Escape to toggle mouse capture (only in play mode)
+	if rl.IsKeyPressed(rl.KeyEscape) && !g.editor.Active {
+		if rl.IsCursorHidden() {
+			rl.EnableCursor()
+		} else {
+			rl.DisableCursor()
+		}
 	}
 
 	// Check for modifier keys

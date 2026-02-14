@@ -235,7 +235,11 @@ func generateScriptFile(script *ScriptInfo, sourceContent []byte, outputPath str
 
 	// Serializer function
 	f.WriteString(fmt.Sprintf("func %sSerializer(c engine.Component) map[string]any {\n", nameLower))
-	f.WriteString(fmt.Sprintf("\ts, ok := c.(*%s)\n\tif !ok {\n\t\treturn nil\n\t}\n", script.Name))
+	if len(script.Fields) > 0 {
+		f.WriteString(fmt.Sprintf("\ts, ok := c.(*%s)\n\tif !ok {\n\t\treturn nil\n\t}\n", script.Name))
+	} else {
+		f.WriteString(fmt.Sprintf("\t_, ok := c.(*%s)\n\tif !ok {\n\t\treturn nil\n\t}\n", script.Name))
+	}
 	f.WriteString("\treturn map[string]any{\n")
 
 	for _, field := range script.Fields {
@@ -246,7 +250,11 @@ func generateScriptFile(script *ScriptInfo, sourceContent []byte, outputPath str
 
 	// Applier function for live property editing
 	f.WriteString(fmt.Sprintf("func %sApplier(c engine.Component, propName string, value any) bool {\n", nameLower))
-	f.WriteString(fmt.Sprintf("\ts, ok := c.(*%s)\n\tif !ok {\n\t\treturn false\n\t}\n", script.Name))
+	if len(script.Fields) > 0 {
+		f.WriteString(fmt.Sprintf("\ts, ok := c.(*%s)\n\tif !ok {\n\t\treturn false\n\t}\n", script.Name))
+	} else {
+		f.WriteString(fmt.Sprintf("\t_, ok := c.(*%s)\n\tif !ok {\n\t\treturn false\n\t}\n", script.Name))
+	}
 	f.WriteString("\tswitch propName {\n")
 
 	for _, field := range script.Fields {

@@ -473,6 +473,79 @@ func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) floa
 	return value
 }
 
+// drawTextField draws a multiline text input field
+func (e *Editor) drawTextField(x, y, w, h int32, id string, value string) string {
+	mousePos := rl.GetMousePosition()
+	hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
+		mousePos.Y >= float32(y) && mousePos.Y <= float32(y+h)
+
+	editMode := e.activeInputID == id
+
+	// Background color
+	bgColor := colorBgElement
+	if editMode {
+		bgColor = colorBgActive
+	} else if hovered {
+		bgColor = colorBgHover
+	}
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, bgColor)
+	if editMode {
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, 1, colorAccent)
+	}
+
+	// Click to edit
+	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !editMode {
+		e.activeInputID = id
+		e.inputTextValue = value
+	}
+
+	// Text display/editing
+	if editMode {
+		// Draw text input with cursor
+		displayText := e.inputTextValue + "_"
+		drawTextEx(editorFontMono, displayText, x+6, y+4, 14, colorTextPrimary)
+
+		// Handle typing
+		for {
+			key := rl.GetCharPressed()
+			if key == 0 {
+				break
+			}
+			e.inputTextValue += string(rune(key))
+		}
+
+		// Backspace
+		if rl.IsKeyPressed(rl.KeyBackspace) && len(e.inputTextValue) > 0 {
+			e.inputTextValue = e.inputTextValue[:len(e.inputTextValue)-1]
+		}
+
+		// Enter or click outside to confirm
+		clickedOutside := rl.IsMouseButtonPressed(rl.MouseLeftButton) && !hovered
+		if rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) || clickedOutside || rl.IsKeyPressed(rl.KeyTab) {
+			value = e.inputTextValue
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+
+		// Escape to cancel
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+	} else {
+		// Display current value
+		displayText := value
+		if displayText == "" {
+			displayText = "(empty)"
+			drawTextEx(editorFontMono, displayText, x+6, y+4, 14, colorTextMuted)
+		} else {
+			drawTextEx(editorFontMono, displayText, x+6, y+4, 14, colorTextSecondary)
+		}
+	}
+
+	return value
+}
+
 // drawTextureField draws an editable text field for texture paths
 func (e *Editor) drawTextureField(x, y, w, h int32, id string, value string) string {
 	mousePos := rl.GetMousePosition()
@@ -813,6 +886,42 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		drawTextEx(editorFont, "Radius", indent, y+4, 15, colorTextMuted)
 		radiusBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
 		comp.Radius = gui.Slider(radiusBounds, "", fmt.Sprintf("%.1f", comp.Radius), comp.Radius, 1, 50)
+		y += fieldH + 6
+
+	case *components.UIText:
+		id := fmt.Sprintf("uitext%d", compIdx)
+
+		// Text content (multiline text field)
+		drawTextEx(editorFont, "Text", indent, y+4, 15, colorTextMuted)
+		y += 20
+		textFieldW := int32(200)
+		textFieldH := int32(60)
+		comp.Text = e.drawTextField(indent, y, textFieldW, textFieldH, id+".text", comp.Text)
+		y += textFieldH + 6
+
+		// Font size
+		drawTextEx(editorFont, "Font Size", indent, y+4, 15, colorTextMuted)
+		newSize := e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".size", float32(comp.FontSize))
+		comp.FontSize = int32(newSize)
+		y += fieldH + 4
+
+		// Alignment dropdown
+		drawTextEx(editorFont, "Alignment", indent, y+4, 15, colorTextMuted)
+		currentAlign := int32(comp.Alignment)
+		alignBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
+		newAlign := gui.ComboBox(alignBounds, "Left;Center;Right", currentAlign)
+		comp.Alignment = components.TextAlignment(newAlign)
+		y += fieldH + 6
+
+		// Color picker (RGB sliders)
+		drawTextEx(editorFont, "Color", indent, y+4, 15, colorTextMuted)
+		colorPreview := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(colorPreview, comp.Color)
+		rl.DrawRectangleLinesEx(colorPreview, 1, rl.Gray)
+		// R/G/B fields
+		comp.Color.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".r", float32(comp.Color.R)))
+		comp.Color.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".g", float32(comp.Color.G)))
+		comp.Color.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".b", float32(comp.Color.B)))
 		y += fieldH + 6
 
 	default:

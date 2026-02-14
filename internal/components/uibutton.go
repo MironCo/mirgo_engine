@@ -34,8 +34,8 @@ type UIButton struct {
 	State    ButtonState
 	Disabled bool
 
-	// Callback when clicked (set via code, not serialized)
-	OnClick func()
+	// Unity-style event - supports multiple listeners
+	OnClick engine.Event
 
 	// For detecting click (press and release on same button)
 	wasPressed bool
@@ -98,9 +98,7 @@ func (b *UIButton) HandleInput(rect rl.Rectangle, mousePos rl.Vector2, pressed, 
 
 		// Click detection: released while hovering and was pressed on this button
 		if released && b.wasPressed {
-			if b.OnClick != nil {
-				b.OnClick()
-			}
+			b.OnClick.Invoke()
 			b.wasPressed = false
 		}
 	} else {
