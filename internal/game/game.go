@@ -234,8 +234,6 @@ func (g *Game) DrawUI() {
 		}
 	}
 
-	rl.DrawText("WASD to move, Space to jump, Mouse to look", 10, 10, 20, rl.DarkGray)
-	rl.DrawText("F1: debug | P: pause | Cmd+P: editor (reset)", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 
 	// Crosshair

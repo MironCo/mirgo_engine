@@ -593,13 +593,49 @@ func (e *Editor) drawUIElementsForEdit(obj *engine.GameObject, parentRect rl.Rec
 		btn.Draw(screenRect)
 	}
 	if text := engine.GetComponent[*components.UIText](obj); text != nil {
-		text.Draw(screenRect)
+		e.drawUITextScaled(text, screenRect)
 	}
 
 	// Draw children
 	for _, child := range obj.Children {
 		e.drawUIElementsForEdit(child, currentRect)
 	}
+}
+
+// drawUITextScaled draws text scaled proportionally with zoom
+func (e *Editor) drawUITextScaled(text *components.UIText, rect rl.Rectangle) {
+	if text.Text == "" {
+		return
+	}
+
+	// Render text at original size, then use matrix transform to scale it
+	fontSize := text.FontSize
+	zoom := e.uiEditState.ViewZoom
+
+	// Measure text at original size
+	textWidth := float32(rl.MeasureText(text.Text, fontSize))
+	textHeight := float32(fontSize)
+
+	// Calculate position in unscaled space
+	var xUnscaled float32
+	switch text.Alignment {
+	case components.TextAlignLeft:
+		xUnscaled = 0
+	case components.TextAlignCenter:
+		xUnscaled = (rect.Width/zoom - textWidth) / 2
+	case components.TextAlignRight:
+		xUnscaled = rect.Width/zoom - textWidth
+	}
+
+	// Vertically center in unscaled space
+	yUnscaled := (rect.Height/zoom - textHeight) / 2
+
+	// Push matrix, scale, draw, pop
+	rl.PushMatrix()
+	rl.Translatef(rect.X, rect.Y, 0)
+	rl.Scalef(zoom, zoom, 1)
+	rl.DrawText(text.Text, int32(xUnscaled), int32(yUnscaled), fontSize, text.Color)
+	rl.PopMatrix()
 }
 
 // drawResizeHandles draws the 8 resize handles around a rect

@@ -1024,6 +1024,108 @@
               ]
             }
           ]
+        },
+        {
+          "uid": 1005,
+          "name": "ControlsText",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0,
+                1
+              ],
+              "anchorMin": [
+                0,
+                1
+              ],
+              "anchoredPosition": [
+                975.624,
+                -936.8739
+              ],
+              "pivot": [
+                0,
+                1
+              ],
+              "sizeDelta": [
+                600,
+                20
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "alignment": 0,
+              "color": "/////w==",
+              "fontSize": 20,
+              "text": "WASD to move, Space to jump, Mouse to look",
+              "type": "UIText"
+            }
+          ]
+        },
+        {
+          "uid": 1006,
+          "name": "DebugKeysText",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0,
+                1
+              ],
+              "anchorMin": [
+                0,
+                1
+              ],
+              "anchoredPosition": [
+                254.49146,
+                -936.89307
+              ],
+              "pivot": [
+                0,
+                1
+              ],
+              "sizeDelta": [
+                600,
+                20
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "alignment": 0,
+              "color": "/////w==",
+              "fontSize": 20,
+              "text": "F1: debug | P: pause | Cmd+P: editor (reset)",
+              "type": "UIText"
+            }
+          ]
         }
       ]
     }
