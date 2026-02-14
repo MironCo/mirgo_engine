@@ -1182,15 +1182,15 @@
               ],
               "anchoredPosition": [
                 50,
-                -50
+                -72.96045
               ],
               "pivot": [
                 0,
                 1
               ],
               "sizeDelta": [
-                150,
-                40
+                165.78143,
+                62.96045
               ],
               "type": "RectTransform"
             },
@@ -1235,8 +1235,8 @@
                     0
                   ],
                   "anchoredPosition": [
-                    0,
-                    0
+                    8.991394,
+                    10.383789
                   ],
                   "pivot": [
                     0,
@@ -1258,6 +1258,251 @@
               ]
             }
           ]
+        },
+        {
+          "uid": 10000,
+          "name": "AddScoreButton",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0.5,
+                0.5
+              ],
+              "anchorMin": [
+                0.5,
+                0.5
+              ],
+              "anchoredPosition": [
+                -633.6161,
+                402.56857
+              ],
+              "pivot": [
+                0.5,
+                0.5
+              ],
+              "sizeDelta": [
+                136.8888,
+                52.864532
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "borderColor": "ZGRz/w==",
+              "borderWidth": 1,
+              "disabled": false,
+              "disabledColor": "KCgt/w==",
+              "hoverColor": "UFBf/w==",
+              "normalColor": "PDxG/w==",
+              "pressedColor": "ZGR4/w==",
+              "type": "UIButton"
+            }
+          ],
+          "children": [
+            {
+              "uid": 10001,
+              "name": "AddScoreButtonText",
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "components": [
+                {
+                  "anchorMax": [
+                    0.5,
+                    0.5
+                  ],
+                  "anchorMin": [
+                    0.5,
+                    0.5
+                  ],
+                  "anchoredPosition": [
+                    2.0966187,
+                    0.6152954
+                  ],
+                  "pivot": [
+                    0.5,
+                    0.5
+                  ],
+                  "sizeDelta": [
+                    100,
+                    30
+                  ],
+                  "type": "RectTransform"
+                },
+                {
+                  "alignment": 0,
+                  "color": "/////w==",
+                  "fontSize": 20,
+                  "text": "Add Score",
+                  "type": "UIText"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "uid": 10002,
+          "name": "ResetScoreButton",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0.5,
+                0.5
+              ],
+              "anchorMin": [
+                0.5,
+                0.5
+              ],
+              "anchoredPosition": [
+                808.76746,
+                422.24707
+              ],
+              "pivot": [
+                0.5,
+                0.5
+              ],
+              "sizeDelta": [
+                136.44763,
+                61.09955
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "borderColor": "ZGRz/w==",
+              "borderWidth": 1,
+              "disabled": false,
+              "disabledColor": "KCgt/w==",
+              "hoverColor": "UFBf/w==",
+              "normalColor": "PDxG/w==",
+              "pressedColor": "ZGR4/w==",
+              "type": "UIButton"
+            }
+          ],
+          "children": [
+            {
+              "uid": 10003,
+              "name": "AddScoreButton",
+              "position": [
+                0,
+                0,
+                0
+              ],
+              "rotation": [
+                0,
+                0,
+                0
+              ],
+              "scale": [
+                1,
+                1,
+                1
+              ],
+              "components": [
+                {
+                  "anchorMax": [
+                    0.5,
+                    0.5
+                  ],
+                  "anchorMin": [
+                    0.5,
+                    0.5
+                  ],
+                  "anchoredPosition": [
+                    0,
+                    0
+                  ],
+                  "pivot": [
+                    0.5,
+                    0.5
+                  ],
+                  "sizeDelta": [
+                    100,
+                    30
+                  ],
+                  "type": "RectTransform"
+                },
+                {
+                  "alignment": 0,
+                  "color": "/////w==",
+                  "fontSize": 20,
+                  "text": "Reset Score",
+                  "type": "UIText"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uid": 10020,
+      "name": "GameObject",
+      "position": [
+        -0.254835,
+        2.2296214,
+        7.6007814
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ],
+      "components": [
+        {
+          "type": "Script",
+          "name": "ScoreManager",
+          "props": {
+            "add_button_name": "AddScoreButton",
+            "reset_button_name": "ResetScoreButton",
+            "score": 0,
+            "score_text_name": "ScoreText"
+          }
         }
       ]
     }

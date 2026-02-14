@@ -113,6 +113,11 @@ func (e *Editor) drawHierarchy() {
 			e.draggingHierarchy = true
 			e.draggedObject = g
 
+			// If in UI edit mode, also sync the UI edit state selection
+			if e.IsUIEditModeActive() {
+				e.uiEditState.SelectedElement = g
+			}
+
 			if isDoubleClick {
 				// Double-click: focus camera on object
 				e.focusOnObject(g)

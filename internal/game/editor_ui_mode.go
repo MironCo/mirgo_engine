@@ -111,8 +111,8 @@ func (e *Editor) UpdateUIEditMode() {
 		return
 	}
 
-	// Delete/Backspace to delete selected element
-	if (rl.IsKeyPressed(rl.KeyDelete) || rl.IsKeyPressed(rl.KeyBackspace)) && e.uiEditState.SelectedElement != nil {
+	// Cmd+Delete / Ctrl+Delete to delete selected element
+	if cmdOrCtrl && (rl.IsKeyPressed(rl.KeyDelete) || rl.IsKeyPressed(rl.KeyBackspace)) && e.uiEditState.SelectedElement != nil {
 		e.deleteUIElement(e.uiEditState.SelectedElement)
 		return
 	}
@@ -258,6 +258,7 @@ func (e *Editor) UpdateUIEditMode() {
 		} else {
 			// Clicked empty space - deselect
 			e.uiEditState.SelectedElement = nil
+			e.Selected = nil // Sync with main editor selection
 		}
 	}
 }
