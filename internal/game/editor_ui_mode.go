@@ -103,6 +103,20 @@ func (e *Editor) UpdateUIEditMode() {
 		return
 	}
 
+	cmdOrCtrl := rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)
+
+	// Cmd+D / Ctrl+D to duplicate selected element
+	if cmdOrCtrl && rl.IsKeyPressed(rl.KeyD) && e.uiEditState.SelectedElement != nil {
+		e.duplicateUIElement(e.uiEditState.SelectedElement)
+		return
+	}
+
+	// Cmd+Delete / Ctrl+Delete to delete selected element
+	if cmdOrCtrl && (rl.IsKeyPressed(rl.KeyDelete) || rl.IsKeyPressed(rl.KeyBackspace)) && e.uiEditState.SelectedElement != nil {
+		e.deleteUIElement(e.uiEditState.SelectedElement)
+		return
+	}
+
 	// Handle panning (middle mouse or right mouse drag)
 	if e.uiEditState.Panning {
 		// Stop panning when neither middle nor right mouse is held
@@ -174,7 +188,12 @@ func (e *Editor) UpdateUIEditMode() {
 		if rl.IsMouseButtonReleased(rl.MouseLeftButton) {
 			e.uiEditState.Dragging = false
 		} else {
-			e.updateUIElementDrag(canvasMousePos)
+			// Check if axis-locked (gizmo arrow drag)
+			if e.uiEditState.ResizeHandle == -2 || e.uiEditState.ResizeHandle == -3 {
+				e.updateUIElementAxisDrag(canvasMousePos)
+			} else {
+				e.updateUIElementDrag(canvasMousePos)
+			}
 		}
 		return
 	}
@@ -193,11 +212,17 @@ func (e *Editor) UpdateUIEditMode() {
 	e.uiEditState.HoveredElement = nil
 	e.uiEditState.HoveredHandle = -1
 
-	// Check resize handles first (if element selected)
+	// Check gizmo arrows first (if element selected)
 	if e.uiEditState.SelectedElement != nil {
-		handle := e.pickResizeHandle(canvasMousePos)
-		if handle >= 0 {
-			e.uiEditState.HoveredHandle = handle
+		gizmoHandle := e.pickGizmoArrow(canvasMousePos)
+		if gizmoHandle < 0 {
+			// If not hovering gizmo, check resize handles
+			handle := e.pickResizeHandle(canvasMousePos)
+			if handle >= 0 {
+				e.uiEditState.HoveredHandle = handle
+			}
+		} else {
+			e.uiEditState.HoveredHandle = gizmoHandle
 		}
 	}
 
@@ -208,9 +233,15 @@ func (e *Editor) UpdateUIEditMode() {
 
 	// Left click
 	if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-		// Check resize handles first
+		// Check gizmo arrows and resize handles
 		if e.uiEditState.SelectedElement != nil && e.uiEditState.HoveredHandle >= 0 {
-			e.startUIElementResize(canvasMousePos, e.uiEditState.HoveredHandle)
+			if e.uiEditState.HoveredHandle == -2 || e.uiEditState.HoveredHandle == -3 {
+				// Clicked on gizmo arrow - start axis-locked drag
+				e.startUIElementAxisDrag(canvasMousePos, e.uiEditState.HoveredHandle)
+			} else {
+				// Clicked on resize handle
+				e.startUIElementResize(canvasMousePos, e.uiEditState.HoveredHandle)
+			}
 			return
 		}
 
@@ -227,6 +258,7 @@ func (e *Editor) UpdateUIEditMode() {
 		} else {
 			// Clicked empty space - deselect
 			e.uiEditState.SelectedElement = nil
+			e.Selected = nil // Sync with main editor selection
 		}
 	}
 }
@@ -317,6 +349,46 @@ func (e *Editor) pickUIElementRecursive(mousePos rl.Vector2, obj *engine.GameObj
 }
 
 // pickResizeHandle returns which resize handle is under the mouse (-1 if none)
+// pickGizmoArrow checks if mouse is over X or Y axis arrow
+// Returns -2 for X axis, -3 for Y axis, -1 for none
+func (e *Editor) pickGizmoArrow(mousePos rl.Vector2) int {
+	if e.uiEditState.SelectedElement == nil {
+		return -1
+	}
+
+	rt := engine.GetComponent[*components.RectTransform](e.uiEditState.SelectedElement)
+	if rt == nil {
+		return -1
+	}
+
+	rect := rt.GetScreenRect()
+	centerX := rect.X + rect.Width/2
+	centerY := rect.Y + rect.Height/2
+
+	arrowLength := float32(80)
+	hitRadius := float32(12) // Hit detection radius around arrow line
+
+	// Check X axis (horizontal arrow)
+	xEndX := centerX + arrowLength
+	// Check if mouse is near the X arrow line
+	if mousePos.Y >= centerY-hitRadius && mousePos.Y <= centerY+hitRadius {
+		if mousePos.X >= centerX && mousePos.X <= xEndX+hitRadius {
+			return -2 // X axis
+		}
+	}
+
+	// Check Y axis (vertical arrow)
+	yEndY := centerY + arrowLength
+	// Check if mouse is near the Y arrow line
+	if mousePos.X >= centerX-hitRadius && mousePos.X <= centerX+hitRadius {
+		if mousePos.Y >= centerY && mousePos.Y <= yEndY+hitRadius {
+			return -3 // Y axis
+		}
+	}
+
+	return -1
+}
+
 func (e *Editor) pickResizeHandle(mousePos rl.Vector2) int {
 	if e.uiEditState.SelectedElement == nil {
 		return -1
@@ -384,6 +456,47 @@ func (e *Editor) updateUIElementDrag(mousePos rl.Vector2) {
 	rt.AnchoredPosition = rl.Vector2{
 		X: e.uiEditState.DragStartPos.X + delta.X,
 		Y: e.uiEditState.DragStartPos.Y + delta.Y,
+	}
+}
+
+// startUIElementAxisDrag begins dragging locked to X or Y axis
+func (e *Editor) startUIElementAxisDrag(mousePos rl.Vector2, axis int) {
+	rt := engine.GetComponent[*components.RectTransform](e.uiEditState.SelectedElement)
+	if rt == nil {
+		return
+	}
+
+	e.uiEditState.Dragging = true
+	e.uiEditState.DragStartMouse = mousePos
+	e.uiEditState.DragStartPos = rt.AnchoredPosition
+	e.uiEditState.ResizeHandle = axis // Store which axis (-2 for X, -3 for Y)
+}
+
+// updateUIElementAxisDrag updates position while axis-locked dragging
+func (e *Editor) updateUIElementAxisDrag(mousePos rl.Vector2) {
+	rt := engine.GetComponent[*components.RectTransform](e.uiEditState.SelectedElement)
+	if rt == nil {
+		return
+	}
+
+	delta := rl.Vector2{
+		X: mousePos.X - e.uiEditState.DragStartMouse.X,
+		Y: mousePos.Y - e.uiEditState.DragStartMouse.Y,
+	}
+
+	// Apply axis lock based on which arrow was clicked
+	if e.uiEditState.ResizeHandle == -2 {
+		// X axis only
+		rt.AnchoredPosition = rl.Vector2{
+			X: e.uiEditState.DragStartPos.X + delta.X,
+			Y: e.uiEditState.DragStartPos.Y, // Keep Y locked
+		}
+	} else if e.uiEditState.ResizeHandle == -3 {
+		// Y axis only
+		rt.AnchoredPosition = rl.Vector2{
+			X: e.uiEditState.DragStartPos.X, // Keep X locked
+			Y: e.uiEditState.DragStartPos.Y + delta.Y,
+		}
 	}
 }
 
@@ -506,6 +619,9 @@ func (e *Editor) Draw3DForUIMode() {
 			// Selection outline
 			rl.DrawRectangleLinesEx(screenRect, 2, colorAccent)
 
+			// Move gizmo (arrows at center) - pass canvas rect for proper sizing
+			e.drawMoveGizmo(rect)
+
 			// Resize handles
 			e.drawResizeHandles(screenRect)
 		}
@@ -593,13 +709,118 @@ func (e *Editor) drawUIElementsForEdit(obj *engine.GameObject, parentRect rl.Rec
 		btn.Draw(screenRect)
 	}
 	if text := engine.GetComponent[*components.UIText](obj); text != nil {
-		text.Draw(screenRect)
+		e.drawUITextScaled(text, screenRect)
 	}
 
 	// Draw children
 	for _, child := range obj.Children {
 		e.drawUIElementsForEdit(child, currentRect)
 	}
+}
+
+// drawUITextScaled draws text scaled proportionally with zoom
+func (e *Editor) drawUITextScaled(text *components.UIText, rect rl.Rectangle) {
+	if text.Text == "" {
+		return
+	}
+
+	// Render text at original size, then use matrix transform to scale it
+	fontSize := text.FontSize
+	zoom := e.uiEditState.ViewZoom
+
+	// Measure text at original size
+	textWidth := float32(rl.MeasureText(text.Text, fontSize))
+	textHeight := float32(fontSize)
+
+	// Calculate position in unscaled space
+	var xUnscaled float32
+	switch text.Alignment {
+	case components.TextAlignLeft:
+		xUnscaled = 0
+	case components.TextAlignCenter:
+		xUnscaled = (rect.Width/zoom - textWidth) / 2
+	case components.TextAlignRight:
+		xUnscaled = rect.Width/zoom - textWidth
+	}
+
+	// Vertically center in unscaled space
+	yUnscaled := (rect.Height/zoom - textHeight) / 2
+
+	// Push matrix, scale, draw, pop
+	rl.PushMatrix()
+	rl.Translatef(rect.X, rect.Y, 0)
+	rl.Scalef(zoom, zoom, 1)
+	rl.DrawText(text.Text, int32(xUnscaled), int32(yUnscaled), fontSize, text.Color)
+	rl.PopMatrix()
+}
+
+// drawMoveGizmo draws X/Y axis arrows for moving the element
+// Takes canvas-space rect, draws in screen space with fixed size
+func (e *Editor) drawMoveGizmo(canvasRect rl.Rectangle) {
+	// Gizmo at center of element in canvas space
+	canvasCenterX := canvasRect.X + canvasRect.Width/2
+	canvasCenterY := canvasRect.Y + canvasRect.Height/2
+
+	// Transform center to screen space
+	centerScreen := e.canvasToScreen(rl.Vector2{X: canvasCenterX, Y: canvasCenterY})
+	centerX := centerScreen.X
+	centerY := centerScreen.Y
+
+	// Fixed size in canvas space (scales with zoom like Unity)
+	arrowLength := float32(80)
+	arrowHeadSize := float32(12)
+
+	// X axis (red, horizontal)
+	xColor := rl.Red
+	if e.uiEditState.HoveredHandle == -2 { // -2 = X axis
+		xColor = rl.NewColor(255, 100, 100, 255)
+	}
+	// Arrow endpoint in canvas space, then transform to screen
+	xEndCanvas := rl.Vector2{X: canvasCenterX + arrowLength, Y: canvasCenterY}
+	xEndScreen := e.canvasToScreen(xEndCanvas)
+
+	// Arrow line
+	rl.DrawLineEx(
+		rl.Vector2{X: centerX, Y: centerY},
+		xEndScreen,
+		4, xColor,
+	)
+	// Arrow head (triangle) - calculate in screen space
+	headOffset := (xEndScreen.X - centerX) / arrowLength * arrowHeadSize
+	rl.DrawTriangle(
+		xEndScreen,
+		rl.Vector2{X: xEndScreen.X - headOffset, Y: xEndScreen.Y - headOffset/2},
+		rl.Vector2{X: xEndScreen.X - headOffset, Y: xEndScreen.Y + headOffset/2},
+		xColor,
+	)
+
+	// Y axis (green, vertical)
+	yColor := rl.Green
+	if e.uiEditState.HoveredHandle == -3 { // -3 = Y axis
+		yColor = rl.NewColor(100, 255, 100, 255)
+	}
+	// Arrow endpoint in canvas space, then transform to screen
+	yEndCanvas := rl.Vector2{X: canvasCenterX, Y: canvasCenterY + arrowLength}
+	yEndScreen := e.canvasToScreen(yEndCanvas)
+
+	// Arrow line
+	rl.DrawLineEx(
+		rl.Vector2{X: centerX, Y: centerY},
+		yEndScreen,
+		4, yColor,
+	)
+	// Arrow head (triangle) - calculate in screen space
+	headOffsetY := (yEndScreen.Y - centerY) / arrowLength * arrowHeadSize
+	rl.DrawTriangle(
+		yEndScreen,
+		rl.Vector2{X: yEndScreen.X - headOffsetY/2, Y: yEndScreen.Y - headOffsetY},
+		rl.Vector2{X: yEndScreen.X + headOffsetY/2, Y: yEndScreen.Y - headOffsetY},
+		yColor,
+	)
+
+	// Center circle
+	rl.DrawCircle(int32(centerX), int32(centerY), 8, rl.White)
+	rl.DrawCircleLines(int32(centerX), int32(centerY), 8, colorAccent)
 }
 
 // drawResizeHandles draws the 8 resize handles around a rect
@@ -656,6 +877,116 @@ func (e *Editor) setResizeCursor(handle int) {
 	default:
 		rl.SetMouseCursor(rl.MouseCursorDefault)
 	}
+}
+
+// duplicateUIElement duplicates a UI element and offsets it slightly
+func (e *Editor) duplicateUIElement(original *engine.GameObject) {
+	if original == nil {
+		return
+	}
+
+	// Create a new GameObject with same basic properties
+	duplicate := engine.NewGameObject(original.Name + " (Copy)")
+	duplicate.Tags = make([]string, len(original.Tags))
+	copy(duplicate.Tags, original.Tags)
+	duplicate.Transform.Position = original.Transform.Position
+	duplicate.Transform.Rotation = original.Transform.Rotation
+	duplicate.Transform.Scale = original.Transform.Scale
+
+	// Copy all components
+	for _, comp := range original.Components() {
+		// Try to serialize and deserialize the component
+		if serializable, ok := comp.(engine.Serializable); ok {
+			data := serializable.Serialize()
+
+			// Create new component of same type
+			typeName := serializable.TypeName()
+			newComp := engine.CreateComponent(typeName)
+			if newComp != nil {
+				newComp.Deserialize(data)
+				duplicate.AddComponent(newComp.(engine.Component))
+			}
+		}
+	}
+
+	// Offset RectTransform position slightly so it's visible
+	if rt := engine.GetComponent[*components.RectTransform](duplicate); rt != nil {
+		rt.AnchoredPosition.X += 20
+		rt.AnchoredPosition.Y -= 20
+	}
+
+	// Add to scene
+	e.world.Scene.AddGameObject(duplicate)
+
+	// If original has a parent, add duplicate to same parent
+	if original.Parent != nil {
+		original.Parent.AddChild(duplicate)
+	}
+
+	// Recursively duplicate children
+	for _, child := range original.Children {
+		e.duplicateUIElementRecursive(child, duplicate)
+	}
+
+	// Select the duplicate
+	e.uiEditState.SelectedElement = duplicate
+	e.Selected = duplicate
+
+	fmt.Printf("Duplicated UI element: %s -> %s\n", original.Name, duplicate.Name)
+}
+
+// duplicateUIElementRecursive duplicates a child element recursively
+func (e *Editor) duplicateUIElementRecursive(original *engine.GameObject, newParent *engine.GameObject) {
+	if original == nil {
+		return
+	}
+
+	duplicate := engine.NewGameObject(original.Name)
+	duplicate.Tags = make([]string, len(original.Tags))
+	copy(duplicate.Tags, original.Tags)
+	duplicate.Transform.Position = original.Transform.Position
+	duplicate.Transform.Rotation = original.Transform.Rotation
+	duplicate.Transform.Scale = original.Transform.Scale
+
+	// Copy components
+	for _, comp := range original.Components() {
+		if serializable, ok := comp.(engine.Serializable); ok {
+			data := serializable.Serialize()
+			typeName := serializable.TypeName()
+			newComp := engine.CreateComponent(typeName)
+			if newComp != nil {
+				newComp.Deserialize(data)
+				duplicate.AddComponent(newComp.(engine.Component))
+			}
+		}
+	}
+
+	// Add to scene and parent
+	e.world.Scene.AddGameObject(duplicate)
+	newParent.AddChild(duplicate)
+
+	// Recursively duplicate children
+	for _, child := range original.Children {
+		e.duplicateUIElementRecursive(child, duplicate)
+	}
+}
+
+// deleteUIElement removes a UI element and its children from the scene
+func (e *Editor) deleteUIElement(element *engine.GameObject) {
+	if element == nil {
+		return
+	}
+
+	// Clear selection if we're deleting the selected element
+	if e.uiEditState.SelectedElement == element {
+		e.uiEditState.SelectedElement = nil
+		e.Selected = nil
+	}
+
+	// Remove from scene (this also handles children)
+	e.world.Scene.RemoveGameObject(element)
+
+	fmt.Printf("Deleted UI element: %s\n", element.Name)
 }
 
 // IsUIEditModeActive returns true if the editor is in UI edit mode

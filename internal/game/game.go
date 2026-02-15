@@ -48,6 +48,9 @@ func (g *Game) Run(restoreEditor bool) {
 		rl.SetWindowPosition(prefs.WindowX, prefs.WindowY)
 	}
 
+	// Disable Escape key from closing the window (we'll use it for mouse capture toggle)
+	rl.SetExitKey(0)
+
 	rl.SetTargetFPS(120)
 
 	// Load the scene from prefs if available
@@ -108,6 +111,15 @@ func (g *Game) Update() {
 		g.DebugMode = !g.DebugMode
 	}
 
+	// Escape to toggle mouse capture (only in play mode)
+	if rl.IsKeyPressed(rl.KeyEscape) && !g.editor.Active {
+		if rl.IsCursorHidden() {
+			rl.EnableCursor()
+		} else {
+			rl.DisableCursor()
+		}
+	}
+
 	// Check for modifier keys
 	cmdOrCtrl := rl.IsKeyDown(rl.KeyLeftSuper) || rl.IsKeyDown(rl.KeyRightSuper) || rl.IsKeyDown(rl.KeyLeftControl) || rl.IsKeyDown(rl.KeyRightControl)
 	shift := rl.IsKeyDown(rl.KeyLeftShift) || rl.IsKeyDown(rl.KeyRightShift)
@@ -143,6 +155,10 @@ func (g *Game) Update() {
 		g.updateMs = float64(time.Since(updateStart).Microseconds()) / 1000.0
 		return
 	}
+
+	// Call Start() on any GameObjects that haven't started yet
+	// (e.g., after exiting editor mode with modified properties)
+	g.World.Scene.Start()
 
 	// Update world (physics + all game objects including player)
 	g.World.Update(deltaTime)
@@ -237,8 +253,6 @@ func (g *Game) DrawUI() {
 		}
 	}
 
-	rl.DrawText("WASD to move, Space to jump, Mouse to look", 10, 10, 20, rl.DarkGray)
-	rl.DrawText("F1: debug | P: pause | Cmd+P: editor (reset)", 10, 35, 20, rl.DarkGray)
 	rl.DrawFPS(10, 60)
 
 	// Crosshair

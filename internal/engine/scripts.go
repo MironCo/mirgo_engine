@@ -16,6 +16,7 @@ type scriptEntry struct {
 	factory    ScriptFactory
 	serializer ScriptSerializer
 	applier    ScriptApplier
+	fieldTypes map[string]string // Map of field name -> type (e.g., "target_button" -> "GameObjectRef")
 }
 
 var scriptRegistry = map[string]scriptEntry{}
@@ -35,7 +36,16 @@ func RegisterScriptWithApplier(name string, factory ScriptFactory, serializer Sc
 	if _, exists := scriptRegistry[name]; exists {
 		panic(fmt.Sprintf("script %q already registered", name))
 	}
-	scriptRegistry[name] = scriptEntry{factory: factory, serializer: serializer, applier: applier}
+	scriptRegistry[name] = scriptEntry{factory: factory, serializer: serializer, applier: applier, fieldTypes: nil}
+}
+
+// RegisterScriptWithMetadata registers a script with full metadata including field types.
+// This is used by the code generator to provide type information for inspector UI.
+func RegisterScriptWithMetadata(name string, factory ScriptFactory, serializer ScriptSerializer, applier ScriptApplier, fieldTypes map[string]string) {
+	if _, exists := scriptRegistry[name]; exists {
+		panic(fmt.Sprintf("script %q already registered", name))
+	}
+	scriptRegistry[name] = scriptEntry{factory: factory, serializer: serializer, applier: applier, fieldTypes: fieldTypes}
 }
 
 // CreateScript looks up a registered script by name and creates it with the given props.
@@ -105,4 +115,19 @@ func HasScriptApplier(c Component) bool {
 		}
 	}
 	return false
+}
+
+// GetScriptFieldType returns the type of a script field (e.g., "GameObjectRef").
+// Returns empty string if the field type is not registered.
+func GetScriptFieldType(c Component, fieldName string) string {
+	for _, entry := range scriptRegistry {
+		if entry.serializer == nil || entry.fieldTypes == nil {
+			continue
+		}
+		// Check if this is the right script
+		if entry.serializer(c) != nil {
+			return entry.fieldTypes[fieldName]
+		}
+	}
+	return ""
 }

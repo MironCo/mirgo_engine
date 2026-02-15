@@ -473,6 +473,79 @@ func (e *Editor) drawFloatField(x, y, w, h int32, id string, value float32) floa
 	return value
 }
 
+// drawTextField draws a multiline text input field
+func (e *Editor) drawTextField(x, y, w, h int32, id string, value string) string {
+	mousePos := rl.GetMousePosition()
+	hovered := mousePos.X >= float32(x) && mousePos.X <= float32(x+w) &&
+		mousePos.Y >= float32(y) && mousePos.Y <= float32(y+h)
+
+	editMode := e.activeInputID == id
+
+	// Background color
+	bgColor := colorBgElement
+	if editMode {
+		bgColor = colorBgActive
+	} else if hovered {
+		bgColor = colorBgHover
+	}
+	rl.DrawRectangleRounded(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, bgColor)
+	if editMode {
+		rl.DrawRectangleRoundedLinesEx(rl.Rectangle{X: float32(x), Y: float32(y), Width: float32(w), Height: float32(h)}, 0.2, 4, 1, colorAccent)
+	}
+
+	// Click to edit
+	if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !editMode {
+		e.activeInputID = id
+		e.inputTextValue = value
+	}
+
+	// Text display/editing
+	if editMode {
+		// Draw text input with cursor
+		displayText := e.inputTextValue + "_"
+		drawTextEx(editorFontMono, displayText, x+6, y+4, 14, colorTextPrimary)
+
+		// Handle typing
+		for {
+			key := rl.GetCharPressed()
+			if key == 0 {
+				break
+			}
+			e.inputTextValue += string(rune(key))
+		}
+
+		// Backspace
+		if rl.IsKeyPressed(rl.KeyBackspace) && len(e.inputTextValue) > 0 {
+			e.inputTextValue = e.inputTextValue[:len(e.inputTextValue)-1]
+		}
+
+		// Enter or click outside to confirm
+		clickedOutside := rl.IsMouseButtonPressed(rl.MouseLeftButton) && !hovered
+		if rl.IsKeyPressed(rl.KeyEnter) || rl.IsKeyPressed(rl.KeyKpEnter) || clickedOutside || rl.IsKeyPressed(rl.KeyTab) {
+			value = e.inputTextValue
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+
+		// Escape to cancel
+		if rl.IsKeyPressed(rl.KeyEscape) {
+			e.activeInputID = ""
+			e.inputTextValue = ""
+		}
+	} else {
+		// Display current value
+		displayText := value
+		if displayText == "" {
+			displayText = "(empty)"
+			drawTextEx(editorFontMono, displayText, x+6, y+4, 14, colorTextMuted)
+		} else {
+			drawTextEx(editorFontMono, displayText, x+6, y+4, 14, colorTextSecondary)
+		}
+	}
+
+	return value
+}
+
 // drawTextureField draws an editable text field for texture paths
 func (e *Editor) drawTextureField(x, y, w, h int32, id string, value string) string {
 	mousePos := rl.GetMousePosition()
@@ -815,6 +888,42 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		comp.Radius = gui.Slider(radiusBounds, "", fmt.Sprintf("%.1f", comp.Radius), comp.Radius, 1, 50)
 		y += fieldH + 6
 
+	case *components.UIText:
+		id := fmt.Sprintf("uitext%d", compIdx)
+
+		// Text content (multiline text field)
+		drawTextEx(editorFont, "Text", indent, y+4, 15, colorTextMuted)
+		y += 20
+		textFieldW := int32(200)
+		textFieldH := int32(60)
+		comp.Text = e.drawTextField(indent, y, textFieldW, textFieldH, id+".text", comp.Text)
+		y += textFieldH + 6
+
+		// Font size
+		drawTextEx(editorFont, "Font Size", indent, y+4, 15, colorTextMuted)
+		newSize := e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".size", float32(comp.FontSize))
+		comp.FontSize = int32(newSize)
+		y += fieldH + 4
+
+		// Alignment dropdown
+		drawTextEx(editorFont, "Alignment", indent, y+4, 15, colorTextMuted)
+		currentAlign := int32(comp.Alignment)
+		alignBounds := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldW * 2), Height: float32(fieldH)}
+		newAlign := gui.ComboBox(alignBounds, "Left;Center;Right", currentAlign)
+		comp.Alignment = components.TextAlignment(newAlign)
+		y += fieldH + 6
+
+		// Color picker (RGB sliders)
+		drawTextEx(editorFont, "Color", indent, y+4, 15, colorTextMuted)
+		colorPreview := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(colorPreview, comp.Color)
+		rl.DrawRectangleLinesEx(colorPreview, 1, rl.Gray)
+		// R/G/B fields
+		comp.Color.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".r", float32(comp.Color.R)))
+		comp.Color.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".g", float32(comp.Color.G)))
+		comp.Color.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".b", float32(comp.Color.B)))
+		y += fieldH + 6
+
 	default:
 		// For scripts and unknown components, try to get script name
 		if name, props, ok := engine.SerializeScript(c); ok {
@@ -838,6 +947,22 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 			for _, k := range keys {
 				v := props[k]
 				fieldID := fmt.Sprintf("script%d.%s", compIdx, k)
+
+				// Check if this field is a GameObjectRef
+				fieldType := engine.GetScriptFieldType(c, k)
+				if fieldType == "GameObjectRef" {
+					// Handle GameObject reference field
+					uid := uint64(0)
+					if val, ok := v.(float64); ok {
+						uid = uint64(val)
+					}
+					newUID := e.drawGameObjectRefField(indent, y, labelW, fieldW, fieldH, k, uid)
+					if newUID != uid {
+						engine.ApplyScriptProperty(c, k, float64(newUID))
+					}
+					y += fieldH + 4
+					continue
+				}
 
 				switch val := v.(type) {
 				case float32:
@@ -891,6 +1016,83 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 	}
 
 	return y
+}
+
+// drawGameObjectRefField renders a GameObject reference field with drag-and-drop support.
+// Returns the new UID value (may be the same as the input if unchanged).
+func (e *Editor) drawGameObjectRefField(x, y, labelW, fieldW, fieldH int32, label string, currentUID uint64) uint64 {
+	// Draw label
+	drawTextEx(editorFont, label, x, y+4, 14, colorTextMuted)
+
+	// Draw the reference box
+	boxX := x + labelW
+	boxY := y
+	boxW := fieldW
+	boxH := fieldH
+
+	boxBounds := rl.Rectangle{X: float32(boxX), Y: float32(boxY), Width: float32(boxW), Height: float32(boxH)}
+	mousePos := rl.GetMousePosition()
+	mouseOver := rl.CheckCollisionPointRec(mousePos, boxBounds)
+
+	// Determine background color
+	bgColor := colorBgElement
+	if e.draggingHierarchy && mouseOver {
+		bgColor = colorAccent // Highlight when dragging over
+	} else if mouseOver {
+		bgColor = colorBgHover
+	}
+
+	// Draw box background
+	rl.DrawRectangleRec(boxBounds, bgColor)
+	rl.DrawRectangleLinesEx(boxBounds, 1, colorBorder)
+
+	// Get the referenced GameObject and display its name
+	displayText := "None"
+	textColor := colorTextMuted
+	if currentUID != 0 {
+		if obj := e.world.Scene.FindByUID(currentUID); obj != nil {
+			displayText = obj.Name
+			textColor = colorTextSecondary
+		} else {
+			displayText = "Missing!"
+			textColor = rl.Red
+		}
+	}
+
+	// Draw text (leave space for X button if reference is set)
+	drawTextEx(editorFont, displayText, boxX+4, boxY+4, 14, textColor)
+
+	// Draw X button to clear reference (if not empty)
+	newUID := currentUID
+	if currentUID != 0 {
+		clearBtnX := boxX + boxW - 18
+		clearBtnY := boxY + 2
+		clearBtnSize := int32(16)
+		clearBtnBounds := rl.Rectangle{X: float32(clearBtnX), Y: float32(clearBtnY), Width: float32(clearBtnSize), Height: float32(clearBtnSize)}
+		clearBtnHover := rl.CheckCollisionPointRec(mousePos, clearBtnBounds)
+
+		clearBtnColor := colorBgElement
+		if clearBtnHover {
+			clearBtnColor = rl.Red
+		}
+
+		rl.DrawRectangleRec(clearBtnBounds, clearBtnColor)
+		drawTextEx(editorFont, "×", clearBtnX+3, clearBtnY-1, 14, colorTextPrimary)
+
+		// Handle click on X button
+		if clearBtnHover && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			newUID = 0
+		}
+	}
+
+	// Handle drag-and-drop from hierarchy
+	if e.draggingHierarchy && mouseOver && rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+		if e.draggedObject != nil {
+			newUID = e.draggedObject.UID
+		}
+	}
+
+	return newUID
 }
 
 // drawAddComponentMenu draws the dropdown menu for adding components.
