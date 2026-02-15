@@ -99,6 +99,11 @@ type Editor struct {
 	hierarchyDropTarget *engine.GameObject // Target for hierarchy drop (parent candidate)
 	hierarchyDropIndex  int                // Index where to drop (-1 = as child, >= 0 = at position)
 
+	// Hierarchy click/drag detection (Unity-style)
+	hierarchyMouseDownObj   *engine.GameObject // Object that was mouse-downed on (not yet confirmed as drag)
+	hierarchyMouseDownPos   rl.Vector2         // Mouse position when pressed
+	hierarchyMouseDownTime  float64            // Time when mouse was pressed
+
 	// Name editing state
 	editingName    bool   // True if editing the object name
 	nameEditBuffer string // Current text in name edit field
@@ -580,6 +585,9 @@ func (e *Editor) DrawUI() {
 
 	e.drawHierarchy()
 	e.drawInspector()
+
+	// Cleanup drag state after all panels have had a chance to handle the drop
+	e.cleanupDragState()
 
 	// Asset browser toggle button in top bar - pill shaped (positioned left of speed)
 	abBtnW := int32(95)

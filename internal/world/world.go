@@ -47,8 +47,8 @@ func (w *World) Initialize() {
 		log.Fatalf("failed to load scene: %v", err)
 	}
 
-	// Start all GameObjects
-	w.Scene.Start()
+	// Don't call Start() here - it will be called when entering play mode from editor
+	// or when the game loop starts if running without editor
 }
 
 // ResetScene reloads the scene from disk, removing all dynamically spawned

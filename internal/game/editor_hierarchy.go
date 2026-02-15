@@ -4,6 +4,7 @@ package game
 
 import (
 	"fmt"
+	"math"
 	"test3d/internal/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -104,23 +105,24 @@ func (e *Editor) drawHierarchy() {
 			rl.DrawRectangle(panelX, itemY, panelW, itemH, colorBgHover)
 		}
 
-		// Start drag on mouse down (if not already dragging)
-		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !clickedNewButton && !e.draggingHierarchy {
+		// Track mouse down (potential drag start)
+		if hovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) && !clickedNewButton {
 			now := rl.GetTime()
 			isDoubleClick := (now-e.lastHierarchyClick < 0.3) && (e.lastClickedObject == g)
 
-			e.Selected = g
-			e.draggingHierarchy = true
-			e.draggedObject = g
-
-			// If in UI edit mode, also sync the UI edit state selection
-			if e.IsUIEditModeActive() {
-				e.uiEditState.SelectedElement = g
-			}
-
 			if isDoubleClick {
-				// Double-click: focus camera on object
+				// Double-click: select and focus camera on object
+				e.Selected = g
+				if e.IsUIEditModeActive() {
+					e.uiEditState.SelectedElement = g
+				}
 				e.focusOnObject(g)
+				e.hierarchyMouseDownObj = nil // Cancel any drag potential
+			} else {
+				// Single click - prepare for potential drag
+				e.hierarchyMouseDownObj = g
+				e.hierarchyMouseDownPos = mousePos
+				e.hierarchyMouseDownTime = now
 			}
 
 			e.lastHierarchyClick = now
@@ -148,6 +150,34 @@ func (e *Editor) drawHierarchy() {
 
 	rl.EndScissorMode()
 
+	// Handle mouse down -> drag or click detection (Unity-style)
+	if e.hierarchyMouseDownObj != nil {
+		if rl.IsMouseButtonDown(rl.MouseLeftButton) {
+			// Mouse still held - check if we should start dragging
+			if !e.draggingHierarchy {
+				dragThreshold := float32(4.0) // pixels
+				dx := mousePos.X - e.hierarchyMouseDownPos.X
+				dy := mousePos.Y - e.hierarchyMouseDownPos.Y
+				dist := float32(math.Sqrt(float64(dx*dx + dy*dy)))
+
+				if dist > dragThreshold {
+					// Start dragging
+					e.draggingHierarchy = true
+					e.draggedObject = e.hierarchyMouseDownObj
+				}
+			}
+		} else if rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+			// Released without dragging - this is a click, select the object
+			if !e.draggingHierarchy {
+				e.Selected = e.hierarchyMouseDownObj
+				if e.IsUIEditModeActive() {
+					e.uiEditState.SelectedElement = e.hierarchyMouseDownObj
+				}
+			}
+			e.hierarchyMouseDownObj = nil
+		}
+	}
+
 	// "Unparent" drop zone at bottom of hierarchy (drawn outside scissor mode)
 	if e.draggingHierarchy && e.draggedObject != nil && e.draggedObject.Parent != nil {
 		unparentY := panelY + panelH - itemH - 4
@@ -163,7 +193,7 @@ func (e *Editor) drawHierarchy() {
 		drawTextEx(editorFont, "— Unparent —", panelX+55, unparentY+3, 16, colorTextSecondary)
 	}
 
-	// Handle drop on mouse release
+	// Handle reparenting on mouse release (but don't clear drag state yet - inspector needs it)
 	if e.draggingHierarchy && rl.IsMouseButtonReleased(rl.MouseLeftButton) {
 		if e.draggedObject != nil {
 			if e.hierarchyDropIndex == -2 {
@@ -174,15 +204,23 @@ func (e *Editor) drawHierarchy() {
 				e.reparentObject(e.draggedObject, e.hierarchyDropTarget)
 			}
 		}
-		e.draggingHierarchy = false
-		e.draggedObject = nil
-		e.hierarchyDropTarget = nil
-		e.hierarchyDropIndex = 0
+		// Note: Drag state is cleared after all panels are drawn (see cleanupDragState)
 	}
 
 	// Draw drag indicator if dragging
 	if e.draggingHierarchy && e.draggedObject != nil {
 		drawTextEx(editorFont, e.draggedObject.Name, int32(mousePos.X)+10, int32(mousePos.Y)-8, 14, colorAccentLight)
+	}
+}
+
+// cleanupDragState clears the hierarchy drag state after all panels have processed the drop.
+// This is called after drawHierarchy and drawInspector to ensure inspector can handle drops.
+func (e *Editor) cleanupDragState() {
+	if e.draggingHierarchy && rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+		e.draggingHierarchy = false
+		e.draggedObject = nil
+		e.hierarchyDropTarget = nil
+		e.hierarchyDropIndex = 0
 	}
 }
 

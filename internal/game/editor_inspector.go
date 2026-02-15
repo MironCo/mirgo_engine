@@ -948,6 +948,22 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 				v := props[k]
 				fieldID := fmt.Sprintf("script%d.%s", compIdx, k)
 
+				// Check if this field is a GameObjectRef
+				fieldType := engine.GetScriptFieldType(c, k)
+				if fieldType == "GameObjectRef" {
+					// Handle GameObject reference field
+					uid := uint64(0)
+					if val, ok := v.(float64); ok {
+						uid = uint64(val)
+					}
+					newUID := e.drawGameObjectRefField(indent, y, labelW, fieldW, fieldH, k, uid)
+					if newUID != uid {
+						engine.ApplyScriptProperty(c, k, float64(newUID))
+					}
+					y += fieldH + 4
+					continue
+				}
+
 				switch val := v.(type) {
 				case float32:
 					drawTextEx(editorFont, k, indent, y+4, 14, colorTextMuted)
@@ -1000,6 +1016,83 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 	}
 
 	return y
+}
+
+// drawGameObjectRefField renders a GameObject reference field with drag-and-drop support.
+// Returns the new UID value (may be the same as the input if unchanged).
+func (e *Editor) drawGameObjectRefField(x, y, labelW, fieldW, fieldH int32, label string, currentUID uint64) uint64 {
+	// Draw label
+	drawTextEx(editorFont, label, x, y+4, 14, colorTextMuted)
+
+	// Draw the reference box
+	boxX := x + labelW
+	boxY := y
+	boxW := fieldW
+	boxH := fieldH
+
+	boxBounds := rl.Rectangle{X: float32(boxX), Y: float32(boxY), Width: float32(boxW), Height: float32(boxH)}
+	mousePos := rl.GetMousePosition()
+	mouseOver := rl.CheckCollisionPointRec(mousePos, boxBounds)
+
+	// Determine background color
+	bgColor := colorBgElement
+	if e.draggingHierarchy && mouseOver {
+		bgColor = colorAccent // Highlight when dragging over
+	} else if mouseOver {
+		bgColor = colorBgHover
+	}
+
+	// Draw box background
+	rl.DrawRectangleRec(boxBounds, bgColor)
+	rl.DrawRectangleLinesEx(boxBounds, 1, colorBorder)
+
+	// Get the referenced GameObject and display its name
+	displayText := "None"
+	textColor := colorTextMuted
+	if currentUID != 0 {
+		if obj := e.world.Scene.FindByUID(currentUID); obj != nil {
+			displayText = obj.Name
+			textColor = colorTextSecondary
+		} else {
+			displayText = "Missing!"
+			textColor = rl.Red
+		}
+	}
+
+	// Draw text (leave space for X button if reference is set)
+	drawTextEx(editorFont, displayText, boxX+4, boxY+4, 14, textColor)
+
+	// Draw X button to clear reference (if not empty)
+	newUID := currentUID
+	if currentUID != 0 {
+		clearBtnX := boxX + boxW - 18
+		clearBtnY := boxY + 2
+		clearBtnSize := int32(16)
+		clearBtnBounds := rl.Rectangle{X: float32(clearBtnX), Y: float32(clearBtnY), Width: float32(clearBtnSize), Height: float32(clearBtnSize)}
+		clearBtnHover := rl.CheckCollisionPointRec(mousePos, clearBtnBounds)
+
+		clearBtnColor := colorBgElement
+		if clearBtnHover {
+			clearBtnColor = rl.Red
+		}
+
+		rl.DrawRectangleRec(clearBtnBounds, clearBtnColor)
+		drawTextEx(editorFont, "×", clearBtnX+3, clearBtnY-1, 14, colorTextPrimary)
+
+		// Handle click on X button
+		if clearBtnHover && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			newUID = 0
+		}
+	}
+
+	// Handle drag-and-drop from hierarchy
+	if e.draggingHierarchy && mouseOver && rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+		if e.draggedObject != nil {
+			newUID = e.draggedObject.UID
+		}
+	}
+
+	return newUID
 }
 
 // drawAddComponentMenu draws the dropdown menu for adding components.

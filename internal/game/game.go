@@ -153,6 +153,10 @@ func (g *Game) Update() {
 		return
 	}
 
+	// Call Start() on any GameObjects that haven't started yet
+	// (e.g., after exiting editor mode with modified properties)
+	g.World.Scene.Start()
+
 	// Update world (physics + all game objects including player)
 	g.World.Update(deltaTime)
 

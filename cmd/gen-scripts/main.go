@@ -147,14 +147,20 @@ func parseScript(content string) (*ScriptInfo, error) {
 
 						fieldType := exprToString(field.Type)
 
-						// Skip embedded structs with package qualifiers
-						if strings.Contains(fieldType, ".") {
+						// Skip embedded structs with package qualifiers (except GameObjectRef)
+						if strings.Contains(fieldType, ".") && fieldType != "engine.GameObjectRef" {
 							continue
+						}
+
+						// Strip package prefix for known types
+						cleanType := fieldType
+						if fieldType == "engine.GameObjectRef" {
+							cleanType = "GameObjectRef"
 						}
 
 						scriptInfo.Fields = append(scriptInfo.Fields, FieldInfo{
 							Name:     name.Name,
-							Type:     fieldType,
+							Type:     cleanType,
 							JSONName: toSnakeCase(name.Name),
 						})
 					}
@@ -218,8 +224,30 @@ func generateScriptFile(script *ScriptInfo, sourceContent []byte, outputPath str
 	nameLower := toSnakeCase(script.Name)
 
 	f.WriteString("\n// --- Generated boilerplate below ---\n\n")
-	f.WriteString(fmt.Sprintf("func init() {\n\tengine.RegisterScriptWithApplier(\"%s\", %sFactory, %sSerializer, %sApplier)\n}\n\n",
-		script.Name, nameLower, nameLower, nameLower))
+
+	// Generate field types map if there are any GameObjectRef fields
+	hasGameObjectRef := false
+	for _, field := range script.Fields {
+		if field.Type == "GameObjectRef" {
+			hasGameObjectRef = true
+			break
+		}
+	}
+
+	if hasGameObjectRef {
+		f.WriteString(fmt.Sprintf("var %sFieldTypes = map[string]string{\n", nameLower))
+		for _, field := range script.Fields {
+			if field.Type == "GameObjectRef" {
+				f.WriteString(fmt.Sprintf("\t\"%s\": \"GameObjectRef\",\n", field.JSONName))
+			}
+		}
+		f.WriteString("}\n\n")
+		f.WriteString(fmt.Sprintf("func init() {\n\tengine.RegisterScriptWithMetadata(\"%s\", %sFactory, %sSerializer, %sApplier, %sFieldTypes)\n}\n\n",
+			script.Name, nameLower, nameLower, nameLower, nameLower))
+	} else {
+		f.WriteString(fmt.Sprintf("func init() {\n\tengine.RegisterScriptWithApplier(\"%s\", %sFactory, %sSerializer, %sApplier)\n}\n\n",
+			script.Name, nameLower, nameLower, nameLower))
+	}
 
 	// Factory function
 	f.WriteString(fmt.Sprintf("func %sFactory(props map[string]any) engine.Component {\n", nameLower))
@@ -243,7 +271,12 @@ func generateScriptFile(script *ScriptInfo, sourceContent []byte, outputPath str
 	f.WriteString("\treturn map[string]any{\n")
 
 	for _, field := range script.Fields {
-		f.WriteString(fmt.Sprintf("\t\t\"%s\": s.%s,\n", field.JSONName, field.Name))
+		// Special handling for GameObjectRef - serialize as UID
+		if field.Type == "GameObjectRef" {
+			f.WriteString(fmt.Sprintf("\t\t\"%s\": float64(s.%s.UID),\n", field.JSONName, field.Name))
+		} else {
+			f.WriteString(fmt.Sprintf("\t\t\"%s\": s.%s,\n", field.JSONName, field.Name))
+		}
 	}
 
 	f.WriteString("\t}\n}\n\n")
@@ -292,6 +325,8 @@ func getTypeConversion(fieldType string) (goType, conversion string) {
 		return "bool", "%s"
 	case "string":
 		return "string", "%s"
+	case "GameObjectRef":
+		return "float64", "engine.GameObjectRef{UID: uint64(%s)}"
 	default:
 		return "any", "%s"
 	}

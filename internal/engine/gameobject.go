@@ -128,6 +128,12 @@ func (g *GameObject) Start() {
 	g.started = true
 }
 
+// ResetStarted resets the started flag so Start() can be called again.
+// This is used when transitioning from editor mode to play mode.
+func (g *GameObject) ResetStarted() {
+	g.started = false
+}
+
 func (g *GameObject) Update(deltaTime float32) {
 	if !g.Active {
 		return

@@ -896,57 +896,6 @@
           ]
         },
         {
-          "uid": 1002,
-          "name": "HealthLabel",
-          "position": [
-            0,
-            0,
-            0
-          ],
-          "rotation": [
-            0,
-            0,
-            0
-          ],
-          "scale": [
-            1,
-            1,
-            1
-          ],
-          "components": [
-            {
-              "anchorMax": [
-                0,
-                0
-              ],
-              "anchorMin": [
-                0,
-                0
-              ],
-              "anchoredPosition": [
-                21.506226,
-                88.367584
-              ],
-              "pivot": [
-                0,
-                0
-              ],
-              "sizeDelta": [
-                100,
-                20
-              ],
-              "type": "RectTransform"
-            },
-            {
-              "alignment": 0,
-              "color": "/////w==",
-              "fontSize": 16,
-              "text": "Health: 75",
-              "type": "UIText"
-            }
-          ]
-        },
-        {
           "uid": 1003,
           "name": "ScorePanel",
           "position": [
@@ -1079,8 +1028,8 @@
                 1
               ],
               "anchoredPosition": [
-                905.5768,
-                -919.1582
+                507.1006,
+                -677.74316
               ],
               "pivot": [
                 0,
@@ -1130,8 +1079,8 @@
                 1
               ],
               "anchoredPosition": [
-                254.49146,
-                -936.89307
+                499.44977,
+                -743.1008
               ],
               "pivot": [
                 0,
@@ -1288,8 +1237,8 @@
                 0.5
               ],
               "anchoredPosition": [
-                -633.6161,
-                402.56857
+                -423.1649,
+                307.2806
               ],
               "pivot": [
                 0.5,
@@ -1395,15 +1344,15 @@
                 0.5
               ],
               "anchoredPosition": [
-                808.76746,
-                422.24707
+                656.4408,
+                352.92822
               ],
               "pivot": [
                 0.5,
                 0.5
               ],
               "sizeDelta": [
-                136.44763,
+                150.88123,
                 61.09955
               ],
               "type": "RectTransform"
@@ -1463,13 +1412,64 @@
                   "type": "RectTransform"
                 },
                 {
-                  "alignment": 0,
+                  "alignment": 1,
                   "color": "/////w==",
                   "fontSize": 20,
                   "text": "Reset Score",
                   "type": "UIText"
                 }
               ]
+            }
+          ]
+        },
+        {
+          "uid": 1002,
+          "name": "HealthLabel",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "components": [
+            {
+              "anchorMax": [
+                0,
+                0
+              ],
+              "anchorMin": [
+                0,
+                0
+              ],
+              "anchoredPosition": [
+                21.506226,
+                88.367584
+              ],
+              "pivot": [
+                0,
+                0
+              ],
+              "sizeDelta": [
+                100,
+                20
+              ],
+              "type": "RectTransform"
+            },
+            {
+              "alignment": 0,
+              "color": "/////w==",
+              "fontSize": 16,
+              "text": "Health: 75",
+              "type": "UIText"
             }
           ]
         }
@@ -1498,10 +1498,10 @@
           "type": "Script",
           "name": "ScoreManager",
           "props": {
-            "add_button_name": "AddScoreButton",
-            "reset_button_name": "ResetScoreButton",
+            "add_button": 10002,
+            "reset_button": 10000,
             "score": 0,
-            "score_text_name": "ScoreText"
+            "score_text": 1004
           }
         }
       ]
