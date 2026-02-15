@@ -1,7 +1,7 @@
 BINARY_NAME=test3d
 CMD_PATH=./cmd/test3d
 
-.PHONY: all build run build-game run-game clean gen-scripts
+.PHONY: all build run build-game run-game clean gen-scripts test
 
 all: build
 
@@ -19,6 +19,9 @@ build-game:
 
 run-game:
 	go run -tags game $(CMD_PATH)
+
+test:
+	@go test ./internal/engine/... ./cmd/gen-scripts/...
 
 clean:
 	rm -f $(BINARY_NAME) $(BINARY_NAME).exe $(BINARY_NAME)-linux
