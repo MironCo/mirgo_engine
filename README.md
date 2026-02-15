@@ -1,5 +1,7 @@
 # Mirgo Engine
 
+![Engine Preview](docs/images/engine%20preview.jpg)
+
 A 3D game engine written in Go, built on top of [raylib-go](https://github.com/gen2brain/raylib-go). Features an entity-component system, real-time physics, shadow mapping, a built-in scene editor, and a JSON-based scene format.
 
 ## Features
