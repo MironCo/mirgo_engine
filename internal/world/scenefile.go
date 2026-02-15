@@ -77,11 +77,11 @@ type scriptDef struct {
 }
 
 type cameraDef struct {
-	Type       string `json:"type"`
-	FOV        float32 `json:"fov,omitempty"`
-	Near       float32 `json:"near,omitempty"`
-	Far        float32 `json:"far,omitempty"`
-	IsMain     bool    `json:"isMain,omitempty"`
+	Type   string  `json:"type"`
+	FOV    float32 `json:"fov,omitempty"`
+	Near   float32 `json:"near,omitempty"`
+	Far    float32 `json:"far,omitempty"`
+	IsMain bool    `json:"isMain,omitempty"`
 }
 
 // --- Color mapping ---

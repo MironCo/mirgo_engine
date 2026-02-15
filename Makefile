@@ -21,6 +21,15 @@ run-game:
 	go run -tags game $(CMD_PATH)
 
 test:
+	@echo "Checking formatting..."
+	@if [ -n "$$(gofmt -l .)" ]; then \
+		echo "❌ Code not formatted. Run 'gofmt -w .'"; \
+		gofmt -l .; \
+		exit 1; \
+	fi
+	@echo "✓ Formatting OK"
+	@echo "Running linter (warnings only)..."
+	@golangci-lint run --timeout 5m || echo "⚠️  Linter found issues (non-blocking)"
 	@go test ./internal/engine/... ./cmd/gen-scripts/...
 
 clean:

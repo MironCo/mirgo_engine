@@ -31,8 +31,8 @@ func (e *Editor) RestoreState()        {}
 func (e *Editor) GetRaylibCamera() rl.Camera3D {
 	return rl.Camera3D{}
 }
-func (e *Editor) Draw3D()                    {}
-func (e *Editor) DrawUI()                    {}
-func (e *Editor) SavePrefs()                 {}
-func (e *Editor) ApplyPrefs(_ *EditorPrefs)  {}
-func LoadEditorPrefs() *EditorPrefs          { return nil }
+func (e *Editor) Draw3D()                   {}
+func (e *Editor) DrawUI()                   {}
+func (e *Editor) SavePrefs()                {}
+func (e *Editor) ApplyPrefs(_ *EditorPrefs) {}
+func LoadEditorPrefs() *EditorPrefs         { return nil }

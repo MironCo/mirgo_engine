@@ -271,8 +271,8 @@ func (e *Editor) screenToCanvas(screenPos rl.Vector2) rl.Vector2 {
 	}
 	// Remove offset and zoom
 	return rl.Vector2{
-		X: (screenPos.X - screenCenter.X - e.uiEditState.ViewOffset.X) / e.uiEditState.ViewZoom + screenCenter.X,
-		Y: (screenPos.Y - screenCenter.Y - e.uiEditState.ViewOffset.Y) / e.uiEditState.ViewZoom + screenCenter.Y,
+		X: (screenPos.X-screenCenter.X-e.uiEditState.ViewOffset.X)/e.uiEditState.ViewZoom + screenCenter.X,
+		Y: (screenPos.Y-screenCenter.Y-e.uiEditState.ViewOffset.Y)/e.uiEditState.ViewZoom + screenCenter.Y,
 	}
 }
 

@@ -18,4 +18,5 @@ func (r *Rotator) Update(deltaTime float32) {
 		g.Transform.Rotation.Y -= 360
 	}
 }
+
 // test

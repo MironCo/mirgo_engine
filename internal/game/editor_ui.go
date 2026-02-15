@@ -10,19 +10,19 @@ import (
 )
 
 // Editor fonts - Outfit for UI, JetBrains Mono for values
-var editorFont rl.Font      // Outfit Regular - main UI font
-var editorFontBold rl.Font  // Outfit Bold - headers
-var editorFontMono rl.Font  // JetBrains Mono - numeric values
+var editorFont rl.Font     // Outfit Regular - main UI font
+var editorFontBold rl.Font // Outfit Bold - headers
+var editorFontMono rl.Font // JetBrains Mono - numeric values
 var editorFontsLoaded bool
 
 // Theme colors - Indigo/purple dark theme matching the website
 var (
 	// Base backgrounds (dark with slight blue tint)
-	colorBgDark    = rl.NewColor(10, 10, 15, 255)   // Darkest - nav bg
-	colorBgPanel   = rl.NewColor(18, 18, 24, 245)   // Panel backgrounds
-	colorBgElement = rl.NewColor(28, 28, 38, 255)   // Input fields, buttons
-	colorBgHover   = rl.NewColor(38, 38, 52, 255)   // Hover state
-	colorBgActive  = rl.NewColor(48, 48, 65, 255)   // Active/pressed state
+	colorBgDark    = rl.NewColor(10, 10, 15, 255) // Darkest - nav bg
+	colorBgPanel   = rl.NewColor(18, 18, 24, 245) // Panel backgrounds
+	colorBgElement = rl.NewColor(28, 28, 38, 255) // Input fields, buttons
+	colorBgHover   = rl.NewColor(38, 38, 52, 255) // Hover state
+	colorBgActive  = rl.NewColor(48, 48, 65, 255) // Active/pressed state
 
 	// Accent colors - indigo/purple gradient
 	colorAccent       = rl.NewColor(108, 99, 255, 255)  // Primary indigo #6c63ff
@@ -36,8 +36,8 @@ var (
 	colorTextMuted     = rl.NewColor(119, 119, 119, 255) // Muted #777
 
 	// Borders
-	colorBorder      = rl.NewColor(255, 255, 255, 13)  // rgba(255,255,255,0.05)
-	colorBorderHover = rl.NewColor(108, 99, 255, 100)  // Indigo border on hover
+	colorBorder      = rl.NewColor(255, 255, 255, 13) // rgba(255,255,255,0.05)
+	colorBorderHover = rl.NewColor(108, 99, 255, 100) // Indigo border on hover
 
 	// Selection highlight (indigo tinted)
 	colorSelection = rl.NewColor(108, 99, 255, 60) // Indigo with transparency

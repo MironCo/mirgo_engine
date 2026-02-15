@@ -27,7 +27,7 @@ type AssetEntry struct {
 func (e *Editor) drawAssetBrowser() {
 	panelH := int32(150)
 	panelY := int32(rl.GetScreenHeight()) - panelH
-	panelX := e.hierarchyWidth                                              // Start after hierarchy
+	panelX := e.hierarchyWidth                                                 // Start after hierarchy
 	panelW := int32(rl.GetScreenWidth()) - e.hierarchyWidth - e.inspectorWidth // Between hierarchy and inspector
 
 	// Reserve space for material editor on the right when a material is selected
@@ -242,7 +242,7 @@ func (e *Editor) drawAssetIcon(x, y, itemW int32, assetType string) {
 		// Material icon - gradient sphere effect
 		centerX := iconX + iconSize/2
 		centerY := iconY + iconSize/2
-		radius := float32(iconSize) / 2 - 2
+		radius := float32(iconSize)/2 - 2
 		// Outer ring
 		rl.DrawCircle(centerX, centerY, radius, colorAccent)
 		// Inner highlight
@@ -276,9 +276,9 @@ func (e *Editor) drawAssetIcon(x, y, itemW int32, assetType string) {
 
 	case "scene":
 		// Scene icon - clapperboard style
-		sceneColor := rl.NewColor(100, 180, 255, 255)  // Light blue
-		sceneDark := rl.NewColor(60, 120, 200, 255)    // Darker blue
-		sceneStripe := rl.NewColor(40, 80, 160, 255)   // Stripe color
+		sceneColor := rl.NewColor(100, 180, 255, 255) // Light blue
+		sceneDark := rl.NewColor(60, 120, 200, 255)   // Darker blue
+		sceneStripe := rl.NewColor(40, 80, 160, 255)  // Stripe color
 		// Clapperboard top (angled stripes part)
 		rl.DrawRectangleRounded(rl.Rectangle{X: float32(iconX), Y: float32(iconY), Width: float32(iconSize), Height: 14}, 0.3, 4, sceneDark)
 		// Diagonal stripes on top

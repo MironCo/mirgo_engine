@@ -17,18 +17,18 @@ const (
 )
 
 type Renderer struct {
-	Shader          rl.Shader
-	InstanceShader  rl.Shader
-	ShadowMap       rl.RenderTexture2D
-	Light           *components.DirectionalLight
-	LightCamera     rl.Camera3D
-	MatLightVP      rl.Matrix
-	floorSize       float32
-	frustum         Frustum // current frame's view frustum for culling
-	CullEnabled     bool    // frustum culling toggle (default true)
+	Shader         rl.Shader
+	InstanceShader rl.Shader
+	ShadowMap      rl.RenderTexture2D
+	Light          *components.DirectionalLight
+	LightCamera    rl.Camera3D
+	MatLightVP     rl.Matrix
+	floorSize      float32
+	frustum        Frustum // current frame's view frustum for culling
+	CullEnabled    bool    // frustum culling toggle (default true)
 
 	// Stats for debug display
-	DrawnObjects int // objects rendered this frame
+	DrawnObjects  int // objects rendered this frame
 	CulledObjects int // objects culled this frame
 }
 
@@ -169,9 +169,9 @@ func (r *Renderer) DrawWithShadows(camera rl.Camera3D, gameObjects []*engine.Gam
 
 // instanceBatch groups objects by mesh type for instanced rendering
 type instanceBatch struct {
-	mesh      rl.Mesh
-	material  rl.Material
-	color     rl.Color
+	mesh       rl.Mesh
+	material   rl.Material
+	color      rl.Color
 	transforms []rl.Matrix
 }
 

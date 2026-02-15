@@ -70,12 +70,12 @@ type Editor struct {
 	showAssetBrowser     bool
 	assetBrowserScroll   int32
 	assetFiles           []AssetEntry
-	currentAssetPath     string           // Current directory being viewed
-	selectedMaterialPath string           // Selected material for editing
-	selectedMaterial     *assets.Material // Loaded material being edited
-	lastClickTime        float64          // For double-click detection
-	lastClickedAsset     string           // Path of last clicked asset
-	lastHierarchyClick   float64          // For hierarchy double-click detection
+	currentAssetPath     string             // Current directory being viewed
+	selectedMaterialPath string             // Selected material for editing
+	selectedMaterial     *assets.Material   // Loaded material being edited
+	lastClickTime        float64            // For double-click detection
+	lastClickedAsset     string             // Path of last clicked asset
+	lastHierarchyClick   float64            // For hierarchy double-click detection
 	lastClickedObject    *engine.GameObject // Last clicked object in hierarchy
 
 	// Script hot-reload
@@ -100,9 +100,9 @@ type Editor struct {
 	hierarchyDropIndex  int                // Index where to drop (-1 = as child, >= 0 = at position)
 
 	// Hierarchy click/drag detection (Unity-style)
-	hierarchyMouseDownObj   *engine.GameObject // Object that was mouse-downed on (not yet confirmed as drag)
-	hierarchyMouseDownPos   rl.Vector2         // Mouse position when pressed
-	hierarchyMouseDownTime  float64            // Time when mouse was pressed
+	hierarchyMouseDownObj  *engine.GameObject // Object that was mouse-downed on (not yet confirmed as drag)
+	hierarchyMouseDownPos  rl.Vector2         // Mouse position when pressed
+	hierarchyMouseDownTime float64            // Time when mouse was pressed
 
 	// Name editing state
 	editingName    bool   // True if editing the object name
@@ -113,11 +113,11 @@ type Editor struct {
 	tagsEditBuffer string // Current text in tags edit field
 
 	// Panel sizing
-	hierarchyWidth  int32 // Width of hierarchy panel (default 210)
-	inspectorWidth  int32 // Width of inspector panel (default 310)
-	resizingPanel   int   // 0=none, 1=hierarchy, 2=inspector
-	resizeStartX    float32
-	resizeStartW    int32
+	hierarchyWidth int32 // Width of hierarchy panel (default 210)
+	inspectorWidth int32 // Width of inspector panel (default 310)
+	resizingPanel  int   // 0=none, 1=hierarchy, 2=inspector
+	resizeStartX   float32
+	resizeStartW   int32
 
 	// Camera zoom animation
 	zoomingToTarget bool

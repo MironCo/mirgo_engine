@@ -8,8 +8,8 @@ import (
 
 // OBB represents an Oriented Bounding Box
 type OBB struct {
-	Center   rl.Vector3   // World-space center
-	HalfSize rl.Vector3   // Half-extents along local axes
+	Center   rl.Vector3    // World-space center
+	HalfSize rl.Vector3    // Half-extents along local axes
 	Axes     [3]rl.Vector3 // Local X, Y, Z axes (rotated)
 }
 

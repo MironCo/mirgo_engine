@@ -45,11 +45,11 @@ var (
 
 // AdapterInfo contains GPU information.
 type AdapterInfo struct {
-	Name         string
-	Vendor       string
-	Backend      string
-	DeviceType   string
-	Driver       string
+	Name       string
+	Vendor     string
+	Backend    string
+	DeviceType string
+	Driver     string
 }
 
 // Initialize sets up the compute system. Safe to call multiple times.
@@ -179,11 +179,11 @@ func (s *System) WriteBuffer(buf *Buffer, offset uint64, data []byte) {
 
 // Dispatch runs a compute shader with the given buffers.
 type DispatchParams struct {
-	Pipeline       *Pipeline
-	Buffers        []*Buffer        // Buffers to bind (in order of @binding)
-	WorkgroupsX    uint32           // Number of workgroups in X
-	WorkgroupsY    uint32           // Number of workgroups in Y (default 1)
-	WorkgroupsZ    uint32           // Number of workgroups in Z (default 1)
+	Pipeline    *Pipeline
+	Buffers     []*Buffer // Buffers to bind (in order of @binding)
+	WorkgroupsX uint32    // Number of workgroups in X
+	WorkgroupsY uint32    // Number of workgroups in Y (default 1)
+	WorkgroupsZ uint32    // Number of workgroups in Z (default 1)
 }
 
 // Dispatch executes a compute shader.

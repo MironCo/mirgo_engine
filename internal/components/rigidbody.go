@@ -14,9 +14,9 @@ func init() {
 
 // Sleep thresholds
 const (
-	SleepVelocityThreshold = 0.3  // units/sec - below this, object might sleep
-	SleepAngularThreshold  = 1.0  // deg/sec - below this, object might sleep
-	SleepTimeThreshold     = 0.3  // seconds of low velocity before sleeping
+	SleepVelocityThreshold = 0.3 // units/sec - below this, object might sleep
+	SleepAngularThreshold  = 1.0 // deg/sec - below this, object might sleep
+	SleepTimeThreshold     = 0.3 // seconds of low velocity before sleeping
 )
 
 type Rigidbody struct {
@@ -31,9 +31,9 @@ type Rigidbody struct {
 	IsKinematic     bool // moves but doesn't get pushed by physics
 
 	// Sleep state - sleeping objects skip physics simulation
-	IsSleeping    bool
-	sleepTimer    float32 // time spent below velocity threshold
-	CanSleep      bool    // whether this object can sleep (default true)
+	IsSleeping bool
+	sleepTimer float32 // time spent below velocity threshold
+	CanSleep   bool    // whether this object can sleep (default true)
 }
 
 func NewRigidbody() *Rigidbody {

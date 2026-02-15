@@ -42,7 +42,7 @@ func NewGameObject(name string) *GameObject {
 			Rotation:   rl.Vector3{},
 			Scale:      rl.Vector3{X: 1, Y: 1, Z: 1},
 			quaternion: rl.Quaternion{X: 0, Y: 0, Z: 0, W: 1}, // Identity
-			quatDirty:  true, // Will convert from Euler on first GetQuaternion() call
+			quatDirty:  true,                                  // Will convert from Euler on first GetQuaternion() call
 		},
 		components: make([]Component, 0),
 		Children:   make([]*GameObject, 0),
