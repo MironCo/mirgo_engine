@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"test3d/internal/game"
+	"mirgo_engine/internal/game"
 )
 
 func main() {

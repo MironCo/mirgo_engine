@@ -2,7 +2,7 @@ package components
 
 import (
 	"math"
-	"test3d/internal/engine"
+	"mirgo_engine/internal/engine"
 	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

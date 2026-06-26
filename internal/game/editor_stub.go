@@ -3,8 +3,8 @@
 package game
 
 import (
-	"test3d/internal/engine"
-	"test3d/internal/world"
+	"mirgo_engine/internal/engine"
+	"mirgo_engine/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

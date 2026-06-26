@@ -1,9 +1,9 @@
 package world
 
 import (
-	"test3d/internal/components"
-	"test3d/internal/engine"
-	"test3d/internal/physics"
+	"mirgo_engine/internal/components"
+	"mirgo_engine/internal/engine"
+	"mirgo_engine/internal/physics"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

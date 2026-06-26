@@ -2,8 +2,8 @@ package scripts
 
 import (
 	"math"
-	"test3d/internal/components"
-	"test3d/internal/engine"
+	"mirgo_engine/internal/components"
+	"mirgo_engine/internal/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

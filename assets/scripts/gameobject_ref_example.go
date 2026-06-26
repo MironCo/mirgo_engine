@@ -2,8 +2,8 @@ package scripts
 
 import (
 	"fmt"
-	"test3d/internal/components"
-	"test3d/internal/engine"
+	"mirgo_engine/internal/components"
+	"mirgo_engine/internal/engine"
 )
 
 // GameObjectRefExample demonstrates Unity-style GameObject references.

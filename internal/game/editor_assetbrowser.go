@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"test3d/internal/assets"
-	"test3d/internal/components"
-	"test3d/internal/engine"
-	"test3d/internal/world"
+	"mirgo_engine/internal/assets"
+	"mirgo_engine/internal/components"
+	"mirgo_engine/internal/engine"
+	"mirgo_engine/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

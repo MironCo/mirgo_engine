@@ -41,7 +41,7 @@ type TestScript struct {
 func TestParseScriptWithGameObjectRef(t *testing.T) {
 	source := `package scripts
 
-import "test3d/internal/engine"
+import "mirgo_engine/internal/engine"
 
 type TargetScript struct {
 	engine.BaseComponent
@@ -106,7 +106,7 @@ type TestScript struct {
 func TestParseScriptSkipsEmbeddedStructs(t *testing.T) {
 	source := `package scripts
 
-import "test3d/internal/engine"
+import "mirgo_engine/internal/engine"
 
 type TestScript struct {
 	engine.BaseComponent

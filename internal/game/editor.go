@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"math"
 	"sync"
-	"test3d/internal/assets"
-	"test3d/internal/audio"
-	"test3d/internal/components"
-	"test3d/internal/engine"
-	"test3d/internal/world"
+	"mirgo_engine/internal/assets"
+	"mirgo_engine/internal/audio"
+	"mirgo_engine/internal/components"
+	"mirgo_engine/internal/engine"
+	"mirgo_engine/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

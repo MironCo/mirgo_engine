@@ -1,8 +1,8 @@
 package world
 
 import (
-	"test3d/internal/components"
-	"test3d/internal/engine"
+	"mirgo_engine/internal/components"
+	"mirgo_engine/internal/engine"
 	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

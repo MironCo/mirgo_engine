@@ -7,8 +7,8 @@ import (
 	"math"
 	"os"
 	"sync"
-	"test3d/internal/audio"
-	"test3d/internal/engine"
+	"mirgo_engine/internal/audio"
+	"mirgo_engine/internal/engine"
 
 	"github.com/ebitengine/oto/v3"
 )

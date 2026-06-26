@@ -1,4 +1,4 @@
-module test3d
+module mirgo_engine
 
 go 1.25
 

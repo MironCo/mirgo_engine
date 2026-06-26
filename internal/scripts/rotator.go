@@ -1,6 +1,6 @@
 package scripts
 
-import "test3d/internal/engine"
+import "mirgo_engine/internal/engine"
 
 // Rotator is a simple script that spins an object around the Y axis.
 type Rotator struct {

@@ -4,7 +4,7 @@ package world
 
 import (
 	"log"
-	"test3d/internal/compute"
+	"mirgo_engine/internal/compute"
 )
 
 func (w *World) initializeCompute() {

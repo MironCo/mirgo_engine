@@ -1,4 +1,4 @@
-BINARY_NAME=test3d
+BINARY_NAME=mirgo_engine
 CMD_PATH=./cmd/test3d
 
 .PHONY: all build run build-game run-game clean gen-scripts test

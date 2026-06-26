@@ -2,13 +2,13 @@ package world
 
 import (
 	"log"
-	"test3d/internal/assets"
-	"test3d/internal/audio"
-	"test3d/internal/components"
-	"test3d/internal/compute"
-	"test3d/internal/engine"
-	"test3d/internal/physics"
-	_ "test3d/internal/scripts"
+	"mirgo_engine/internal/assets"
+	"mirgo_engine/internal/audio"
+	"mirgo_engine/internal/components"
+	"mirgo_engine/internal/compute"
+	"mirgo_engine/internal/engine"
+	"mirgo_engine/internal/physics"
+	_ "mirgo_engine/internal/scripts"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

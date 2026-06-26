@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	"test3d/internal/compute"
+	"mirgo_engine/internal/compute"
 )
 
 func main() {

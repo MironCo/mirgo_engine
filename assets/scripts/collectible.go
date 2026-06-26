@@ -2,7 +2,7 @@ package scripts
 
 import (
 	"fmt"
-	"test3d/internal/engine"
+	"mirgo_engine/internal/engine"
 )
 
 // Collectible is a script that detects when the player touches it.
