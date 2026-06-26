@@ -1,8 +1,8 @@
 package physics
 
 import (
-	"mirgo_engine/internal/components"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

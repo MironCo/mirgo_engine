@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"mirgo_engine/internal/assets"
-	"mirgo_engine/internal/components"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
 	"mirgo_engine/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -49,7 +49,7 @@ func (e *Editor) drawAssetBrowser() {
 	backBtnX := panelX + 10
 	backBtnW := int32(26)
 	backBtnH := int32(20)
-	canGoBack := e.currentAssetPath != "assets" && e.currentAssetPath != ""
+	canGoBack := e.currentAssetPath != "game/assets" && e.currentAssetPath != ""
 
 	if canGoBack {
 		backHovered := mousePos.X >= float32(backBtnX) && mousePos.X <= float32(backBtnX+backBtnW) &&

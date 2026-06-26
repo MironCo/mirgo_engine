@@ -5,7 +5,7 @@ package game
 import (
 	"fmt"
 	"math"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

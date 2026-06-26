@@ -4,16 +4,16 @@ import (
 	"log"
 	"mirgo_engine/internal/assets"
 	"mirgo_engine/internal/audio"
-	"mirgo_engine/internal/components"
+	"mirgo_engine/components"
 	"mirgo_engine/internal/compute"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/engine"
 	"mirgo_engine/internal/physics"
 	_ "mirgo_engine/internal/scripts"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-var ScenePath = "assets/scenes/main.json"
+var ScenePath = "game/assets/scenes/main.json"
 
 const FloorSize = 60.0
 

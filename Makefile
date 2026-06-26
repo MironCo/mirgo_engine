@@ -1,7 +1,8 @@
 BINARY_NAME=mirgo_engine
-CMD_PATH=./cmd/test3d
+CMD_PATH=./cmd/editor
+UTILS_PATH=./cmd/mirgo_utils
 
-.PHONY: all build run build-game run-game clean gen-scripts test
+.PHONY: all build run build-game run-game clean gen-scripts test utils
 
 all: build
 
@@ -12,7 +13,10 @@ run: gen-scripts
 	go run $(CMD_PATH)
 
 gen-scripts:
-	@go run ./cmd/gen-scripts
+	@go run ./cmd/mirgo_utils genscripts
+
+utils:
+	go build -o mirgo_utils $(UTILS_PATH)
 
 build-game:
 	go build -tags game -o $(BINARY_NAME) $(CMD_PATH)
@@ -30,10 +34,10 @@ test:
 	@echo "✓ Formatting OK"
 	@echo "Running linter (warnings only)..."
 	@golangci-lint run --timeout 5m || echo "⚠️  Linter found issues (non-blocking)"
-	@go test ./internal/engine/... ./cmd/gen-scripts/...
+	@go test ./engine/... ./cmd/gen-scripts/...
 
 clean:
-	rm -f $(BINARY_NAME) $(BINARY_NAME).exe $(BINARY_NAME)-linux
+	rm -f $(BINARY_NAME) $(BINARY_NAME).exe $(BINARY_NAME)-linux mirgo_utils
 
 # Cross-compilation is tricky with raylib due to CGO
 # These targets require the appropriate cross-compilers and libs installed

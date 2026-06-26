@@ -2,9 +2,8 @@ package scripts
 
 import (
 	"fmt"
-	"mirgo_engine/internal/assets"
-	"mirgo_engine/internal/components"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -72,9 +71,7 @@ func (s *Shooter) Shoot() {
 	sphere.Transform.Position = spawnPos
 	sphere.Transform.Scale = rl.Vector3{X: radius, Y: radius, Z: radius} // unit sphere has radius 1, scale to desired radius
 
-	model := assets.GetSphereModel() // shared cached model
-	renderer := components.NewModelRenderer(model, rl.Orange)
-	renderer.MeshType = "sphere" // mark for instanced batching
+	renderer := components.NewSphereRenderer(rl.Orange)
 	renderer.SetShader(s.GetGameObject().Scene.World.GetShader())
 	sphere.AddComponent(renderer)
 

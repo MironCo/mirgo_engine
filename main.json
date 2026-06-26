@@ -21,8 +21,8 @@
       "components": [
         {
           "type": "ModelRenderer",
-          "model": "assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
-          "material": "assets/materials/rubber.json"
+          "model": "game/assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
+          "material": "game/assets/materials/rubber.json"
         },
         {
           "offset": [
@@ -142,7 +142,7 @@
       "components": [
         {
           "type": "ModelRenderer",
-          "model": "assets/models/building-a/building-a.glb",
+          "model": "game/assets/models/building-a/building-a.glb",
           "color": "White",
           "roughness": 0.5
         },
@@ -188,7 +188,7 @@
             2,
             2
           ],
-          "material": "assets/materials/metal.json"
+          "material": "game/assets/materials/metal.json"
         },
         {
           "offset": [
@@ -232,7 +232,7 @@
             2,
             2
           ],
-          "material": "assets/materials/plastic.json"
+          "material": "game/assets/materials/plastic.json"
         },
         {
           "offset": [
@@ -283,7 +283,7 @@
             2,
             2
           ],
-          "material": "assets/materials/glow.json"
+          "material": "game/assets/materials/glow.json"
         },
         {
           "offset": [
@@ -327,7 +327,7 @@
             2,
             2
           ],
-          "material": "assets/materials/brick.json"
+          "material": "game/assets/materials/brick.json"
         },
         {
           "offset": [
@@ -450,7 +450,7 @@
       "components": [
         {
           "type": "ModelRenderer",
-          "model": "assets/models/building-a/building-a.glb",
+          "model": "game/assets/models/building-a/building-a.glb",
           "color": "White",
           "roughness": 0.5
         },
@@ -490,7 +490,7 @@
       "components": [
         {
           "type": "ModelRenderer",
-          "model": "assets/models/building-a/building-a.glb",
+          "model": "game/assets/models/building-a/building-a.glb",
           "color": "White",
           "roughness": 0.5
         },
@@ -530,8 +530,8 @@
       "components": [
         {
           "type": "ModelRenderer",
-          "model": "assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
-          "material": "assets/materials/rubber.json"
+          "model": "game/assets/models/rubber_duck_toy_1k.gltf/rubber_duck_toy_1k.gltf",
+          "material": "game/assets/materials/rubber.json"
         },
         {
           "offset": [
@@ -578,7 +578,7 @@
             2,
             2
           ],
-          "material": "assets/materials/metal.json"
+          "material": "game/assets/materials/metal.json"
         },
         {
           "offset": [
@@ -630,7 +630,7 @@
             2,
             2
           ],
-          "material": "assets/materials/metal.json"
+          "material": "game/assets/materials/metal.json"
         },
         {
           "offset": [
@@ -674,7 +674,7 @@
                 2,
                 2
               ],
-              "material": "assets/materials/metal.json"
+              "material": "game/assets/materials/metal.json"
             },
             {
               "offset": [
@@ -718,7 +718,7 @@
                 2,
                 2
               ],
-              "material": "assets/materials/metal.json"
+              "material": "game/assets/materials/metal.json"
             },
             {
               "offset": [

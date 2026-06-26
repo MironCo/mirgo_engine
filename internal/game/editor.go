@@ -8,8 +8,8 @@ import (
 	"sync"
 	"mirgo_engine/internal/assets"
 	"mirgo_engine/internal/audio"
-	"mirgo_engine/internal/components"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
 	"mirgo_engine/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -262,7 +262,7 @@ func (e *Editor) Update(deltaTime float32) {
 		e.showAssetBrowser = !e.showAssetBrowser
 		if e.showAssetBrowser {
 			if e.currentAssetPath == "" {
-				e.currentAssetPath = "assets"
+				e.currentAssetPath = "game/assets"
 			}
 			e.scanAssets()
 		}
@@ -615,7 +615,7 @@ func (e *Editor) DrawUI() {
 		e.showAssetBrowser = !e.showAssetBrowser
 		if e.showAssetBrowser {
 			if e.currentAssetPath == "" {
-				e.currentAssetPath = "assets"
+				e.currentAssetPath = "game/assets"
 			}
 			e.scanAssets()
 		}

@@ -209,7 +209,7 @@ func (e *Editor) buildGame() {
 	e.saveMsg = "Building game..."
 	e.saveMsgTime = rl.GetTime()
 
-	cmd := exec.Command("./mirgo-utils", "build")
+	cmd := exec.Command("./mirgo_utils", "build")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		e.saveMsg = fmt.Sprintf("Build failed: %v", err)

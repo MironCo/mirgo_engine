@@ -2,9 +2,9 @@ package physics
 
 import (
 	"log"
-	"mirgo_engine/internal/components"
+	"mirgo_engine/components"
 	"mirgo_engine/internal/compute"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/engine"
 	"time"
 	"unsafe"
 

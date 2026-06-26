@@ -1,15 +1,16 @@
-test3d
-test3d.exe
-test3d-linux
-mirgo-utils
-utilities/target/
+mirgo_engine
+mirgo_engine.exe
+mirgo_engine-linux
+mirgo_utils
 build/
 .editor_prefs.json
 
-# Generated scripts (source files are in assets/scripts/)
+# Game project (separate git history)
+game/
+
+# Generated scripts (source files are in game/assets/scripts/)
 internal/scripts/
 !internal/scripts/doc.go
 
 # Raylib examples (vendored for reference only)
 raylib-go/examples/
-

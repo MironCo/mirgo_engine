@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"mirgo_engine/internal/components"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -42,7 +42,7 @@ func (e *Editor) importModel(srcPath string) {
 	ext := strings.ToLower(filepath.Ext(filename))
 	name := strings.TrimSuffix(filename, ext)
 
-	dstDir := filepath.Join("assets/models", name)
+	dstDir := filepath.Join("game/assets/models", name)
 
 	if err := os.MkdirAll(dstDir, 0755); err != nil {
 		e.setMsg("Failed to create model dir: %v", err)

@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"mirgo_engine/internal/assets"
-	"mirgo_engine/internal/components"
-	"mirgo_engine/internal/engine"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
 	"mirgo_engine/internal/world"
 
 	gui "github.com/gen2brain/raylib-go/raygui"
@@ -754,7 +754,7 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 			drawTextEx(editorFont, "Flip Normals", btnX+8, btnY+4, 14, colorTextSecondary)
 
 			if btnHovered && rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-				cmd := exec.Command("./mirgo-utils", "flipnormals", comp.FilePath)
+				cmd := exec.Command("./mirgo_utils", "flipnormals", comp.FilePath)
 				if err := cmd.Run(); err != nil {
 					fmt.Printf("Failed to flip normals: %v\n", err)
 				} else {
