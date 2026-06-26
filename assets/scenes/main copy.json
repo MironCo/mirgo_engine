@@ -409,7 +409,6 @@
           "name": "FPSController",
           "props": {
             "eye_height": 2.0295312,
-            "gravity": 20,
             "jump_strength": 10.536875,
             "look_speed": 0.1,
             "move_speed": 8,

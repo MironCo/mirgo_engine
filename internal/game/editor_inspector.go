@@ -888,6 +888,194 @@ func (e *Editor) drawComponentProperties(panelX, y int32, c engine.Component, co
 		comp.Radius = gui.Slider(radiusBounds, "", fmt.Sprintf("%.1f", comp.Radius), comp.Radius, 1, 50)
 		y += fieldH + 6
 
+	case *components.RectTransform:
+		id := fmt.Sprintf("rt%d", compIdx)
+
+		// Anchored Position
+		drawTextEx(editorFont, "Pos", indent, y+4, 15, colorTextMuted)
+		comp.AnchoredPosition.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".px", comp.AnchoredPosition.X)
+		comp.AnchoredPosition.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".py", comp.AnchoredPosition.Y)
+		y += fieldH + 2
+
+		// Size Delta
+		drawTextEx(editorFont, "Size", indent, y+4, 15, colorTextMuted)
+		comp.SizeDelta.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".sw", comp.SizeDelta.X)
+		comp.SizeDelta.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".sh", comp.SizeDelta.Y)
+		y += fieldH + 2
+
+		// Anchor Min
+		drawTextEx(editorFont, "Anc Min", indent, y+4, 15, colorTextMuted)
+		comp.AnchorMin.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".amnx", comp.AnchorMin.X)
+		comp.AnchorMin.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".amny", comp.AnchorMin.Y)
+		y += fieldH + 2
+
+		// Anchor Max
+		drawTextEx(editorFont, "Anc Max", indent, y+4, 15, colorTextMuted)
+		comp.AnchorMax.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".amxx", comp.AnchorMax.X)
+		comp.AnchorMax.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".amxy", comp.AnchorMax.Y)
+		y += fieldH + 2
+
+		// Pivot
+		drawTextEx(editorFont, "Pivot", indent, y+4, 15, colorTextMuted)
+		comp.Pivot.X = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".pvx", comp.Pivot.X)
+		comp.Pivot.Y = e.drawFloatField(indent+labelW+fieldW+2, y, fieldW, fieldH, id+".pvy", comp.Pivot.Y)
+		y += fieldH + 6
+
+	case *components.UIPanel:
+		id := fmt.Sprintf("uipanel%d", compIdx)
+
+		// Background color
+		drawTextEx(editorFont, "Color", indent, y+4, 15, colorTextMuted)
+		colorPreview := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(colorPreview, comp.Color)
+		rl.DrawRectangleLinesEx(colorPreview, 1, rl.Gray)
+		comp.Color.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".r", float32(comp.Color.R)))
+		comp.Color.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".g", float32(comp.Color.G)))
+		comp.Color.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".b", float32(comp.Color.B)))
+		comp.Color.A = uint8(e.drawFloatField(indent+labelW+fieldH+4+3*(fieldW-8), y, fieldW-10, fieldH, id+".a", float32(comp.Color.A)))
+		y += fieldH + 4
+
+		// Border color
+		drawTextEx(editorFont, "Border", indent, y+4, 15, colorTextMuted)
+		borderPreview := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(borderPreview, comp.BorderColor)
+		rl.DrawRectangleLinesEx(borderPreview, 1, rl.Gray)
+		comp.BorderColor.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".br", float32(comp.BorderColor.R)))
+		comp.BorderColor.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".bg", float32(comp.BorderColor.G)))
+		comp.BorderColor.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".bb", float32(comp.BorderColor.B)))
+		y += fieldH + 4
+
+		// Border width
+		drawTextEx(editorFont, "Bdr Width", indent, y+4, 15, colorTextMuted)
+		comp.BorderWidth = int32(e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".bw", float32(comp.BorderWidth)))
+		y += fieldH + 2
+
+		// Border radius
+		drawTextEx(editorFont, "Radius", indent, y+4, 15, colorTextMuted)
+		comp.BorderRadius = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".brad", comp.BorderRadius)
+		y += fieldH + 6
+
+	case *components.UIButton:
+		id := fmt.Sprintf("uibtn%d", compIdx)
+
+		// Normal color
+		drawTextEx(editorFont, "Normal", indent, y+4, 15, colorTextMuted)
+		np := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(np, comp.NormalColor)
+		rl.DrawRectangleLinesEx(np, 1, rl.Gray)
+		comp.NormalColor.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".nr", float32(comp.NormalColor.R)))
+		comp.NormalColor.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".ng", float32(comp.NormalColor.G)))
+		comp.NormalColor.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".nb", float32(comp.NormalColor.B)))
+		y += fieldH + 2
+
+		// Hover color
+		drawTextEx(editorFont, "Hover", indent, y+4, 15, colorTextMuted)
+		hp := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(hp, comp.HoverColor)
+		rl.DrawRectangleLinesEx(hp, 1, rl.Gray)
+		comp.HoverColor.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".hr", float32(comp.HoverColor.R)))
+		comp.HoverColor.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".hg", float32(comp.HoverColor.G)))
+		comp.HoverColor.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".hb", float32(comp.HoverColor.B)))
+		y += fieldH + 2
+
+		// Pressed color
+		drawTextEx(editorFont, "Pressed", indent, y+4, 15, colorTextMuted)
+		pp := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(pp, comp.PressedColor)
+		rl.DrawRectangleLinesEx(pp, 1, rl.Gray)
+		comp.PressedColor.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".pr", float32(comp.PressedColor.R)))
+		comp.PressedColor.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".pg", float32(comp.PressedColor.G)))
+		comp.PressedColor.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".pb", float32(comp.PressedColor.B)))
+		y += fieldH + 4
+
+		// Border width
+		drawTextEx(editorFont, "Bdr Width", indent, y+4, 15, colorTextMuted)
+		comp.BorderWidth = int32(e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".bw", float32(comp.BorderWidth)))
+		y += fieldH + 4
+
+		// Disabled checkbox
+		disabledBounds := rl.Rectangle{X: float32(indent), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		comp.Disabled = gui.CheckBox(disabledBounds, "Disabled", comp.Disabled)
+		y += fieldH + 6
+
+	case *components.UIImage:
+		id := fmt.Sprintf("uiimg%d", compIdx)
+
+		// Texture path
+		drawTextEx(editorFont, "Texture", indent, y+4, 15, colorTextMuted)
+		newPath := e.drawTextureField(indent+labelW, y, fieldW*2, fieldH, id+".tex", comp.TexturePath)
+		if newPath != comp.TexturePath {
+			comp.SetTexture(newPath)
+		}
+		y += fieldH + 4
+
+		// Color (fallback)
+		drawTextEx(editorFont, "Color", indent, y+4, 15, colorTextMuted)
+		cp := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(cp, comp.Color)
+		rl.DrawRectangleLinesEx(cp, 1, rl.Gray)
+		comp.Color.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".r", float32(comp.Color.R)))
+		comp.Color.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".g", float32(comp.Color.G)))
+		comp.Color.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".b", float32(comp.Color.B)))
+		y += fieldH + 4
+
+		// Tint
+		drawTextEx(editorFont, "Tint", indent, y+4, 15, colorTextMuted)
+		tp := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(tp, comp.Tint)
+		rl.DrawRectangleLinesEx(tp, 1, rl.Gray)
+		comp.Tint.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".tr", float32(comp.Tint.R)))
+		comp.Tint.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".tg", float32(comp.Tint.G)))
+		comp.Tint.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".tb", float32(comp.Tint.B)))
+		y += fieldH + 4
+
+		// Preserve aspect checkbox
+		aspectBounds := rl.Rectangle{X: float32(indent), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		comp.PreserveAspect = gui.CheckBox(aspectBounds, "Preserve Aspect", comp.PreserveAspect)
+		y += fieldH + 6
+
+	case *components.UIProgressBar:
+		id := fmt.Sprintf("uipb%d", compIdx)
+
+		// Value / MaxValue
+		drawTextEx(editorFont, "Value", indent, y+4, 15, colorTextMuted)
+		comp.Value = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".val", comp.Value)
+		y += fieldH + 2
+
+		drawTextEx(editorFont, "Max", indent, y+4, 15, colorTextMuted)
+		comp.MaxValue = e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".max", comp.MaxValue)
+		y += fieldH + 4
+
+		// Fill color
+		drawTextEx(editorFont, "Fill", indent, y+4, 15, colorTextMuted)
+		fp := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(fp, comp.FillColor)
+		rl.DrawRectangleLinesEx(fp, 1, rl.Gray)
+		comp.FillColor.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".fr", float32(comp.FillColor.R)))
+		comp.FillColor.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".fg", float32(comp.FillColor.G)))
+		comp.FillColor.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".fb", float32(comp.FillColor.B)))
+		y += fieldH + 2
+
+		// Background color
+		drawTextEx(editorFont, "BG", indent, y+4, 15, colorTextMuted)
+		bgp := rl.Rectangle{X: float32(indent + labelW), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		rl.DrawRectangleRec(bgp, comp.BackgroundColor)
+		rl.DrawRectangleLinesEx(bgp, 1, rl.Gray)
+		comp.BackgroundColor.R = uint8(e.drawFloatField(indent+labelW+fieldH+4, y, fieldW-10, fieldH, id+".bgr", float32(comp.BackgroundColor.R)))
+		comp.BackgroundColor.G = uint8(e.drawFloatField(indent+labelW+fieldH+4+fieldW-8, y, fieldW-10, fieldH, id+".bgg", float32(comp.BackgroundColor.G)))
+		comp.BackgroundColor.B = uint8(e.drawFloatField(indent+labelW+fieldH+4+2*(fieldW-8), y, fieldW-10, fieldH, id+".bgb", float32(comp.BackgroundColor.B)))
+		y += fieldH + 4
+
+		// Border width
+		drawTextEx(editorFont, "Bdr Width", indent, y+4, 15, colorTextMuted)
+		comp.BorderWidth = int32(e.drawFloatField(indent+labelW, y, fieldW, fieldH, id+".bw", float32(comp.BorderWidth)))
+		y += fieldH + 4
+
+		// Fill direction checkbox
+		fillDirBounds := rl.Rectangle{X: float32(indent), Y: float32(y), Width: float32(fieldH), Height: float32(fieldH)}
+		comp.FillFromRight = gui.CheckBox(fillDirBounds, "Fill From Right", comp.FillFromRight)
+		y += fieldH + 6
+
 	case *components.UIText:
 		id := fmt.Sprintf("uitext%d", compIdx)
 

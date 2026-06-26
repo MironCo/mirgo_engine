@@ -20,18 +20,17 @@
       ],
       "components": [
         {
-          "type": "Camera",
-          "fov": 45,
-          "near": 0.1,
           "far": 1000,
-          "isMain": true
+          "fov": 45,
+          "isMain": true,
+          "near": 0.1,
+          "type": "Camera"
         },
         {
           "type": "Script",
           "name": "FPSController",
           "props": {
             "eye_height": 1.6,
-            "gravity": 20,
             "jump_strength": 8,
             "look_speed": 0.1,
             "move_speed": 8,
@@ -40,25 +39,25 @@
           }
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            1.4517187,
+            0
+          ],
           "size": [
             0.8,
             2.7526171,
             0.8
           ],
-          "offset": [
-            0,
-            1.4517187,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.5,
           "friction": 0.1,
-          "useGravity": false,
-          "isKinematic": true
+          "isKinematic": true,
+          "mass": 1,
+          "type": "Rigidbody",
+          "useGravity": false
         }
       ]
     },
@@ -92,17 +91,17 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            -0.5,
+            0
+          ],
           "size": [
             60,
             1,
             60
           ],
-          "offset": [
-            0,
-            -0.5,
-            0
-          ]
+          "type": "BoxCollider"
         }
       ]
     },
@@ -137,23 +136,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.6,
           "friction": 0.08,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ],
@@ -223,23 +223,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.5,
           "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -275,23 +276,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.7,
           "friction": 0.06,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -327,23 +329,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.4,
           "friction": 0.12,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -379,23 +382,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.55,
           "friction": 0.09,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -431,23 +435,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.65,
           "friction": 0.07,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -483,23 +488,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.45,
           "friction": 0.11,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -535,23 +541,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.5,
           "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -587,23 +594,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.6,
           "friction": 0.08,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -639,23 +647,24 @@
           "roughness": 0.5
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0,
+            0
+          ],
           "size": [
             1.5,
             1.5,
             1.5
           ],
-          "offset": [
-            0,
-            0,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.5,
           "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -693,23 +702,24 @@
           }
         },
         {
-          "type": "BoxCollider",
+          "offset": [
+            0,
+            0.10925781,
+            0
+          ],
           "size": [
             0.16,
             0.20945312,
             0.28035158
           ],
-          "offset": [
-            0,
-            0.10925781,
-            0
-          ]
+          "type": "BoxCollider"
         },
         {
-          "type": "Rigidbody",
-          "mass": 1,
           "bounciness": 0.6,
           "friction": 0.1,
+          "isKinematic": false,
+          "mass": 1,
+          "type": "Rigidbody",
           "useGravity": true
         }
       ]
@@ -734,13 +744,13 @@
       ],
       "components": [
         {
-          "type": "DirectionalLight",
           "direction": [
             0.31367752,
             -0.89622146,
             -0.31367752
           ],
-          "intensity": 1
+          "intensity": 1,
+          "type": "DirectionalLight"
         }
       ]
     }
