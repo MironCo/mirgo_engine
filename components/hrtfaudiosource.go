@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"mirgo_engine/engine"
+	"mirgo_engine/internal/audio"
 	"os"
 	"sync"
-	"mirgo_engine/internal/audio"
-	"mirgo_engine/engine"
 
 	"github.com/ebitengine/oto/v3"
 )

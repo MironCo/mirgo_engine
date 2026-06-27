@@ -19,4 +19,5 @@ type WorldAccess interface {
 	Destroy(g *GameObject)
 	Raycast(origin, direction rl.Vector3, maxDistance float32) (RaycastResult, bool)
 	GetShader() rl.Shader
+	LoadScene(path string)
 }

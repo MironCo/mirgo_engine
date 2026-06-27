@@ -5,12 +5,12 @@ package game
 import (
 	"fmt"
 	"math"
-	"sync"
-	"mirgo_engine/internal/assets"
-	"mirgo_engine/internal/audio"
 	"mirgo_engine/components"
 	"mirgo_engine/engine"
+	"mirgo_engine/internal/assets"
+	"mirgo_engine/internal/audio"
 	"mirgo_engine/internal/world"
+	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

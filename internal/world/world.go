@@ -2,11 +2,11 @@ package world
 
 import (
 	"log"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
 	"mirgo_engine/internal/assets"
 	"mirgo_engine/internal/audio"
-	"mirgo_engine/components"
 	"mirgo_engine/internal/compute"
-	"mirgo_engine/engine"
 	"mirgo_engine/internal/physics"
 	_ "mirgo_engine/internal/scripts"
 
@@ -22,6 +22,8 @@ type World struct {
 	PhysicsWorld *physics.PhysicsWorld
 	Renderer     *Renderer
 	Light        *engine.GameObject
+
+	pendingScene string
 }
 
 func New() *World {
@@ -43,7 +45,7 @@ func (w *World) Initialize() {
 	w.initializeCompute()
 
 	// Load scene objects from JSON
-	if err := w.LoadScene(ScenePath); err != nil {
+	if err := w.LoadSceneFromFile(ScenePath); err != nil {
 		log.Fatalf("failed to load scene: %v", err)
 	}
 
@@ -68,17 +70,49 @@ func (w *World) ResetScene() {
 	w.PhysicsWorld.Kinematics = w.PhysicsWorld.Kinematics[:0]
 
 	// Reload scene from disk (includes Player now)
-	if err := w.LoadScene(ScenePath); err != nil {
+	if err := w.LoadSceneFromFile(ScenePath); err != nil {
 		log.Printf("failed to reload scene: %v", err)
 		return
 	}
 	w.Scene.Start()
 }
 
+func (w *World) LoadScene(path string) {
+	w.pendingScene = path
+}
+
 func (w *World) Update(deltaTime float32) {
 	w.PhysicsWorld.Update(deltaTime)
 	w.Scene.Update(deltaTime)
 	audio.Update()
+
+	if w.pendingScene != "" {
+		path := w.pendingScene
+		w.pendingScene = ""
+		w.switchScene(path)
+	}
+}
+
+func (w *World) switchScene(path string) {
+	log.Printf("switchScene: loading %s (old scene had %d objects)", path, len(w.Scene.GameObjects))
+	for _, g := range w.Scene.GameObjects {
+		if renderer := engine.GetComponent[*components.ModelRenderer](g); renderer != nil {
+			renderer.Unload()
+		}
+	}
+
+	w.Scene.GameObjects = w.Scene.GameObjects[:0]
+	w.PhysicsWorld.Objects = w.PhysicsWorld.Objects[:0]
+	w.PhysicsWorld.Statics = w.PhysicsWorld.Statics[:0]
+	w.PhysicsWorld.Kinematics = w.PhysicsWorld.Kinematics[:0]
+
+	ScenePath = path
+	if err := w.LoadSceneFromFile(path); err != nil {
+		log.Printf("failed to load scene %s: %v", path, err)
+		return
+	}
+	w.Scene.Start()
+	log.Printf("switchScene: loaded %d objects from %s", len(w.Scene.GameObjects), path)
 }
 
 // SpawnObject adds a GameObject to both the scene and physics world.

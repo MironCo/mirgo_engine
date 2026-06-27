@@ -171,6 +171,18 @@ func (c *CharacterController) moveWithCollision(g *engine.GameObject, motion rl.
 			continue
 		}
 
+		// Notify collision handlers on both objects
+		for _, comp := range g.Components() {
+			if handler, ok := comp.(engine.CollisionHandler); ok {
+				handler.OnCollisionEnter(other)
+			}
+		}
+		for _, comp := range other.Components() {
+			if handler, ok := comp.(engine.CollisionHandler); ok {
+				handler.OnCollisionEnter(g)
+			}
+		}
+
 		// Calculate push-out vector
 		pushOut := calculatePushOut(charMin, charMax, staticMin, staticMax)
 

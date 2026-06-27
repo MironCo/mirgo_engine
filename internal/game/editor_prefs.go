@@ -5,11 +5,11 @@ package game
 import (
 	"encoding/json"
 	"fmt"
+	"mirgo_engine/internal/world"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"mirgo_engine/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

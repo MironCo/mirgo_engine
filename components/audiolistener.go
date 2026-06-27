@@ -2,8 +2,8 @@ package components
 
 import (
 	"math"
-	"mirgo_engine/internal/audio"
 	"mirgo_engine/engine"
+	"mirgo_engine/internal/audio"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )

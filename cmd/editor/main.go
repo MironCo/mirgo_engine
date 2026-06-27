@@ -1,10 +1,10 @@
 package main
 
 import (
+	"mirgo_engine/internal/game"
 	"os"
 	"path/filepath"
 	"strings"
-	"mirgo_engine/internal/game"
 )
 
 func main() {

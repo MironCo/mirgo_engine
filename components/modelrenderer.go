@@ -1,8 +1,8 @@
 package components
 
 import (
-	"mirgo_engine/internal/assets"
 	"mirgo_engine/engine"
+	"mirgo_engine/internal/assets"
 	"unsafe"
 
 	rl "github.com/gen2brain/raylib-go/raylib"

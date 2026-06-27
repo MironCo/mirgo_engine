@@ -4,13 +4,13 @@ package game
 
 import (
 	"fmt"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
+	"mirgo_engine/internal/assets"
+	"mirgo_engine/internal/world"
 	"os"
 	"path/filepath"
 	"strings"
-	"mirgo_engine/internal/assets"
-	"mirgo_engine/components"
-	"mirgo_engine/engine"
-	"mirgo_engine/internal/world"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -529,7 +529,7 @@ func (e *Editor) openScene(scenePath string) {
 	world.ScenePath = scenePath
 
 	// Load the new scene
-	if err := e.world.LoadScene(scenePath); err != nil {
+	if err := e.world.LoadSceneFromFile(scenePath); err != nil {
 		e.saveMsg = fmt.Sprintf("Failed to load scene: %v", err)
 		e.saveMsgTime = rl.GetTime()
 		return

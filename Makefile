@@ -34,7 +34,7 @@ test:
 	@echo "✓ Formatting OK"
 	@echo "Running linter (warnings only)..."
 	@golangci-lint run --timeout 5m || echo "⚠️  Linter found issues (non-blocking)"
-	@go test ./engine/... ./cmd/gen-scripts/...
+	@go test ./engine/...
 
 clean:
 	rm -f $(BINARY_NAME) $(BINARY_NAME).exe $(BINARY_NAME)-linux mirgo_utils

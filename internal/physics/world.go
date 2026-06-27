@@ -3,8 +3,8 @@ package physics
 import (
 	"log"
 	"mirgo_engine/components"
-	"mirgo_engine/internal/compute"
 	"mirgo_engine/engine"
+	"mirgo_engine/internal/compute"
 	"time"
 	"unsafe"
 
@@ -158,7 +158,10 @@ func (p *PhysicsWorld) getNeighborObjects(obj *engine.GameObject) []*engine.Game
 // AddObject adds a game object to the physics world
 func (p *PhysicsWorld) AddObject(g *engine.GameObject) {
 	rb := engine.GetComponent[*components.Rigidbody](g)
-	if rb == nil {
+	cc := engine.GetComponent[*components.CharacterController](g)
+	if cc != nil {
+		p.Kinematics = append(p.Kinematics, g)
+	} else if rb == nil {
 		p.Statics = append(p.Statics, g)
 	} else if rb.IsKinematic {
 		p.Kinematics = append(p.Kinematics, g)

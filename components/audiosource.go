@@ -1,8 +1,8 @@
 package components
 
 import (
-	"mirgo_engine/internal/audio"
 	"mirgo_engine/engine"
+	"mirgo_engine/internal/audio"
 )
 
 func init() {

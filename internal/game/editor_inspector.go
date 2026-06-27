@@ -4,15 +4,15 @@ package game
 
 import (
 	"fmt"
+	"mirgo_engine/components"
+	"mirgo_engine/engine"
+	"mirgo_engine/internal/assets"
+	"mirgo_engine/internal/world"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
-	"mirgo_engine/internal/assets"
-	"mirgo_engine/components"
-	"mirgo_engine/engine"
-	"mirgo_engine/internal/world"
 
 	gui "github.com/gen2brain/raylib-go/raygui"
 	rl "github.com/gen2brain/raylib-go/raylib"

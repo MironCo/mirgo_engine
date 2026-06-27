@@ -3,10 +3,10 @@ package world
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"mirgo_engine/internal/assets"
 	"mirgo_engine/components"
 	"mirgo_engine/engine"
+	"mirgo_engine/internal/assets"
+	"os"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -133,7 +133,7 @@ func lookupColorName(c rl.Color) string {
 
 // --- Loading ---
 
-func (w *World) LoadScene(path string) error {
+func (w *World) LoadSceneFromFile(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("read scene: %w", err)
