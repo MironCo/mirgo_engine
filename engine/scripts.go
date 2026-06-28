@@ -1,7 +1,5 @@
 package engine
 
-import "fmt"
-
 // ScriptFactory creates a Component from JSON props.
 type ScriptFactory func(props map[string]any) Component
 
@@ -24,27 +22,18 @@ var scriptRegistry = map[string]scriptEntry{}
 // RegisterScript registers a named script with a factory and optional serializer.
 // The serializer is used when saving the scene back to JSON.
 func RegisterScript(name string, factory ScriptFactory, serializer ScriptSerializer) {
-	if _, exists := scriptRegistry[name]; exists {
-		panic(fmt.Sprintf("script %q already registered", name))
-	}
 	scriptRegistry[name] = scriptEntry{factory: factory, serializer: serializer}
 }
 
 // RegisterScriptWithApplier registers a script with factory, serializer, and property applier.
 // The applier enables live property editing in the editor.
 func RegisterScriptWithApplier(name string, factory ScriptFactory, serializer ScriptSerializer, applier ScriptApplier) {
-	if _, exists := scriptRegistry[name]; exists {
-		panic(fmt.Sprintf("script %q already registered", name))
-	}
 	scriptRegistry[name] = scriptEntry{factory: factory, serializer: serializer, applier: applier, fieldTypes: nil}
 }
 
 // RegisterScriptWithMetadata registers a script with full metadata including field types.
 // This is used by the code generator to provide type information for inspector UI.
 func RegisterScriptWithMetadata(name string, factory ScriptFactory, serializer ScriptSerializer, applier ScriptApplier, fieldTypes map[string]string) {
-	if _, exists := scriptRegistry[name]; exists {
-		panic(fmt.Sprintf("script %q already registered", name))
-	}
 	scriptRegistry[name] = scriptEntry{factory: factory, serializer: serializer, applier: applier, fieldTypes: fieldTypes}
 }
 

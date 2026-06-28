@@ -1,6 +1,7 @@
 package world
 
 import (
+	"mirgo_engine/assets/shaders"
 	"mirgo_engine/components"
 	"mirgo_engine/engine"
 	"unsafe"
@@ -42,7 +43,7 @@ func (r *Renderer) Initialize(floorSize float32) {
 	r.floorSize = floorSize
 
 	// Load lighting shader for regular models
-	r.Shader = rl.LoadShader("assets/shaders/lighting.vs", "assets/shaders/lighting.fs")
+	r.Shader = rl.LoadShaderFromMemory(shaders.MustLoad("lighting.vs"), shaders.MustLoad("lighting.fs"))
 
 	// Set shader locations for material maps so raylib knows where to bind them
 	// Normal map goes to texture slot 1 (texture1 in our shader)
@@ -51,7 +52,7 @@ func (r *Renderer) Initialize(floorSize float32) {
 	locs[rl.ShaderLocMatrixNormal] = rl.GetShaderLocation(r.Shader, "matNormal")
 
 	// Load instancing shader for batched meshes
-	r.InstanceShader = rl.LoadShader("assets/shaders/instancing.vs", "assets/shaders/lighting.fs")
+	r.InstanceShader = rl.LoadShaderFromMemory(shaders.MustLoad("instancing.vs"), shaders.MustLoad("lighting.fs"))
 
 	// Create shadowmap render texture
 	r.ShadowMap = loadShadowmapRenderTexture(ShadowMapResolution, ShadowMapResolution)

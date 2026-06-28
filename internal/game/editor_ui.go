@@ -4,6 +4,7 @@ package game
 
 import (
 	"log"
+	"mirgo_engine/assets/fonts"
 
 	gui "github.com/gen2brain/raylib-go/raygui"
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -49,8 +50,7 @@ func initRayguiStyle() {
 	if !editorFontsLoaded {
 		editorFontsLoaded = true
 
-		// Load Outfit Regular for main UI (high res for smooth scaling)
-		editorFont = rl.LoadFontEx("assets/fonts/Outfit-Regular.ttf", 48, nil)
+		editorFont = rl.LoadFontFromMemory(".ttf", fonts.MustLoad("Outfit-Regular.ttf"), 48, nil)
 		if editorFont.Texture.ID > 0 {
 			rl.SetTextureFilter(editorFont.Texture, rl.FilterBilinear)
 			gui.SetFont(editorFont)
@@ -59,8 +59,7 @@ func initRayguiStyle() {
 			log.Println("Failed to load Outfit-Regular font")
 		}
 
-		// Load Outfit Bold for headers
-		editorFontBold = rl.LoadFontEx("assets/fonts/Outfit-Bold.ttf", 48, nil)
+		editorFontBold = rl.LoadFontFromMemory(".ttf", fonts.MustLoad("Outfit-Bold.ttf"), 48, nil)
 		if editorFontBold.Texture.ID > 0 {
 			rl.SetTextureFilter(editorFontBold.Texture, rl.FilterBilinear)
 			log.Println("Loaded Outfit-Bold font")
@@ -68,8 +67,7 @@ func initRayguiStyle() {
 			log.Println("Failed to load Outfit-Bold font")
 		}
 
-		// Load JetBrains Mono for numeric values
-		editorFontMono = rl.LoadFontEx("assets/fonts/JetBrainsMono-Regular.ttf", 48, nil)
+		editorFontMono = rl.LoadFontFromMemory(".ttf", fonts.MustLoad("JetBrainsMono-Regular.ttf"), 48, nil)
 		if editorFontMono.Texture.ID > 0 {
 			rl.SetTextureFilter(editorFontMono.Texture, rl.FilterBilinear)
 			log.Println("Loaded JetBrainsMono font")
