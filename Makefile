@@ -43,7 +43,10 @@ clean:
 # These targets require the appropriate cross-compilers and libs installed
 
 build-windows:
-	CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOOS=windows GOARCH=amd64 \
+	set CGO_ENABLED=1
+	set CC=x86_64-w64-mingw32-gcc
+	set GOOS=windows
+	set GOARCH=amd64
 	go build -o $(BINARY_NAME).exe $(CMD_PATH)
 
 build-linux:
